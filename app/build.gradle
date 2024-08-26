@@ -11,7 +11,7 @@ android {
         applicationId "com.musan.easysstun"
         minSdk 26
         targetSdk 33
-        versionCode 18
+        versionCode 19
         versionName "1.7"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
