@@ -70,6 +70,7 @@ class Pref(private val ctx: Context) {
             "-outbound-proto", easyss_outbound,
             "-l", "2080",
             "-m", "chacha20-poly1305",
+            "-t", "60",
             "-log-level", easyss_loglevel,
             String.format("-disable-quic=%s", easyss_disable_quic),
             "-ipv6-rule", easyss_ipv6_rule,
