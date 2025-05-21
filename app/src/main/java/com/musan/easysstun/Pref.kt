@@ -76,6 +76,7 @@ class Pref(private val ctx: Context) {
                 remove("easyss_ipv6_rule")
                 remove("easyss_sn")
                 remove("easyss_custom_ca")
+                apply() // Ensure changes are persisted
             }
         }
     }
@@ -91,7 +92,7 @@ class Pref(private val ctx: Context) {
 
     var isServiceEnabled: Boolean
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(SERVICE_ENABLED, value) }
+        set(value) = prefs.edit().putBoolean(SERVICE_ENABLED, value).apply()
 
     fun getApps(): Set<String>? {
         return prefs.getStringSet("selected_apps", HashSet<String>())
@@ -112,7 +113,10 @@ class Pref(private val ctx: Context) {
 
     private fun saveServerProfiles(profiles: List<ServerProfile>) {
         val profilesJson = json.encodeToString(profiles)
-        prefs.edit { putString(SERVER_PROFILES, profilesJson) }
+        prefs.edit {
+            putString(SERVER_PROFILES, profilesJson)
+            apply()
+        }
     }
 
     fun addServerProfile(profile: ServerProfile) {
@@ -135,12 +139,15 @@ class Pref(private val ctx: Context) {
         profiles.removeAll { it.id == profileId }
         saveServerProfiles(profiles)
         if (prefs.getString(ACTIVE_SERVER_ID, null) == profileId) {
-            prefs.edit { remove(ACTIVE_SERVER_ID) }
+            prefs.edit {
+                remove(ACTIVE_SERVER_ID)
+                apply()
+            }
         }
     }
 
     fun setActiveServer(profileId: String) {
-        prefs.edit { putString(ACTIVE_SERVER_ID, profileId) }
+        prefs.edit().putString(ACTIVE_SERVER_ID, profileId).apply()
     }
 
     fun getActiveServerProfile(): ServerProfile? {
