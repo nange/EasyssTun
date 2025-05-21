@@ -333,7 +333,7 @@ class MainFragment : Fragment() {
                 stopVPNService() // Ensure service is stopped
                 service_button.text = getString(R.string.service_enable)
                 service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color))
-                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big_disabled)) // Disabled/default icon
+                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big)) // Changed to default icon
                 service_button.icon = getDrawable(mContext, R.drawable.ic_outline_play_arrow_24)
                 service_button.setBackgroundColor(mContext.getColor(R.color.button_enable))
                 service_title.text = getString(R.string.service_stopped)
