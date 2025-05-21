@@ -48,14 +48,42 @@ class ServerProfileActivity : AppCompatActivity() {
         profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
         saveProfileButton = findViewById(R.id.save_profile_button)
 
-        // Populate Spinners - ArrayAdapter setup would be more robust if values are not identical to entryValues
-        // For simplicity, assuming direct use of arrays from XML for now as per problem description.
-        // Example for one spinner (repeat for others if custom adapters are needed):
-        // ArrayAdapter.createFromResource(this, R.array.easyss_encryption_list, android.R.layout.simple_spinner_item)
-        //     .also { adapter ->
-        //         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        //         profileEncryption.adapter = adapter
-        //     }
+        // Populate Spinners
+        val encryptionAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_encryption_list, android.R.layout.simple_spinner_item
+        )
+        encryptionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileEncryption.adapter = encryptionAdapter
+
+        val proxyRuleAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_proxyrule_list, android.R.layout.simple_spinner_item
+        )
+        proxyRuleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileProxyRule.adapter = proxyRuleAdapter
+
+        val outboundAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_outbound_list, android.R.layout.simple_spinner_item
+        )
+        outboundAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileOutbound.adapter = outboundAdapter
+
+        val logLevelAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_loglevel_list, android.R.layout.simple_spinner_item
+        )
+        logLevelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileLogLevel.adapter = logLevelAdapter
+
+        val disableQuicAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_disable_quic_list, android.R.layout.simple_spinner_item
+        )
+        disableQuicAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileDisableQuic.adapter = disableQuicAdapter
+
+        val ipv6RuleAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_ipv6_rule_list, android.R.layout.simple_spinner_item
+        )
+        ipv6RuleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileIpv6Rule.adapter = ipv6RuleAdapter
 
 
         if (profileId != null) {

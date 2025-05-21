@@ -2,7 +2,6 @@ package com.musan.easysstun
 import android.content.Context
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
