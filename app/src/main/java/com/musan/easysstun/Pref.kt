@@ -121,9 +121,7 @@ class Pref(private val ctx: Context) {
         val profilesJson = json.encodeToString(profiles)
         val editor = prefs.edit()
         editor.putString(SERVER_PROFILES, profilesJson)
-        val success = editor.commit() // Use commit()
-        // Note: The value of 'success' is not directly observable by the calling agent,
-        // but this change is for diagnostic purposes to see if synchronous commit behaves differently.
+        editor.apply()
     }
 
     fun addServerProfile(profile: ServerProfile) {

@@ -167,19 +167,17 @@ class ServerProfileActivity : AppCompatActivity() {
             customCa = customCa
         )
 
-        if (profileId == null) {
+        if (profileId == null) { // A new profile is being added
             pref.addServerProfile(profileToSave)
-            Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
-        } else {
+            pref.setActiveServer(profileToSave.id) // Ensure this line is added
+            Toast.makeText(this, "Profile saved and set as active", Toast.LENGTH_SHORT).show() // Update this line
+        } else { // An existing profile is being updated
             pref.updateServerProfile(profileToSave)
             Toast.makeText(this, "Profile updated", Toast.LENGTH_SHORT).show()
 
             // Check if the updated profile is the active one
             if (profileToSave.id == pref.getActiveServerProfile()?.id) {
                 val intent = android.content.Intent("prefs_updated")
-                // Optionally, add data to the intent if the service needs to know what changed,
-                // but for now, just the action might be enough given the service's current behavior.
-                // intent.putExtra("reason", "active_profile_updated")
                 sendBroadcast(intent)
             }
         }
