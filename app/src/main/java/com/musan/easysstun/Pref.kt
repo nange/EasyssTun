@@ -106,7 +106,12 @@ class Pref(private val ctx: Context) {
     fun getServerProfiles(): List<ServerProfile> {
         val profilesJson = prefs.getString(SERVER_PROFILES, null)
         return if (profilesJson != null) {
-            json.decodeFromString<List<ServerProfile>>(profilesJson)
+            try {
+                json.decodeFromString<List<ServerProfile>>(profilesJson)
+            } catch (e: Exception) {
+                // In a real scenario, one might log e.message here.
+                emptyList() // Return empty list if deserialization fails
+            }
         } else {
             emptyList()
         }
@@ -114,10 +119,11 @@ class Pref(private val ctx: Context) {
 
     private fun saveServerProfiles(profiles: List<ServerProfile>) {
         val profilesJson = json.encodeToString(profiles)
-        prefs.edit {
-            putString(SERVER_PROFILES, profilesJson)
-            apply()
-        }
+        val editor = prefs.edit()
+        editor.putString(SERVER_PROFILES, profilesJson)
+        val success = editor.commit() // Use commit()
+        // Note: The value of 'success' is not directly observable by the calling agent,
+        // but this change is for diagnostic purposes to see if synchronous commit behaves differently.
     }
 
     fun addServerProfile(profile: ServerProfile) {
