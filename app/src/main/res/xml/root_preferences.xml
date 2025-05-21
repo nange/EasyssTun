@@ -1,93 +1,15 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-        <EditTextPreference
-            app:icon="@drawable/public_24px"
-            android:maxLines="1"
-            app:key="easyss_server"
-            app:title="@string/easyss_server"
-            app:useSimpleSummaryProvider="true" />
+    <PreferenceCategory
+        app:key="server_profiles_category"
+        app:title="Server Profiles">
+        <!-- Server profiles will be added here dynamically -->
+    </PreferenceCategory>
 
-        <EditTextPreference
-            app:icon="@drawable/lan_24px"
-            android:maxLines="1"
-            app:key="easyss_serverport"
-            app:title="@string/easyss_serverport"
-            app:useSimpleSummaryProvider="true" />
-
-        <EditTextPreference
-            app:icon="@drawable/password_24px"
-            android:maxLines="1"
-            android:inputType="textPassword"
-            app:key="easyss_password"
-            app:title="@string/easyss_password"
-            app:useSimpleSummaryProvider="true" />
-
-        <DropDownPreference
-            app:icon="@drawable/encrypted_24px"
-            android:key="easyss_encryption"
-            android:title="@string/easyss_encryption"
-            android:entries="@array/easyss_encryption_list"
-            android:entryValues="@array/easyss_encryption_list"
-            android:defaultValue="chacha20-poly1305"
-            app:useSimpleSummaryProvider="true"/>
-
-        <DropDownPreference
-            app:icon="@drawable/alt_route_24px"
-            android:key="easyss_proxyrule"
-            android:title="@string/easyss_proxyrule"
-            android:entries="@array/easyss_proxyrule_list"
-            android:entryValues="@array/easyss_proxyrule_list_value"
-            android:defaultValue="auto"
-            app:useSimpleSummaryProvider="true"/>
-
-        <DropDownPreference
-            app:icon="@drawable/logout_24px"
-            android:key="easyss_outbound"
-            android:title="@string/easyss_outbound"
-            android:entries="@array/easyss_outbound_list"
-            android:entryValues="@array/easyss_outbound_list_value"
-            android:defaultValue="native"
-            app:useSimpleSummaryProvider="true"/>
-
-        <EditTextPreference
-            app:icon="@drawable/verified_user_24px"
-            app:key="easyss_custom_ca"
-            app:title="@string/easyss_custom_ca"
-            app:useSimpleSummaryProvider="true" />
-
-        <DropDownPreference
-            app:icon="@drawable/ic_terminal_24"
-            android:key="easyss_loglevel"
-            android:title="@string/easyss_loglevel"
-            android:entries="@array/easyss_loglevel_list"
-            android:entryValues="@array/easyss_loglevel_list_value"
-            android:defaultValue="info"
-            app:useSimpleSummaryProvider="true"/>
-
-        <DropDownPreference
-            app:icon="@drawable/ic_settings_outline_24dp"
-            android:key="easyss_disable_quic"
-            android:title="@string/easyss_disable_quic"
-            android:entries="@array/easyss_disable_quic_list"
-            android:entryValues="@array/easyss_disable_quic_list_value"
-            android:defaultValue="false"
-            app:useSimpleSummaryProvider="true"/>
-
-        <DropDownPreference
-            app:icon="@drawable/ic_settings_outline_24dp"
-            android:key="@string/easyss_ipv6_rule"
-            android:title="@string/easyss_ipv6_rule"
-            android:entries="@array/easyss_ipv6_rule_list"
-            android:entryValues="@array/easyss_ipv6_rule_value"
-            android:defaultValue="auto"
-            app:useSimpleSummaryProvider="true"/>
-
-        <EditTextPreference
-            app:icon="@drawable/public_24px"
-            android:maxLines="1"
-            app:key="easyss_sn"
-            app:title="@string/easyss_sn"
-            app:useSimpleSummaryProvider="true" />
+    <Preference
+        app:key="add_new_server_button"
+        app:title="Add New Server"
+        app:icon="@android:drawable/ic_menu_add" />
 
 </PreferenceScreen>

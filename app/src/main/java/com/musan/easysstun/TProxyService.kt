@@ -233,7 +233,6 @@ tunnel:
         tunFd = null
 
         stopSelf()
-        System.exit(0)
     }
 
     private fun createNotification(channelName: String) {

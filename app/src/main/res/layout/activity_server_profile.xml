@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ServerProfileActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Name">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/profile_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Server Host">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/profile_server"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Server Port">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/profile_server_port"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:passwordToggleEnabled="true"
+            android:hint="Password">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/profile_password"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Encryption Method" />
+        <Spinner
+            android:id="@+id/profile_encryption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/easyss_encryption_list" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Proxy Rule" />
+        <Spinner
+            android:id="@+id/profile_proxy_rule"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/easyss_proxyrule_list"
+            android:entryValues="@array/easyss_proxyrule_list_value" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Outbound Protocol" />
+        <Spinner
+            android:id="@+id/profile_outbound"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/easyss_outbound_list"
+            android:entryValues="@array/easyss_outbound_list_value" />
+        
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Server Name Indication (SNI)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/profile_server_name_indication"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Custom CA (PEM format)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/profile_custom_ca"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:inputType="textMultiLine"
+                android:minLines="3" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Log Level" />
+        <Spinner
+            android:id="@+id/profile_log_level"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/easyss_loglevel_list"
+            android:entryValues="@array/easyss_loglevel_list_value" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Disable QUIC" />
+        <Spinner
+            android:id="@+id/profile_disable_quic"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/easyss_disable_quic_list"
+            android:entryValues="@array/easyss_disable_quic_list_value" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="IPv6 Rule" />
+        <Spinner
+            android:id="@+id/profile_ipv6_rule"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/easyss_ipv6_rule_list"
+            android:entryValues="@array/easyss_ipv6_rule_value" />
+
+        <Button
+            android:id="@+id/save_profile_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:text="Save" />
+
+    </LinearLayout>
+</ScrollView>

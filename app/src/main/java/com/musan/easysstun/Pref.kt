@@ -2,18 +2,83 @@ package com.musan.easysstun
 import android.content.Context
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.UUID
 
 
 class Pref(private val ctx: Context) {
     companion object {
         const val SERVICE_ENABLED = "enable"
         const val VERSION = "version"
+        const val SERVER_PROFILES = "server_profiles"
+        const val ACTIVE_SERVER_ID = "active_server_id"
     }
 
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
+
+    init {
+        migrateOldConfig()
+    }
+
+    private fun migrateOldConfig() {
+        val oldServer = prefs.getString("easyss_server", null)
+        // Check if migration has already happened by looking for the old key
+        // or if there are already profiles.
+        if (prefs.contains("easyss_server") && !oldServer.isNullOrBlank() && getServerProfiles().isEmpty()) {
+            val id = UUID.randomUUID().toString()
+            // Use old server address as name, or a default if blank (though oldServer check should prevent this)
+            val name = if (oldServer.isNotBlank()) oldServer else "Default Server"
+            val server = oldServer // Already checked for null/blank
+            val serverPort = prefs.getString("easyss_serverport", "") ?: ""
+            val password = prefs.getString("easyss_password", "") ?: ""
+            val encryption = prefs.getString("easyss_encryption", "chacha20-poly1305") ?: "chacha20-poly1305"
+            val proxyRule = prefs.getString("easyss_proxyrule", "auto") ?: "auto"
+            val outbound = prefs.getString("easyss_outbound", "native") ?: "native"
+            val logLevel = prefs.getString("easyss_loglevel", "info") ?: "info"
+            val disableQuic = prefs.getString("easyss_disable_quic", "false") ?: "false"
+            val ipv6Rule = prefs.getString("easyss_ipv6_rule", "auto") ?: "auto"
+            val serverNameIndication = prefs.getString("easyss_sn", "") ?: ""
+            val customCa = prefs.getString("easyss_custom_ca", "") ?: ""
+
+            val migratedProfile = ServerProfile(
+                id = id,
+                name = name,
+                server = server,
+                serverPort = serverPort,
+                password = password,
+                encryption = encryption,
+                proxyRule = proxyRule,
+                outbound = outbound,
+                logLevel = logLevel,
+                disableQuic = disableQuic,
+                ipv6Rule = ipv6Rule,
+                serverNameIndication = serverNameIndication,
+                customCa = customCa
+            )
+            addServerProfile(migratedProfile)
+            setActiveServer(id)
+
+            // Remove old keys after migration
+            prefs.edit {
+                remove("easyss_server")
+                remove("easyss_serverport")
+                remove("easyss_password")
+                remove("easyss_encryption")
+                remove("easyss_proxyrule")
+                remove("easyss_outbound")
+                remove("easyss_loglevel")
+                remove("easyss_disable_quic")
+                remove("easyss_ipv6_rule")
+                remove("easyss_sn")
+                remove("easyss_custom_ca")
+            }
+        }
+    }
 
     var version: String
         get() {
@@ -36,65 +101,105 @@ class Pref(private val ctx: Context) {
         return prefs.all
     }
 
+    fun getServerProfiles(): List<ServerProfile> {
+        val profilesJson = prefs.getString(SERVER_PROFILES, null)
+        return if (profilesJson != null) {
+            json.decodeFromString<List<ServerProfile>>(profilesJson)
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun saveServerProfiles(profiles: List<ServerProfile>) {
+        val profilesJson = json.encodeToString(profiles)
+        prefs.edit { putString(SERVER_PROFILES, profilesJson) }
+    }
+
+    fun addServerProfile(profile: ServerProfile) {
+        val profiles = getServerProfiles().toMutableList()
+        profiles.add(profile)
+        saveServerProfiles(profiles)
+    }
+
+    fun updateServerProfile(profile: ServerProfile) {
+        val profiles = getServerProfiles().toMutableList()
+        val index = profiles.indexOfFirst { it.id == profile.id }
+        if (index != -1) {
+            profiles[index] = profile
+            saveServerProfiles(profiles)
+        }
+    }
+
+    fun deleteServerProfile(profileId: String) {
+        val profiles = getServerProfiles().toMutableList()
+        profiles.removeAll { it.id == profileId }
+        saveServerProfiles(profiles)
+        if (prefs.getString(ACTIVE_SERVER_ID, null) == profileId) {
+            prefs.edit { remove(ACTIVE_SERVER_ID) }
+        }
+    }
+
+    fun setActiveServer(profileId: String) {
+        prefs.edit { putString(ACTIVE_SERVER_ID, profileId) }
+    }
+
+    fun getActiveServerProfile(): ServerProfile? {
+        val activeId = prefs.getString(ACTIVE_SERVER_ID, null)
+        return if (activeId != null) {
+            getServerProfiles().find { it.id == activeId }
+        } else {
+            null
+        }
+    }
+
     fun getEasyssInfo(): easyssInfo {
-        val myMap = mutableMapOf<String, Any?>()
-        var easyssInfo = easyssInfo()
-        var easyss_server = prefs.getString("easyss_server", "")
-        var easyss_serverport = prefs.getString("easyss_serverport", "")
-        var easyss_password = prefs.getString("easyss_password", "")
+        val activeProfile = getActiveServerProfile()
+        val easyssInfo = easyssInfo()
 
-        myMap["valid"] = false
-        if (!easyss_server.isNullOrBlank() and !easyss_serverport.isNullOrBlank() and !easyss_password.isNullOrBlank()){
-            easyssInfo.valid = true
-            easyssInfo.info = easyss_server.toString() + ":" + easyss_serverport.toString()
+        if (activeProfile == null) {
+            easyssInfo.valid = false
+            return easyssInfo
         }
 
-        var easyss_encryption = prefs.getString("easyss_encryption", "chacha20-poly1305")?:"aes-256-gcm"
-        var easyss_proxyrule = prefs.getString("easyss_proxyrule", "auto")
-        var easyss_outbound = prefs.getString("easyss_outbound", "native")
-        var easyss_loglevel = prefs.getString("easyss_loglevel", "info")
-        var easyss_disable_quic = prefs.getString("easyss_disable_quic", "false")
-        var easyss_ipv6_rule = prefs.getString("easyss_ipv6_rule", "auto")
-        var easyss_sn = prefs.getString("easyss_sn", "")
+        easyssInfo.valid = true
+        easyssInfo.info = "${activeProfile.server}:${activeProfile.serverPort}"
 
-        if (easyss_sn.isNullOrBlank()) {
-            easyss_sn = easyss_server
+        var sn = activeProfile.serverNameIndication
+        if (sn.isBlank()) {
+            sn = activeProfile.server
         }
 
-//        val cmdList = mutableListOf<String>()
-        var cmdList = listOf("-s", easyss_server,
-            "-p", easyss_serverport,
-            "-k", easyss_password,
-            "-m", easyss_encryption,
-            "-proxy-rule", easyss_proxyrule,
-            "-outbound-proto", easyss_outbound,
-            "-l", "2080",
-            "-m", "chacha20-poly1305",
-            "-t", "60",
-            "-log-level", easyss_loglevel,
-            String.format("-disable-quic=%s", easyss_disable_quic),
-            "-ipv6-rule", easyss_ipv6_rule,
-            "-sn", easyss_sn,
+        val cmdList = mutableListOf(
+            "-s", activeProfile.server,
+            "-p", activeProfile.serverPort,
+            "-k", activeProfile.password,
+            "-m", activeProfile.encryption,
+            "-proxy-rule", activeProfile.proxyRule,
+            "-outbound-proto", activeProfile.outbound,
+            "-l", "2080", // This seems to be a fixed local port, kept as is.
+            "-t", "60", // This seems to be a fixed timeout, kept as is.
+            "-log-level", activeProfile.logLevel,
+            "-disable-quic=${activeProfile.disableQuic}",
+            "-ipv6-rule", activeProfile.ipv6Rule,
+            "-sn", sn,
             "-enable-tun2socks=false",
-            "-daemon=false")
+            "-daemon=false"
+        )
 
-        var easyss_custom_ca = prefs.getString("easyss_custom_ca", "")
-        if (!easyss_custom_ca.isNullOrBlank()){
-            val easyss_custom_ca_file = File(ctx.cacheDir, "easyss_custom_ca.conf")
+        if (activeProfile.customCa.isNotBlank()) {
+            val customCaFile = File(ctx.cacheDir, "easyss_custom_ca.conf")
             try {
-                easyss_custom_ca_file.createNewFile()
-                val fos = FileOutputStream(easyss_custom_ca_file, false)
-                fos.write(easyss_custom_ca.toByteArray())
-                fos.close()
+                customCaFile.createNewFile()
+                FileOutputStream(customCaFile, false).use { fos ->
+                    fos.write(activeProfile.customCa.toByteArray())
+                }
+                cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
             } catch (e: IOException) {
-
+                // Log error or handle, for now, it will proceed without custom CA if file ops fail
             }
-
-            cmdList = cmdList + listOf("-ca-path", easyss_custom_ca_file.absolutePath)
         }
 
-        easyssInfo.cmdList = cmdList as List<String>
-
+        easyssInfo.cmdList = cmdList
         return easyssInfo
     }
 
