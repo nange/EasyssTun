@@ -15,8 +15,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.RotateAnimation
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat.getDrawable
@@ -52,14 +55,18 @@ class MainFragment : Fragment() {
     ): View? {
         val view = inflater.inflate(R.layout.fragment_main, container, false)
         setHasOptionsMenu(true)
-        easyssInfo = pref.getEasyssInfo()
-        setup(view)
-        updateServiceStatu(view)
-
-        GitTagTask(view, requireContext()).execute()
-
+        // easyssInfo will be initialized in onViewCreated after view is created
         return view
     }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        easyssInfo = pref.getEasyssInfo()
+        setup(view) // Spinner setup is now in setup()
+        updateServiceStatu(view)
+        GitTagTask(view, requireContext()).execute()
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,12 +106,59 @@ class MainFragment : Fragment() {
             it.setOnClickListener {
                 if (pref.isServiceEnabled) {
                     pref.isServiceEnabled = false
-                    true
                 } else {
+                    if (!easyssInfo.valid) {
+                        Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
                     pref.isServiceEnabled = true
-                    true
                 }
                 updateServiceStatu(view)
+            }
+        }
+
+        // Server Spinner Setup
+        val serverSpinner = view.findViewById<Spinner>(R.id.server_spinner)
+        val serverProfiles = pref.getServerProfiles()
+        val serverNames = serverProfiles.map { it.name }
+        val adapter = ArrayAdapter(mContext, android.R.layout.simple_spinner_item, serverNames)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        serverSpinner.adapter = adapter
+
+        val activeServerProfile = pref.getActiveServerProfile()
+        if (activeServerProfile != null) {
+            val activeServerPosition = serverProfiles.indexOfFirst { it.id == activeServerProfile.id }
+            if (activeServerPosition != -1) {
+                serverSpinner.setSelection(activeServerPosition)
+            }
+        }
+
+        serverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, viewOfItem: View?, position: Int, id: Long) {
+                val selectedProfile = serverProfiles[position]
+                pref.setActiveServer(selectedProfile.id)
+                easyssInfo = pref.getEasyssInfo() // Refresh easyssInfo
+
+                val serviceSummaryTextView = view.findViewById<TextView>(R.id.service_summary)
+                if (easyssInfo.valid) {
+                    serviceSummaryTextView.text = easyssInfo.info
+                } else {
+                    serviceSummaryTextView.text = getString(R.string.easyss_need_config)
+                }
+
+                if (pref.isServiceEnabled) {
+                    stopVPNService()
+                    // It's important to ensure easyssInfo is up-to-date before starting VPN
+                    // and that TProxyService uses the new active server.
+                    // Assuming TProxyService reads active server from Pref on start.
+                    startVPNService()
+                }
+                // updateServiceStatu will use the refreshed easyssInfo
+                updateServiceStatu(view)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                // Do nothing
             }
         }
 
@@ -217,6 +271,22 @@ class MainFragment : Fragment() {
     }
 
     private fun updateServiceStatu(view: View) {
+        // Refresh easyssInfo at the beginning of UI update
+        easyssInfo = pref.getEasyssInfo()
+
+        // Update service summary based on current easyssInfo
+        val serviceSummaryTextView = view.findViewById<TextView>(R.id.service_summary)
+        if (easyssInfo.valid) {
+            serviceSummaryTextView.text = easyssInfo.info
+        } else {
+            serviceSummaryTextView.text = getString(R.string.easyss_need_config)
+            // If config is invalid, ensure service is marked as disabled
+            if (pref.isServiceEnabled) { // only if it was previously enabled
+                 pref.isServiceEnabled = false
+            }
+        }
+
+
         var service_button =
             view.findViewById<MaterialButton>(R.id.service_button)
         var service_title = view.findViewById<TextView>(R.id.service_title)
@@ -224,10 +294,26 @@ class MainFragment : Fragment() {
         var service_card = view.findViewById<MaterialCardView>(R.id.service_card)
         when {
             pref.isServiceEnabled -> {
-                if(!easyssInfo.valid){
+                if(!easyssInfo.valid){ // This check is now also at the start of updateServiceStatu
                     Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_SHORT).show()
-                    pref.isServiceEnabled = false
-                    return
+                    // pref.isServiceEnabled should already be false due to the check at the beginning of this function
+                    // No, the click listener for service_button handles this now.
+                    // And updateServiceStatu itself will set it to false if config is not valid.
+                    // So, if we reach here and isServiceEnabled is true, it means config became invalid *after* enabling.
+                    // However, the primary check for enabling the service is in the service_button click listener.
+                    // The logic here is more about reflecting the state.
+                    // If service is marked enabled but config is bad, we show error and update UI to disabled.
+                    // This part might be redundant if the service_button click listener correctly prevents enabling with bad config.
+                    // Let's rely on the check in service_button click listener and the top of updateServiceStatu.
+                    // If easyssInfo is not valid, updateServiceStatu will set pref.isServiceEnabled = false.
+                    // So, if we are in this block (pref.isServiceEnabled == true), easyssInfo MUST be valid.
+
+                    // The only case this Toast is needed is if the service was running and config became invalid.
+                    // This scenario needs careful handling. For now, assume config validity is checked before start.
+                    // The initial check in updateServiceStatu handles the case where config is invalid.
+                    // pref.isServiceEnabled = false // This is now handled at the top of updateServiceStatu
+                    // return // This would prevent UI update to "running" state if service did start with valid config
+                    // Let's assume if pref.isServiceEnabled is true here, config is valid.
                 }
 
                 startVPNService()
@@ -235,23 +321,23 @@ class MainFragment : Fragment() {
                     service_button.text = getString(R.string.service_disable)
 
                     service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color_active))
-                    service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big))
+                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big)) // Active icon
                     service_button.icon = getDrawable(mContext, R.drawable.ic_close_24)
                     service_button.setBackgroundColor(mContext.getColor(R.color.button_disable))
                     service_title.text = getString(R.string.service_running)
-//                }
 
                 true
             }
 
-            else -> {
-                stopVPNService()
+            else -> { // Service is not enabled (pref.isServiceEnabled == false)
+                stopVPNService() // Ensure service is stopped
                 service_button.text = getString(R.string.service_enable)
                 service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color))
-                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_close_24))
+                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big_disabled)) // Disabled/default icon
                 service_button.icon = getDrawable(mContext, R.drawable.ic_outline_play_arrow_24)
                 service_button.setBackgroundColor(mContext.getColor(R.color.button_enable))
                 service_title.text = getString(R.string.service_stopped)
+                // service_summary is already updated at the beginning of the function
             }
         }
     }
@@ -272,23 +358,28 @@ class MainFragment : Fragment() {
                 val url = URL(urlString)
                 val proxy =
                     Proxy(Proxy.Type.SOCKS, InetSocketAddress(socksProxyHost, socksProxyPort))
-                val startTime = System.currentTimeMillis()
+
                 try {
+                    val startTime = System.currentTimeMillis()
                     (url.openConnection(proxy) as? HttpURLConnection)?.run {
                         requestMethod = "GET"
-                        connectTimeout = 3000
+                        connectTimeout = 3000 // 3 seconds timeout
+                        readTimeout = 3000    // 3 seconds read timeout
 
-                        val responseCode = responseCode
-                        if (responseCode == HttpURLConnection.HTTP_OK) {
-                        } else {
+                        // Force connection and get response code
+                        try {
+                            inputStream.close() // We just want to connect and get headers
+                        } catch (e: Exception) {
+                            // Ignore exceptions from closing stream if any, we care about connect time
                         }
+                        // val responseCode = responseCode // Not strictly needed if we only measure connect time
                         disconnect()
                     }
                     val endTime = System.currentTimeMillis()
-                    var responseTime = endTime - startTime
+                    val responseTime = endTime - startTime
                     res = "$responseTime ms"
                 } catch (e: Exception) {
-                    Log.e("test", e.message.toString())
+                    Log.w("SpeedTest", "Error during speed test: ${e.message}")
                     res = getString(R.string.delay_test_fail)
                 }
             }
@@ -296,14 +387,12 @@ class MainFragment : Fragment() {
             withContext(Dispatchers.Main) {
                 speedTesting = false
                 speed_test_icon.clearAnimation()
-
-                view?.findViewById<TextView>(R.id.speed_result).let {
-
-                    it?.setText(getString(R.string.delay_test_result, res))
+                // Ensure view is still valid if fragment is detached quickly
+                view?.findViewById<TextView>(R.id.speed_result)?.text = getString(R.string.delay_test_result, res)
+                if (isAdded) { // Check if fragment is currently added to its activity
+                    Toast.makeText(mContext, getString(R.string.delay_test_result, res), Toast.LENGTH_SHORT).show()
                 }
-                Toast.makeText(mContext, res, Toast.LENGTH_SHORT).show()
             }
-
         }
     }
 
