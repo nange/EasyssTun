@@ -11,7 +11,7 @@ import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
-import android.util.Log
+// import android.util.Log // Already present
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
@@ -21,8 +21,9 @@ import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
-import java.io.IOException
+// import java.io.IOException // Already present
 import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit // Added for process.waitFor
 
 
 class TProxyService : VpnService() {
@@ -206,34 +207,111 @@ tunnel:
     }
 
     fun stopService() {
-        if (tunFd == null) return
+        if (tunFd == null) {
+            Log.d("TProxyService", "stopService called but tunFd is null, service likely already stopped.")
+            return
+        }
+
+        Log.d("TProxyService", "Stopping TProxyService...")
         stopForeground(true)
 
-        /* TProxy */
+        // 1. Stop hev-socks5-tunnel (TProxy)
         try {
-            TProxyStopService()
+            Log.d("TProxyService", "Calling TProxyStopService()...")
+            TProxyStopService() // Native method from libhev-socks5-tunnel.so
+            Log.d("TProxyService", "TProxyStopService() returned.")
         } catch (e: Exception) {
-            Log.e("TProxyStopService", e.message.toString())
+            Log.e("TProxyService", "Error in TProxyStopService: ${e.message}", e)
+        } catch (u: UnsatisfiedLinkError) {
+            Log.e("TProxyService", "UnsatisfiedLinkError in TProxyStopService: ${u.message}", u)
         }
-        try {
 
-            process.destroy()
+
+        // 2. Stop libeasyss.so process (named 'process' in this class)
+        // Check if 'process' is initialized and if it's alive (requires API 26 for isAlive)
+        if (::process.isInitialized) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && process.isAlive) {
+                Log.d("TProxyService", "Stopping libeasyss process (PID: ${process.pid()})...") // pid() also API 26
+                try {
+                    process.destroy() // Send SIGTERM
+                    // Wait for a short period for graceful shutdown
+                    if (!process.waitFor(200, TimeUnit.MILLISECONDS)) {
+                        Log.w("TProxyService", "libeasyss process did not exit after SIGTERM (200ms), forcing (SIGKILL)...")
+                        process.destroyForcibly()
+                        if (!process.waitFor(100, TimeUnit.MILLISECONDS)) {
+                            Log.e("TProxyService", "libeasyss process did not exit even after SIGKILL (100ms).")
+                        } else {
+                            Log.d("TProxyService", "libeasyss process exited after SIGKILL.")
+                        }
+                    } else {
+                        Log.d("TProxyService", "libeasyss process exited gracefully (SIGTERM).")
+                    }
+                } catch (e: InterruptedException) {
+                    Log.w("TProxyService", "Interrupted while waiting for libeasyss process to exit. Forcing destroy.", e)
+                    try {
+                        process.destroyForcibly()
+                    } catch (fe: Exception) {
+                        Log.e("TProxyService", "Error during forceful destroy after interruption.", fe)
+                    }
+                    Thread.currentThread().interrupt() // Preserve interrupt status
+                } catch (e: Exception) { // Catch other potential errors like SecurityException or
+                    Log.e("TProxyService", "Error stopping libeasyss process: ${e.message}", e)
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && process.isAlive) {
+                             process.destroyForcibly()
+                             Log.d("TProxyService", "Attempted forceful destroy due to an error during regular stop.")
+                        } else if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
+                            // Fallback for older Android versions where isAlive/destroyForcibly might not be available or reliable
+                            // process.destroy() was already called. Not much more can be done here for older APIs.
+                            Log.w("TProxyService", "Cannot confirm process death on older Android version, destroy already called.")
+                        }
+                    } catch (fe: Exception) {
+                        Log.e("TProxyService", "Error during fallback forceful destroy.", fe)
+                    }
+                }
+            } else if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
+                // For older versions, we can't check isAlive, so just try destroy if process is initialized
+                Log.d("TProxyService", "Attempting to stop libeasyss process on older Android version (no isAlive check)...")
+                try {
+                    process.destroy() // SIGTERM
+                    Log.d("TProxyService", "Sent SIGTERM to libeasyss process on older Android version.")
+                    // No waitFor or destroyForcibly here as they might not be safe or available.
+                } catch (e: Exception) {
+                    Log.e("TProxyService", "Error stopping libeasyss process on older Android: ${e.message}", e)
+                }
+            } else {
+                 Log.d("TProxyService", "libeasyss process was not alive or not suitable for termination.")
+            }
+        } else {
+            Log.d("TProxyService", "libeasyss process ('process') was not initialized.")
+        }
+
+        // 3. Cancel the monitoring coroutine ('processEasyJob')
+        if (::processEasyJob.isInitialized && processEasyJob.isActive) {
+            Log.d("TProxyService", "Cancelling processEasyJob coroutine...")
             processEasyJob.cancel()
-//            val exitCode = process.waitFor()
-//            Log.i("easyss", "msg=[EasyssTun] Command exited with code: $exitCode")
-        } catch (e: Exception) {
-            Log.e("easyJob", e.message.toString())
+            // Consider join with timeout if coroutine's finally block is critical and not covered by above process kill
+            // For now, simple cancellation.
+            Log.d("TProxyService", "processEasyJob coroutine cancelled.")
+        } else {
+            Log.d("TProxyService", "processEasyJob coroutine was not active or not initialized.")
         }
-        /* VPN */
-        try {
-            tunFd!!.close()
-        } catch (e: Exception) {
-            Log.e("tunFd", e.message.toString())
-        }
-        tunFd = null
 
+        // 4. Close VPN File Descriptor
+        try {
+            Log.d("TProxyService", "Closing tunFd...")
+            tunFd!!.close() // tunFd was checked for null at the beginning
+            Log.d("TProxyService", "tunFd closed.")
+        } catch (e: IOException) { // More specific exception
+            Log.e("TProxyService", "IOException closing tunFd: ${e.message}", e)
+        } catch (e: Exception) {
+            Log.e("TProxyService", "Generic error closing tunFd: ${e.message}", e)
+        }
+        tunFd = null // Mark as closed/stopped
+
+        Log.d("TProxyService", "Calling stopSelf() to stop the Android Service component.")
         stopSelf()
-        System.exit(0)
+        Log.d("TProxyService", "TProxyService stop sequence finished.")
     }
 
     private fun createNotification(channelName: String) {
