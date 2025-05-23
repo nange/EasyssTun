@@ -1,8 +1,10 @@
 package com.musan.easysstun
 
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.VpnService
 import android.os.AsyncTask
 import android.os.Bundle
@@ -48,6 +50,39 @@ class MainFragment : Fragment() {
     private lateinit var speed_test_icon: ImageView
     private var speedTesting = false
 
+    private var pendingServerProfileId: String? = null
+    private var isSwitchingServer: Boolean = false
+
+    private val serviceStoppedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TProxyService.ACTION_SERVICE_STOPPED) {
+                Log.d("MainFragment", "Received ACTION_SERVICE_STOPPED. Pending server ID: $pendingServerProfileId")
+                if (pendingServerProfileId != null) {
+                    pref.setActiveServer(pendingServerProfileId!!)
+                    easyssInfo = pref.getEasyssInfo() // Refresh local easyssInfo after changing active server
+
+                    Log.i("MainFragment", "Restarting VPN service with new server: $pendingServerProfileId")
+                    startVPNService() // This should now use the new server settings
+
+                    pendingServerProfileId = null
+                    isSwitchingServer = false // Reset switching state
+
+                    // Update UI after server switch is complete
+                    view?.let {
+                        updateServiceStatu(it)
+                    }
+                } else {
+                    // Service stopped for other reasons (e.g. user clicked main stop button)
+                    isSwitchingServer = false // Reset if it was somehow true
+                    view?.let { updateServiceStatu(it) }
+                }
+                // Re-enable spinner after processing
+                view?.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
+                Log.d("MainFragment", "Spinner re-enabled in serviceStoppedReceiver.")
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -65,8 +100,20 @@ class MainFragment : Fragment() {
         setup(view) // Spinner setup is now in setup()
         updateServiceStatu(view)
         GitTagTask(view, requireContext()).execute()
+
+        val intentFilter = IntentFilter(TProxyService.ACTION_SERVICE_STOPPED)
+        requireActivity().registerReceiver(serviceStoppedReceiver, intentFilter)
+        Log.d("MainFragment", "serviceStoppedReceiver registered.")
+
+        // Ensure spinner is enabled when view is created
+        view.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
     }
 
+    override fun onDestroyView() {
+        requireActivity().unregisterReceiver(serviceStoppedReceiver)
+        Log.d("MainFragment", "serviceStoppedReceiver unregistered.")
+        super.onDestroyView()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +144,8 @@ class MainFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        // Ensure spinner is enabled on resume
+        view?.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
     }
 
     private fun setup(view: View) {
@@ -104,6 +153,10 @@ class MainFragment : Fragment() {
             view.findViewById<MaterialButton>(R.id.service_button)
         service_button.let {
             it.setOnClickListener {
+                if (isSwitchingServer) {
+                    Toast.makeText(mContext, "Server switch in progress, please wait.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
                 if (pref.isServiceEnabled) {
                     pref.isServiceEnabled = false
                 } else {
@@ -124,6 +177,8 @@ class MainFragment : Fragment() {
         val adapter = ArrayAdapter(mContext, android.R.layout.simple_spinner_item, serverNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         serverSpinner.adapter = adapter
+        // Ensure spinner is enabled before setting listener and selection
+        serverSpinner.isEnabled = true
 
         val activeServerProfile = pref.getActiveServerProfile()
         if (activeServerProfile != null) {
@@ -136,29 +191,61 @@ class MainFragment : Fragment() {
         serverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, viewOfItem: View?, position: Int, id: Long) {
                 val selectedProfile = serverProfiles[position]
-                pref.setActiveServer(selectedProfile.id)
-                easyssInfo = pref.getEasyssInfo() // Refresh easyssInfo
 
-                val serviceSummaryTextView = view.findViewById<TextView>(R.id.service_summary)
-                if (easyssInfo.valid) {
-                    serviceSummaryTextView.text = easyssInfo.info
-                } else {
-                    serviceSummaryTextView.text = getString(R.string.easyss_need_config)
+                // If the selected server is already the active one, do nothing.
+                if (pref.getActiveServerProfile()?.id == selectedProfile.id && !isSwitchingServer) {
+                     Log.d("MainFragment", "Spinner selected current active server. No change.")
+                     // Ensure UI reflects current state if needed, though it should be correct.
+                     view?.let { updateServiceStatu(it) }
+                     return
                 }
+
+                Log.d("MainFragment", "Server selected: ${selectedProfile.name}. Current isServiceEnabled: ${pref.isServiceEnabled}")
 
                 if (pref.isServiceEnabled) {
-                    stopVPNService()
-                    // It's important to ensure easyssInfo is up-to-date before starting VPN
-                    // and that TProxyService uses the new active server.
-                    // Assuming TProxyService reads active server from Pref on start.
-                    startVPNService()
+                    // VPN is running, need to stop, then restart with new server.
+                    if (isSwitchingServer) {
+                        // Already switching, just update to the latest selection.
+                        Log.i("MainFragment", "Server switch already in progress. Updating pending server to: ${selectedProfile.id}")
+                        pendingServerProfileId = selectedProfile.id
+                        // The existing stop process will continue, and then pick up this latest pendingServerProfileId.
+                        return // Don't call stopVPNService again.
+                    }
+                    
+                    Log.i("MainFragment", "Initiating server switch. Setting pending server to: ${selectedProfile.id}")
+                    pendingServerProfileId = selectedProfile.id
+                    isSwitchingServer = true // Set switching state
+                    
+                    // For now, just disable the spinner to prevent further changes during switch
+                    serverSpinner.isEnabled = false 
+
+                    stopVPNService() // Tell service to stop
+                    // Do NOT call pref.setActiveServer() or startVPNService() here.
+                    // The broadcast receiver will handle that after service confirms stop.
+                } else {
+                    // VPN is not running, just change the active server and update UI.
+                    Log.i("MainFragment", "VPN not running. Setting active server to: ${selectedProfile.id}")
+                    pref.setActiveServer(selectedProfile.id)
+                    easyssInfo = pref.getEasyssInfo() // Refresh local easyssInfo
+                    isSwitchingServer = false // Ensure this is false
+                    // Update UI, including spinner re-enabling if it was disabled by a previous incomplete switch
+                    serverSpinner.isEnabled = true
+                    view?.let {
+                        // Update summary text directly
+                        val serviceSummaryTextView = it.findViewById<TextView>(R.id.service_summary)
+                        if (easyssInfo.valid) {
+                            serviceSummaryTextView.text = easyssInfo.info
+                        } else {
+                            serviceSummaryTextView.text = getString(R.string.easyss_need_config)
+                        }
+                        updateServiceStatu(it) // This will show correct "stopped" state with new server info
+                    }
                 }
-                // updateServiceStatu will use the refreshed easyssInfo
-                updateServiceStatu(view)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 // Do nothing
+                serverSpinner.isEnabled = true // Re-enable spinner if nothing selected somehow
             }
         }
 
@@ -271,7 +358,25 @@ class MainFragment : Fragment() {
     }
 
     private fun updateServiceStatu(view: View) {
-        // Refresh easyssInfo at the beginning of UI update
+        val service_button = view.findViewById<MaterialButton>(R.id.service_button)
+        val service_title = view.findViewById<TextView>(R.id.service_title)
+
+        if (isSwitchingServer) {
+            Log.d("MainFragment", "updateServiceStatu: Server switch in progress, UI set to switching state.")
+            service_button.text = "Switching..."
+            service_button.isEnabled = false
+            // Optionally set title or other UI elements
+            service_title.text = "Switching..." 
+            // It might be good to also change the card color or icon here to reflect "switching"
+            // For now, just text and button state as per primary requirement.
+            return
+        } else {
+            // Ensure button is generally enabled if not switching, specific logic below will fine-tune this
+            service_button.isEnabled = true 
+            Log.d("MainFragment", "updateServiceStatu: Not switching server, proceeding with normal UI update.")
+        }
+
+        // Refresh easyssInfo at the beginning of UI update (if not switching)
         easyssInfo = pref.getEasyssInfo()
 
         // Update service summary based on current easyssInfo
@@ -286,58 +391,58 @@ class MainFragment : Fragment() {
             }
         }
 
-
-        var service_button =
-            view.findViewById<MaterialButton>(R.id.service_button)
-        var service_title = view.findViewById<TextView>(R.id.service_title)
+        // References to UI elements already obtained if isSwitchingServer is false,
+        // or obtained at the start of this else block for the first time.
+        // No, they are obtained at the top of updateServiceStatu now.
+        // var service_button = view.findViewById<MaterialButton>(R.id.service_button)
+        // var service_title = view.findViewById<TextView>(R.id.service_title)
         var service_icon = view.findViewById<ImageView>(R.id.service_icon)
         var service_card = view.findViewById<MaterialCardView>(R.id.service_card)
-        when {
-            pref.isServiceEnabled -> {
-                if(!easyssInfo.valid){ // This check is now also at the start of updateServiceStatu
-                    Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_SHORT).show()
-                    // pref.isServiceEnabled should already be false due to the check at the beginning of this function
-                    // No, the click listener for service_button handles this now.
-                    // And updateServiceStatu itself will set it to false if config is not valid.
-                    // So, if we reach here and isServiceEnabled is true, it means config became invalid *after* enabling.
-                    // However, the primary check for enabling the service is in the service_button click listener.
-                    // The logic here is more about reflecting the state.
-                    // If service is marked enabled but config is bad, we show error and update UI to disabled.
-                    // This part might be redundant if the service_button click listener correctly prevents enabling with bad config.
-                    // Let's rely on the check in service_button click listener and the top of updateServiceStatu.
-                    // If easyssInfo is not valid, updateServiceStatu will set pref.isServiceEnabled = false.
-                    // So, if we are in this block (pref.isServiceEnabled == true), easyssInfo MUST be valid.
 
-                    // The only case this Toast is needed is if the service was running and config became invalid.
-                    // This scenario needs careful handling. For now, assume config validity is checked before start.
-                    // The initial check in updateServiceStatu handles the case where config is invalid.
-                    // pref.isServiceEnabled = false // This is now handled at the top of updateServiceStatu
-                    // return // This would prevent UI update to "running" state if service did start with valid config
-                    // Let's assume if pref.isServiceEnabled is true here, config is valid.
+        // This explicit enabling might conflict if !easyssInfo.valid later.
+        // The click listener for service_button handles invalid config by returning, not by disabling button.
+        // Let's make sure the button state is explicitly managed in each path.
+        // service_button.isEnabled = true; // Default for non-switching, can be overridden below
+
+        when {
+            pref.isServiceEnabled -> { // Service is ON
+                if(!easyssInfo.valid) { // Should not happen if checks in click listener are effective
+                                      // And if startVPNService() is robust. But good to have a safeguard.
+                    Log.w("MainFragment", "updateServiceStatu: Service enabled but easyssInfo is invalid! Disabling service.")
+                    Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_LONG).show()
+                    pref.isServiceEnabled = false // Correct the state
+                    // Now recursively call to update UI to "stopped" state
+                    updateServiceStatu(view)
+                    return // Exit current processing
                 }
 
-                startVPNService()
-//                if(statuVPNService()){
-                    service_button.text = getString(R.string.service_disable)
-
-                    service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color_active))
-                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big)) // Active icon
-                    service_button.icon = getDrawable(mContext, R.drawable.ic_close_24)
-                    service_button.setBackgroundColor(mContext.getColor(R.color.button_disable))
-                    service_title.text = getString(R.string.service_running)
-
-                true
+                startVPNService() // This ensures the service is actually started if pref says it should be
+                service_button.text = getString(R.string.service_disable)
+                service_button.isEnabled = true // Explicitly enable
+                service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color_active))
+                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big))
+                service_button.icon = getDrawable(mContext, R.drawable.ic_close_24)
+                service_button.setBackgroundColor(mContext.getColor(R.color.button_disable))
+                service_title.text = getString(R.string.service_running)
             }
-
-            else -> { // Service is not enabled (pref.isServiceEnabled == false)
-                stopVPNService() // Ensure service is stopped
+            else -> { // Service is OFF (pref.isServiceEnabled == false)
+                stopVPNService() // Ensure service is actually stopped
                 service_button.text = getString(R.string.service_enable)
                 service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color))
-                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big)) // Changed to default icon
+                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big))
                 service_button.icon = getDrawable(mContext, R.drawable.ic_outline_play_arrow_24)
                 service_button.setBackgroundColor(mContext.getColor(R.color.button_enable))
                 service_title.text = getString(R.string.service_stopped)
-                // service_summary is already updated at the beginning of the function
+
+                // If config is invalid, button should be disabled to prevent enabling attempts.
+                if (!easyssInfo.valid) {
+                    service_button.isEnabled = false
+                    // Optionally, provide more visual feedback e.g. change button color
+                    Log.d("MainFragment", "updateServiceStatu: Config invalid and service stopped, service_button disabled.")
+                } else {
+                    service_button.isEnabled = true
+                    Log.d("MainFragment", "updateServiceStatu: Config valid and service stopped, service_button enabled.")
+                }
             }
         }
     }
