@@ -93,7 +93,9 @@ class Pref(private val ctx: Context) {
 
     var isServiceEnabled: Boolean
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(SERVICE_ENABLED, value).commit()
+        set(value) {
+            prefs.edit().putBoolean(SERVICE_ENABLED, value).commit()
+        }
 
     fun getApps(): Set<String>? {
         return prefs.getStringSet("selected_apps", HashSet<String>())
