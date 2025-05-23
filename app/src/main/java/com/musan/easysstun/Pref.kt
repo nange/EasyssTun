@@ -123,7 +123,7 @@ class Pref(private val ctx: Context) {
         val profilesJson = json.encodeToString(profiles)
         val editor = prefs.edit()
         editor.putString(SERVER_PROFILES, profilesJson)
-        editor.apply()
+        editor.commit()
     }
 
     fun addServerProfile(profile: ServerProfile) {
