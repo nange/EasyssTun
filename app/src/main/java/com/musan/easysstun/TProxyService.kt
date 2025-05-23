@@ -263,6 +263,11 @@ tunnel:
         Log.i("easyss", "stopService: Calling stopSelf().")
         stopSelf()
         Log.i("easyss", "stopService: Sequence fully dispatched.")
+
+        // Broadcast that the service has fully stopped
+        Log.i("easyss", "stopService: Broadcasting ACTION_SERVICE_STOPPED")
+        val broadcastIntent = Intent(ACTION_SERVICE_STOPPED)
+        sendBroadcast(broadcastIntent)
     }
 
     private fun createNotification(channelName: String) {
@@ -302,6 +307,7 @@ tunnel:
 
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
+        const val ACTION_SERVICE_STOPPED = "com.musan.easysstun.SERVICE_FULLY_STOPPED"
 
         init {
             System.loadLibrary("hev-socks5-tunnel")
