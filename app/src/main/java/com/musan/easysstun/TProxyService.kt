@@ -206,33 +206,63 @@ tunnel:
     }
 
     fun stopService() {
-        if (tunFd == null) return
-        stopForeground(true)
-
-        /* TProxy */
-        try {
-            TProxyStopService()
-        } catch (e: Exception) {
-            Log.e("TProxyStopService", e.message.toString())
+        if (tunFd == null) {
+            Log.i("easyss", "stopService: called but tunFd is null, already stopped or not started.")
+            return
         }
-        try {
+        Log.i("easyss", "stopService: Initiating stop sequence.")
+        stopForeground(true) // Consider stopForeground(STOP_FOREGROUND_REMOVE) for API 24+
 
-            process.destroy()
-            processEasyJob.cancel()
-//            val exitCode = process.waitFor()
-//            Log.i("easyss", "msg=[EasyssTun] Command exited with code: $exitCode")
-        } catch (e: Exception) {
-            Log.e("easyJob", e.message.toString())
+        // Launch TProxyStopService in a separate coroutine
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.i("easyss", "TProxyStopService coroutine: Calling TProxyStopService()")
+                TProxyStopService()
+                Log.i("easyss", "TProxyStopService coroutine: TProxyStopService() completed.")
+            } catch (e: Throwable) { // Catch Throwable for native errors
+                Log.e("TProxyStopService", "Exception during TProxyStopService: " + (e.message ?: "Unknown error"), e)
+            }
         }
-        /* VPN */
+
+        // Cleanup libeasyss.so process and related job
         try {
-            tunFd!!.close()
+            if (::process.isInitialized && process.isAlive) {
+                Log.i("easyss", "stopService: Destroying libeasyss.so process.")
+                process.destroy()
+            } else {
+                Log.i("easyss", "stopService: libeasyss.so process not initialized or not alive.")
+            }
+
+            if (::processEasyJob.isInitialized && processEasyJob.isActive) {
+                Log.i("easyss", "stopService: Cancelling processEasyJob coroutine.")
+                processEasyJob.cancel()
+            } else {
+                Log.i("easyss", "stopService: processEasyJob not initialized or not active.")
+            }
         } catch (e: Exception) {
-            Log.e("tunFd", e.message.toString())
+            Log.e("easyss", "Exception during process/job cleanup: " + (e.message ?: "Unknown error"), e)
+        }
+
+        // Close VPN tunnel file descriptor
+        try {
+            Log.i("easyss", "stopService: Closing tunFd.")
+            tunFd?.close() // Use safe call
+        } catch (e: IOException) { // Catch specific IOException
+            Log.e("easyss", "Exception closing tunFd: " + (e.message ?: "Unknown error"), e)
         }
         tunFd = null
 
+        // Update preference state
+        if (::pref.isInitialized) { // Ensure pref is initialized
+            pref.isServiceEnabled = false
+            Log.i("easyss", "stopService: Set pref.isServiceEnabled to false.")
+        } else {
+            Log.i("easyss", "stopService: Pref not initialized, cannot set isServiceEnabled.")
+        }
+        
+        Log.i("easyss", "stopService: Calling stopSelf().")
         stopSelf()
+        Log.i("easyss", "stopService: Sequence fully dispatched.")
     }
 
     private fun createNotification(channelName: String) {
