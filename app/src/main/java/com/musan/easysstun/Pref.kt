@@ -93,7 +93,9 @@ class Pref(private val ctx: Context) {
 
     var isServiceEnabled: Boolean
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(SERVICE_ENABLED, value).apply()
+        set(value) {
+            prefs.edit().putBoolean(SERVICE_ENABLED, value).commit()
+        }
 
     fun getApps(): Set<String>? {
         return prefs.getStringSet("selected_apps", HashSet<String>())
@@ -121,7 +123,7 @@ class Pref(private val ctx: Context) {
         val profilesJson = json.encodeToString(profiles)
         val editor = prefs.edit()
         editor.putString(SERVER_PROFILES, profilesJson)
-        editor.apply()
+        editor.commit()
     }
 
     fun addServerProfile(profile: ServerProfile) {
@@ -152,7 +154,7 @@ class Pref(private val ctx: Context) {
     }
 
     fun setActiveServer(profileId: String) {
-        prefs.edit().putString(ACTIVE_SERVER_ID, profileId).apply()
+        prefs.edit().putString(ACTIVE_SERVER_ID, profileId).commit()
     }
 
     fun getActiveServerProfile(): ServerProfile? {

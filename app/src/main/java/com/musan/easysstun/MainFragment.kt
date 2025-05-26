@@ -9,6 +9,8 @@ import android.net.VpnService
 import android.os.AsyncTask
 import android.os.Bundle
 import android.util.Log
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
@@ -340,10 +342,34 @@ class MainFragment : Fragment() {
         } else {
         }
         try {
+            val activeProfile = pref.getActiveServerProfile() // Get the full profile object
+
             val intent2 = Intent(mContext, TProxyService::class.java)
+
+            if (activeProfile != null) {
+                // Ensure Json is available. If Pref.kt's instance is not accessible, create one.
+                // For simplicity, creating one here:
+                val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+                try {
+                    val profileJson = json.encodeToString(activeProfile)
+                    intent2.putExtra("com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA", profileJson)
+                    // Log.d("MainFragment", "Starting TProxyService with ACTIVE_SERVER_PROFILE_JSON_EXTRA: $profileJson") // Optional debug log
+                } catch (e: kotlinx.serialization.SerializationException) {
+                    Log.e("MainFragment", "Error serializing active profile", e)
+                    // Handle error: perhaps don't start service or start without extra?
+                    // For now, if serialization fails, it will proceed without the extra.
+                }
+            } else {
+                // Log.w("MainFragment", "No active profile to send to TProxyService.") // Optional warning
+            }
+
             mContext.startService(intent2.setAction(TProxyService.ACTION_CONNECT))
         } catch (e: Exception) {
-            throw RuntimeException(e)
+            Log.e("MainFragment", "Error starting TProxyService", e)
+            // Consider if this should re-throw or just log, depending on desired app behavior
+            if (e !is kotlinx.serialization.SerializationException) { // Avoid double throw if caught above
+                 throw RuntimeException(e)
+            }
         }
 
     }
