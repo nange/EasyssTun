@@ -16,6 +16,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.SerializationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
@@ -27,6 +29,7 @@ import java.io.InputStreamReader
 
 class TProxyService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
+    private var receivedProfileJson: String? = null
 
     private lateinit var pref: Pref
     private val easyJob = Job()
@@ -34,14 +37,30 @@ class TProxyService : VpnService() {
     private lateinit var processEasyJob: Job
     lateinit var process: Process
 
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
         if (intent != null && ACTION_DISCONNECT == intent.action) {
+            Log.i(TAG, "onStartCommand: Received ACTION_DISCONNECT.")
+            receivedProfileJson = null // Clear any old JSON on disconnect
             stopService()
             return START_NOT_STICKY
         }
+
+        if (intent != null && intent.action == ACTION_CONNECT) { // Assuming ACTION_CONNECT is the trigger
+            receivedProfileJson = intent.getStringExtra("com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA")
+            Log.i(TAG, "onStartCommand: Received profile JSON (length: ${receivedProfileJson?.length ?: "null"}) via Intent.")
+        } else {
+            // If intent is null or action isn't connect (and not disconnect), clear receivedProfileJson
+            // to ensure fallback or default behavior if service is restarted by system.
+            Log.w(TAG, "onStartCommand: No profile JSON in Intent or unexpected action. Intent: $intent")
+            receivedProfileJson = null
+        }
+
         try {
             startService()
-        } catch (e: IOException) {
+        } catch (e: java.io.IOException) { // Ensure correct import for IOException
+            Log.e(TAG, "Failed to start service due to IOException", e)
+            // Consider how to handle this, maybe stopSelf()
             throw RuntimeException(e)
         }
         return START_STICKY
@@ -76,11 +95,115 @@ class TProxyService : VpnService() {
         if (tunFd != null) return
 
         pref = Pref(this)
-        var easyssInfo = pref.getEasyssInfo()
+        // val TAG = "TProxyServiceDiag" // Already in companion object
+
+        var loadedProfile: com.musan.easysstun.ServerProfile? = null 
+        var profileSource = "Unknown" // For logging
+
+        if (receivedProfileJson != null && receivedProfileJson!!.isNotBlank()) {
+            Log.i(TAG, "Attempting to deserialize profile from Intent JSON.")
+            val json = Json { ignoreUnknownKeys = true; encodeDefaults = true } 
+            try {
+                loadedProfile = json.decodeFromString(com.musan.easysstun.ServerProfile.serializer(), receivedProfileJson!!)
+                profileSource = "Intent JSON"
+                Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${loadedProfile?.id}")
+            } catch (e: SerializationException) {
+                Log.e(TAG, "Error deserializing profile from Intent JSON: ${e.message}. Falling back.")
+                profileSource = "Intent JSON Deserialization Error -> Fallback"
+                // loadedProfile remains null, will trigger fallback
+            }
+        } else {
+            Log.i(TAG, "No profile JSON in Intent. Falling back to SharedPreferences.")
+            profileSource = "SharedPreferences Fallback"
+        }
+
+        if (loadedProfile == null) { // Fallback logic
+            Log.i(TAG, "Executing fallback: Loading profile via SharedPreferences.")
+            // This part uses pref to get active ID then find in list
+            val activeIdFromPrefs = pref.prefs.getString(com.musan.easysstun.Pref.ACTIVE_SERVER_ID, null) 
+            Log.i(TAG, "Fallback: Active Server ID from SharedPreferences: '$activeIdFromPrefs'")
+            if (activeIdFromPrefs != null) {
+                loadedProfile = pref.getServerProfiles().find { it.id == activeIdFromPrefs }
+                if (loadedProfile != null) {
+                    Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${loadedProfile.id}")
+                    // If profile was null before due to deserialization error, but fallback succeeded, update source
+                    if (profileSource.startsWith("Intent JSON Deserialization Error")) profileSource = "SharedPreferences Fallback (after Deserialization Error)"
+                } else {
+                    Log.w(TAG, "Fallback: Profile with ID '$activeIdFromPrefs' not found in SharedPreferences list.")
+                }
+            } else {
+                Log.w(TAG, "Fallback: No Active Server ID found in SharedPreferences.")
+            }
+        }
+        // End of new loadedProfile logic
+
+        // Update Diagnostic Logging
+        if (loadedProfile == null) {
+            Log.w(TAG, "最终: Loaded ServerProfile is null (Source evaluation: $profileSource).")
+        } else {
+            Log.i(TAG, "最终: Loaded ServerProfile (Source: $profileSource) - ID: ${loadedProfile.id}, Name: '${loadedProfile.name}', Server: '${loadedProfile.server}', Port: '${loadedProfile.serverPort}'")
+        }
+        
+        // Construct easyssInfo based on loadedProfile
+        val easyssInfo = com.musan.easysstun.easyssInfo() 
+        if (loadedProfile == null) {
+            easyssInfo.valid = false
+        } else {
+            // This is the logic from Pref.getEasyssInfo(), adapted
+            easyssInfo.valid = true
+            easyssInfo.info = "${loadedProfile.server}:${loadedProfile.serverPort}"
+            var sn = loadedProfile.serverNameIndication
+            if (sn.isBlank()) {
+                sn = loadedProfile.server
+            }
+            val cmdList = mutableListOf(
+                "-s", loadedProfile.server,
+                "-p", loadedProfile.serverPort,
+                "-k", loadedProfile.password,
+                "-m", loadedProfile.encryption,
+                "-proxy-rule", loadedProfile.proxyRule,
+                "-outbound-proto", loadedProfile.outbound,
+                "-l", "2080", 
+                "-t", "60", 
+                "-log-level", loadedProfile.logLevel,
+                "-disable-quic=${loadedProfile.disableQuic}",
+                "-ipv6-rule", loadedProfile.ipv6Rule,
+                "-sn", sn,
+                "-enable-tun2socks=false",
+                "-daemon=false"
+            )
+            if (loadedProfile.customCa.isNotBlank()) {
+                val customCaFile = java.io.File(cacheDir, "easyss_custom_ca.conf") // use 'this.cacheDir' or 'applicationContext.cacheDir'
+                try {
+                    customCaFile.createNewFile()
+                    java.io.FileOutputStream(customCaFile, false).use { fos ->
+                        fos.write(loadedProfile.customCa.toByteArray())
+                    }
+                    cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
+                } catch (e: java.io.IOException) {
+                    Log.e(TAG, "Error writing custom CA file", e)
+                }
+            }
+            easyssInfo.cmdList = cmdList
+        }
+        // The existing diagnostic logs for easyssInfo.valid and cmdList should follow this.
+        Log.i(TAG, "Constructed easyssInfo.valid: ${easyssInfo.valid}")
+        if (easyssInfo.valid) {
+            val serverInCmd = easyssInfo.cmdList.indexOf("-s")
+            val serverAddressInCmd = if (serverInCmd != -1 && serverInCmd + 1 < easyssInfo.cmdList.size) easyssInfo.cmdList[serverInCmd + 1] else "N/A"
+            val portInCmd = easyssInfo.cmdList.indexOf("-p")
+            val serverPortInCmd = if (portInCmd != -1 && portInCmd + 1 < easyssInfo.cmdList.size) easyssInfo.cmdList[portInCmd + 1] else "N/A"
+            Log.i(TAG, "Constructed easyssInfo command params: Effective Server='${serverAddressInCmd}', Effective Port='${serverPortInCmd}'")
+        }
+
         if (!easyssInfo.valid){
-            pref.isServiceEnabled = false
+            Log.w(TAG, "Constructed easyssInfo is invalid. Service will not start or will be stopped.")
+            pref.isServiceEnabled = false // This uses the setter which should commit.
             return
         }
+
+        // VPN setup, processEasyJob, TProxy config, etc. remain the same.
+        // Ensure they use the 'easyssInfo' constructed above.
 
         /* VPN */
         var session = String()
@@ -308,6 +431,7 @@ tunnel:
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
         const val ACTION_SERVICE_STOPPED = "com.musan.easysstun.SERVICE_FULLY_STOPPED"
+        private const val TAG = "TProxyServiceDiag"
 
         init {
             System.loadLibrary("hev-socks5-tunnel")
