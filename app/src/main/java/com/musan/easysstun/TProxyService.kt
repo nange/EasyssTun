@@ -19,6 +19,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.SerializationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel // Added this import
+import kotlinx.coroutines.ensureActive // Explicit import for ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withContext
@@ -349,7 +350,7 @@ class TProxyService : VpnService() {
                 try {
                     // Check for cancellation at the start of each attempt to run the process.
                     // ensureActive() will throw a CancellationException if the job is cancelled.
-                    currentJob.ensureActive()
+                    ensureActive() // Use unqualified ensureActive from coroutine scope
 
                     val libraryPath = applicationInfo.nativeLibraryDir.toString() + "/libeasyss.so"
                     val fullCmdList = listOf(libraryPath) + easyssCmdList
@@ -366,7 +367,7 @@ class TProxyService : VpnService() {
                     // Inner loop for reading logs
                     while (true) {
                         // Check for cancellation before each potentially blocking readLine call.
-                        currentJob.ensureActive()
+                        ensureActive() // Use unqualified ensureActive from coroutine scope
 
                         val read = bufferedReader.readLine()
                         if (read == null) { // End of stream from process
