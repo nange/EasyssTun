@@ -284,16 +284,6 @@ class TProxyService : VpnService() {
                         }
                     }
 
-//                    while (isActive) {
-//                        if (bufferedReader.ready()) {
-//                            val line = bufferedReader.readLine()
-//                            if (line != null) {
-//                                Log.i("easyss", line)
-//                            }
-//                        } else {
-//                            delay(100)
-//                        }
-//                    }
                 } catch (e: IOException) {
                     Log.e("easyss", "msg=[EasyssTun] IOException: " + e.message)
                 } catch (e: InterruptedException) {
@@ -313,7 +303,7 @@ class TProxyService : VpnService() {
                     }
                     // Removed break to allow restart
                 }
-                if (!isActive) { // Check if the job itself is cancelled
+                if (!processEasyJob.isActive) { // Check if the job itself is cancelled
                     Log.d(TAG, "processEasyJob: job is no longer active, breaking loop.")
                     break
                 }
