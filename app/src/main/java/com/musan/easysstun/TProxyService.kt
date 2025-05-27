@@ -354,7 +354,7 @@ class TProxyService : VpnService() {
 
                     // Log output from easyss process
                     val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
-                    var line: String?
+                    var line: String? = null // Explicitly initialized to null
                     while (isActive && bufferedReader.readLine().also { line = it } != null) { // Check isActive and readLine
                         Log.i("easyss", line!!) // Use "easyss" tag for its own logs; line is non-null here
                     }
@@ -373,7 +373,10 @@ class TProxyService : VpnService() {
                 } catch (e: InterruptedException) {
                     Log.w(TAG, "launchEasyssProcess: Interrupted - ${e.message}", e)
                     Thread.currentThread().interrupt() // Restore interrupt status
-                    break // Exit while loop if interrupted
+                    if (!isActive) { // If interruption is due to coroutine cancellation
+                        Log.i(TAG, "launchEasyssProcess: Interruption due to coroutine cancellation. Breaking loop.")
+                        break // Exit while loop
+                    }
                 } catch (e: Exception) { // Catch any other unexpected exceptions
                     Log.e(TAG, "launchEasyssProcess: Unexpected error - ${e.message}", e)
                 } finally {
