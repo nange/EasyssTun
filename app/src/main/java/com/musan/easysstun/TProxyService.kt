@@ -20,6 +20,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.SerializationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel // Added this import
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withContext
@@ -310,9 +311,14 @@ class TProxyService : VpnService() {
                     } else {
                         Log.w(TAG, "processEasyJob: finally block, process was not initialized.")
                     }
-                    break // This break is for the while(true) loop inside processEasyJob
+                    // Removed break to allow restart
                 }
-
+                if (!isActive) { // Check if the job itself is cancelled
+                    Log.d(TAG, "processEasyJob: job is no longer active, breaking loop.")
+                    break
+                }
+                Log.i(TAG, "processEasyJob: libeasyss.so process will be restarted after a 5-second delay.")
+                delay(5000L) // Delay before restarting
             }
         }
 
