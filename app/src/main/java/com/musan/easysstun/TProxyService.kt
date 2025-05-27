@@ -52,7 +52,7 @@ class TProxyService : VpnService() {
 
         if (intent != null && intent.action == ACTION_CONNECT) { // Assuming ACTION_CONNECT is the trigger
             receivedProfileJson = intent.getStringExtra("com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA")
-            Log.i(TAG, "onStartCommand: Received profile JSON (length: ${receivedProfileJson?.length ?: "null"}) via Intent.")
+            Log.i(TAG, "onStartCommand: Received profile JSON (length: ${receivedProfileJson?.length ?: "null"}) via Intent.") // Keep Log.i - User-driven action
         } else {
             // If intent is null or action isn't connect (and not disconnect), clear receivedProfileJson
             // to ensure fallback or default behavior if service is restarted by system.
@@ -63,9 +63,8 @@ class TProxyService : VpnService() {
         try {
             startService()
         } catch (e: java.io.IOException) { // Ensure correct import for IOException
-            Log.e(TAG, "Failed to start service due to IOException", e)
-            // Consider how to handle this, maybe stopSelf()
-            throw RuntimeException(e)
+            Log.e(TAG, "Failed to start service due to IOException. Stopping service.", e)
+            stopSelf()
         }
         return START_STICKY
     }
@@ -86,9 +85,9 @@ class TProxyService : VpnService() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(prefsUpdatedReceiver)
-        Log.i(TAG, "onDestroy: Cancelling serviceScope.")
+        Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel() // Cancel all coroutines launched by serviceScope
-        Log.i(TAG, "onDestroy: Service being destroyed.")
+        Log.i(TAG, "onDestroy: Service being destroyed.") // Keep Log.i - Core lifecycle
         // stopSelf() // This should be handled by actualFinalizeStop now
     }
 
@@ -108,31 +107,31 @@ class TProxyService : VpnService() {
         var profileSource = "Unknown" // For logging
 
         if (receivedProfileJson != null && receivedProfileJson!!.isNotBlank()) {
-            Log.i(TAG, "Attempting to deserialize profile from Intent JSON.")
+            Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
             val json = Json { ignoreUnknownKeys = true; encodeDefaults = true } 
             try {
                 loadedProfile = json.decodeFromString(com.musan.easysstun.ServerProfile.serializer(), receivedProfileJson!!)
                 profileSource = "Intent JSON"
-                Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${loadedProfile?.id}")
+                Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${loadedProfile?.id}") // Keep Log.i - High-level outcome
             } catch (e: SerializationException) {
                 Log.e(TAG, "Error deserializing profile from Intent JSON: ${e.message}. Falling back.")
                 profileSource = "Intent JSON Deserialization Error -> Fallback"
                 // loadedProfile remains null, will trigger fallback
             }
         } else {
-            Log.i(TAG, "No profile JSON in Intent. Falling back to SharedPreferences.")
+            Log.d(TAG, "No profile JSON in Intent. Falling back to SharedPreferences.")
             profileSource = "SharedPreferences Fallback"
         }
 
         if (loadedProfile == null) { // Fallback logic
-            Log.i(TAG, "Executing fallback: Loading profile via SharedPreferences.")
+            Log.d(TAG, "Executing fallback: Loading profile via SharedPreferences.")
             // This part uses pref to get active ID then find in list
             val activeIdFromPrefs = pref.prefs.getString(com.musan.easysstun.Pref.ACTIVE_SERVER_ID, null) 
-            Log.i(TAG, "Fallback: Active Server ID from SharedPreferences: '$activeIdFromPrefs'")
+            Log.d(TAG, "Fallback: Active Server ID from SharedPreferences: '$activeIdFromPrefs'")
             if (activeIdFromPrefs != null) {
                 loadedProfile = pref.getServerProfiles().find { it.id == activeIdFromPrefs }
                 if (loadedProfile != null) {
-                    Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${loadedProfile.id}")
+                    Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${loadedProfile.id}") // Keep Log.i - High-level outcome
                     // If profile was null before due to deserialization error, but fallback succeeded, update source
                     if (profileSource.startsWith("Intent JSON Deserialization Error")) profileSource = "SharedPreferences Fallback (after Deserialization Error)"
                 } else {
@@ -148,7 +147,7 @@ class TProxyService : VpnService() {
         if (loadedProfile == null) {
             Log.w(TAG, "最终: Loaded ServerProfile is null (Source evaluation: $profileSource).")
         } else {
-            Log.i(TAG, "最终: Loaded ServerProfile (Source: $profileSource) - ID: ${loadedProfile.id}, Name: '${loadedProfile.name}', Server: '${loadedProfile.server}', Port: '${loadedProfile.serverPort}'")
+            Log.d(TAG, "最终: Loaded ServerProfile (Source: $profileSource) - ID: ${loadedProfile.id}, Name: '${loadedProfile.name}', Server: '${loadedProfile.server}', Port: '${loadedProfile.serverPort}'")
         }
         
         // Construct easyssInfo based on loadedProfile
@@ -194,13 +193,13 @@ class TProxyService : VpnService() {
             easyssInfo.cmdList = cmdList
         }
         // The existing diagnostic logs for easyssInfo.valid and cmdList should follow this.
-        Log.i(TAG, "Constructed easyssInfo.valid: ${easyssInfo.valid}")
+        Log.d(TAG, "Constructed easyssInfo.valid: ${easyssInfo.valid}")
         if (easyssInfo.valid) {
             val serverInCmd = easyssInfo.cmdList.indexOf("-s")
             val serverAddressInCmd = if (serverInCmd != -1 && serverInCmd + 1 < easyssInfo.cmdList.size) easyssInfo.cmdList[serverInCmd + 1] else "N/A"
             val portInCmd = easyssInfo.cmdList.indexOf("-p")
             val serverPortInCmd = if (portInCmd != -1 && portInCmd + 1 < easyssInfo.cmdList.size) easyssInfo.cmdList[portInCmd + 1] else "N/A"
-            Log.i(TAG, "Constructed easyssInfo command params: Effective Server='${serverAddressInCmd}', Effective Port='${serverPortInCmd}'")
+            Log.d(TAG, "Constructed easyssInfo command params: Effective Server='${serverAddressInCmd}', Effective Port='${serverPortInCmd}'")
         }
 
         if (!easyssInfo.valid){
@@ -255,7 +254,7 @@ class TProxyService : VpnService() {
         builder.setSession(session)
         tunFd = builder.establish()
         if (tunFd != null) {
-            Log.i(TAG, "startService: Successfully established new tunFd: ${tunFd!!.fd}")
+            Log.i(TAG, "startService: Successfully established new tunFd: ${tunFd!!.fd}") // Keep Log.i - Core lifecycle
         } else {
             Log.w(TAG, "startService: Failed to establish new tunFd, it's null.")
             // stopSelf() is called by the original code if tunFd is null, which is fine.
@@ -269,9 +268,9 @@ class TProxyService : VpnService() {
                 try {
                     val libraryPath = applicationInfo.nativeLibraryDir.toString() + "/libeasyss.so"
                     var cmdList = listOf(libraryPath) + easyssInfo.cmdList
-                    Log.i(TAG, "processEasyJob: Attempting to start libeasyss.so process. Command server: ${easyssInfo.cmdList.getOrNull(easyssInfo.cmdList.indexOf("-s") + 1)}, local port: ${easyssInfo.cmdList.getOrNull(easyssInfo.cmdList.indexOf("-l") + 1)}")
+                    Log.d(TAG, "processEasyJob: Attempting to start libeasyss.so process. Command server: ${easyssInfo.cmdList.getOrNull(easyssInfo.cmdList.indexOf("-s") + 1)}, local port: ${easyssInfo.cmdList.getOrNull(easyssInfo.cmdList.indexOf("-l") + 1)}")
                     process = ProcessBuilder(cmdList).start()
-                    Log.i(TAG, "processEasyJob: libeasyss.so process started (ProcessBuilder executed). isAlive: ${process.isAlive}")
+                    Log.i(TAG, "processEasyJob: libeasyss.so process started (ProcessBuilder executed). isAlive: ${process.isAlive}") // Keep Log.i - Core lifecycle
 
                     Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.") // This is an existing log, TAG is different
                     val bufferedReader =
@@ -301,13 +300,13 @@ class TProxyService : VpnService() {
                 }
 
                 finally {
-                    Log.i(TAG, "processEasyJob: finally block entered. Process initialized: ${::process.isInitialized}")
+                    Log.d(TAG, "processEasyJob: finally block entered. Process initialized: ${::process.isInitialized}")
                     if (::process.isInitialized) { // Check if process was even initialized
-                        Log.i(TAG, "processEasyJob: About to call process.destroy(). Current process state: isAlive=${process.isAlive}")
+                        Log.d(TAG, "processEasyJob: About to call process.destroy(). Current process state: isAlive=${process.isAlive}")
                         process.destroy()
-                        Log.i(TAG, "processEasyJob: process.destroy() called. About to call process.waitFor().")
+                        Log.d(TAG, "processEasyJob: process.destroy() called. About to call process.waitFor().")
                         val exitCode = process.waitFor()
-                        Log.i(TAG, "processEasyJob: libeasyss.so process exited with code: $exitCode")
+                        Log.i(TAG, "processEasyJob: libeasyss.so process exited with code: $exitCode") // Keep Log.i - Core lifecycle
                     } else {
                         Log.w(TAG, "processEasyJob: finally block, process was not initialized.")
                     }
@@ -319,7 +318,7 @@ class TProxyService : VpnService() {
 
 
         val socksPortForTProxy = pref.prefs.getString("socks_port", "2080")
-        Log.i(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPortForTProxy")
+        Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPortForTProxy")
         /* TProxy */
         val tproxy_file = File(cacheDir, "tproxy.conf")
         try {
@@ -341,7 +340,7 @@ tunnel:
         } catch (e: IOException) {
             return
         }
-        Log.i(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${tunFd?.fd}.")
+        Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${tunFd?.fd}.")
         TProxyStartService(tproxy_file.absolutePath, tunFd!!.fd)
         pref.prefs.edit { apply { putBoolean("enable", true) } }
         val channelName = "easysstun"
@@ -351,7 +350,7 @@ tunnel:
 
     fun stopService() {
         if (tunFd == null && (!::processEasyJob.isInitialized || !processEasyJob.isActive)) {
-            Log.i(TAG, "stopService: called but appears already stopped or not fully started.")
+            Log.d(TAG, "stopService: called but appears already stopped or not fully started.")
             // It's possible actualFinalizeStop() was not called if a previous stop was interrupted.
             // Check pref state and call actualFinalizeStop if needed, or just return.
             if(pref.isServiceEnabled || tunFd != null) { // If state indicates it might still be "on"
@@ -360,7 +359,7 @@ tunnel:
             }
             return
         }
-        Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}")
+        Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}") // Keep Log.i - User-driven or high-level state change
         stopForeground(true)
 
         serviceScope.launch { 
@@ -368,9 +367,9 @@ tunnel:
                 // 1. Stop TProxy (hev-socks5-tunnel)
                 val tproxyStopJob = launch { 
                     try {
-                        Log.i(TAG, "stopService: TProxyStopService coroutine calling TProxyStopService()")
+                        Log.d(TAG, "stopService: TProxyStopService coroutine calling TProxyStopService()")
                         TProxyStopService()
-                        Log.i(TAG, "stopService: TProxyStopService coroutine TProxyStopService() completed.")
+                        Log.d(TAG, "stopService: TProxyStopService coroutine TProxyStopService() completed.")
                     } catch (e: Throwable) {
                         Log.e(TAG, "stopService: Exception during TProxyStopService: ${e.message}", e)
                     }
@@ -378,15 +377,15 @@ tunnel:
 
                 // 2. Stop libeasyss process
                 if (::processEasyJob.isInitialized && processEasyJob.isActive) {
-                    Log.i(TAG, "stopService: Cancelling and joining processEasyJob.")
+                    Log.d(TAG, "stopService: Cancelling and joining processEasyJob.")
                     try {
                         processEasyJob.cancelAndJoin() 
-                        Log.i(TAG, "stopService: processEasyJob completed.")
+                        Log.d(TAG, "stopService: processEasyJob completed.")
                     } catch (e: Exception) {
                         Log.e(TAG, "stopService: Exception during processEasyJob.cancelAndJoin(): ${e.message}", e)
                     }
                 } else {
-                    Log.i(TAG, "stopService: processEasyJob was not active or initialized.")
+                    Log.d(TAG, "stopService: processEasyJob was not active or initialized.")
                     if (::process.isInitialized && process.isAlive) {
                          Log.w(TAG, "stopService: processEasyJob not active, but process is. Destroying directly.")
                          try {
@@ -395,7 +394,7 @@ tunnel:
                                 process.destroy() 
                                 process.waitFor() 
                             }
-                            Log.i(TAG, "stopService: Direct process destruction complete.")
+                            Log.d(TAG, "stopService: Direct process destruction complete.")
                          } catch (e: Exception) {
                              Log.e(TAG, "stopService: Exception during direct process destruction: ${e.message}", e)
                          }
@@ -403,14 +402,14 @@ tunnel:
                 }
                 
                 // 3. Wait for TProxy to stop
-                Log.i(TAG, "stopService: Waiting for TProxyStopService job (tproxyStopJob) to complete.")
+                Log.d(TAG, "stopService: Waiting for TProxyStopService job (tproxyStopJob) to complete.")
                 tproxyStopJob.join()
-                Log.i(TAG, "stopService: TProxyStopService job (tproxyStopJob) completed.")
+                Log.d(TAG, "stopService: TProxyStopService job (tproxyStopJob) completed.")
 
             } catch (e: Exception) {
                 Log.e(TAG, "stopService: Unhandled exception during native cleanup phase: ${e.message}", e)
             } finally {
-                Log.i(TAG, "stopService: Native cleanup phase complete or errored. Proceeding with final Java-level cleanup.")
+                Log.d(TAG, "stopService: Native cleanup phase complete or errored. Proceeding with final Java-level cleanup.")
                 withContext(Dispatchers.Main.immediate) { 
                      actualFinalizeStop() 
                 }
@@ -419,15 +418,15 @@ tunnel:
     }
     
     private fun actualFinalizeStop() {
-        Log.i(TAG, "actualFinalizeStop: Finalizing service stop.")
+        Log.d(TAG, "actualFinalizeStop: Finalizing service stop.")
         try {
-            Log.i(TAG, "actualFinalizeStop: Attempting to close tunFd: ${tunFd?.fd}.")
+            Log.d(TAG, "actualFinalizeStop: Attempting to close tunFd: ${tunFd?.fd}.")
             tunFd?.close() 
         } catch (e: IOException) {
             Log.e(TAG, "actualFinalizeStop: Exception closing tunFd: ${e.message}", e)
         }
         tunFd = null 
-        Log.i(TAG, "actualFinalizeStop: tunFd set to null.")
+        Log.d(TAG, "actualFinalizeStop: tunFd set to null.")
 
         if (::pref.isInitialized) {
             pref.isServiceEnabled = false
@@ -435,11 +434,11 @@ tunnel:
             Log.w(TAG, "actualFinalizeStop: Pref not initialized, cannot set isServiceEnabled.")
         }
         
-        Log.i(TAG, "actualFinalizeStop: Calling stopSelf().")
+        Log.d(TAG, "actualFinalizeStop: Calling stopSelf().")
         stopSelf()
-        Log.i(TAG, "actualFinalizeStop: Broadcasting ACTION_SERVICE_STOPPED")
+        Log.d(TAG, "actualFinalizeStop: Broadcasting ACTION_SERVICE_STOPPED")
         sendBroadcast(Intent(ACTION_SERVICE_STOPPED))
-        Log.i(TAG, "actualFinalizeStop: Service fully stopped and broadcast sent.")
+        Log.i(TAG, "actualFinalizeStop: Service fully stopped and broadcast sent.") // Keep Log.i - High-level outcome
     }
 
     private fun createNotification(channelName: String) {

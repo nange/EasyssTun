@@ -2,457 +2,353 @@ package com.musan.easysstun
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.After
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.Mock
-import org.mockito.Mockito.*
-import org.mockito.junit.MockitoJUnitRunner
-import org.junit.Assert.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
+import org.robolectric.annotation.Config
+import java.util.UUID
 
-@RunWith(MockitoJUnitRunner::class)
+// Use Robolectric to allow PreferenceManager.getDefaultSharedPreferences to work in unit tests
+@RunWith(AndroidJUnit4::class)
+@Config(manifest=Config.NONE) // We don't need a manifest for these unit tests
 class PrefTest {
 
-    @Mock
-    private lateinit var mockContext: Context
-
-    @Mock
-    private lateinit var mockPrefs: SharedPreferences
-
-    @Mock
-    private lateinit var mockEditor: SharedPreferences.Editor
-
-    private lateinit var pref: Pref
-
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private lateinit var context: Context
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var pref: Pref // The actual Pref class
 
     @Before
     fun setUp() {
-        `when`(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(mockPrefs)
-        `when`(mockPrefs.edit()).thenReturn(mockEditor)
-        `when`(mockEditor.putString(anyString(), anyString())).thenReturn(mockEditor)
-        `when`(mockEditor.remove(anyString())).thenReturn(mockEditor)
-        `when`(mockEditor.putBoolean(anyString(), anyBoolean())).thenReturn(mockEditor)
-        // mockEditor.apply() is void, so no need to mock further for it unless verifying calls
+        context = ApplicationProvider.getApplicationContext()
+        // Use a specific name for test preferences to avoid conflicts and ensure clean state
+        // Robolectric handles SharedPreferences, so direct mocking of PreferenceManager isn't strictly needed here
+        sharedPreferences = context.getSharedPreferences("test_easysstun_prefs", Context.MODE_PRIVATE)
+        sharedPreferences.edit().clear().apply() // Clear before each test
 
-        pref = Pref(mockContext)
+        // Initialize the real Pref object, which will use the SharedPreferences provided by Robolectric's context
+        pref = Pref(context)
+        // Ensure its internal SharedPreferences is the one we're controlling/expecting
+        assertEquals(sharedPreferences.toString(), pref.prefs.toString())
     }
 
-    // Test scenarios will be implemented here
-
-    @Test
-    fun `initial state - getServerProfiles returns empty list`() {
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null)
-        val profiles = pref.getServerProfiles()
-        assertTrue(profiles.isEmpty())
+    @After
+    fun tearDown() {
+        // Clear SharedPreferences after each test to ensure test isolation
+        sharedPreferences.edit().clear().apply()
     }
 
-    @Test
-    fun `initial state - getActiveServerProfile returns null`() {
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null) // No profiles
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(null)
-        val activeProfile = pref.getActiveServerProfile()
-        assertNull(activeProfile)
-    }
-
-    @Test
-    fun `addServerProfile - add one profile`() {
-        val profile = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        // Simulate no profiles initially
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null)
-
-        pref.addServerProfile(profile)
-
-        val expectedJson = json.encodeToString(listOf(profile))
-        verify(mockEditor).putString(Pref.SERVER_PROFILES, expectedJson)
-        verify(mockEditor).apply() // Important to verify that changes are saved
-
-        // For verification, simulate the saved state
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(expectedJson)
-        val profiles = pref.getServerProfiles()
-        assertEquals(1, profiles.size)
-        assertEquals(profile, profiles[0])
+    private fun createDummyProfile(id: String = UUID.randomUUID().toString(), name: String = "Test Profile"): ServerProfile {
+        return ServerProfile(
+            id = id,
+            name = name,
+            server = "test.server.com",
+            serverPort = "1234",
+            password = "password",
+            encryption = "chacha20-poly1305",
+            proxyRule = "auto",
+            outbound = "native",
+            logLevel = "info",
+            disableQuic = "false",
+            ipv6Rule = "auto",
+            serverNameIndication = "test.sni.com",
+            customCa = ""
+        )
     }
 
     @Test
-    fun `addServerProfile - add multiple profiles`() {
-        val profile1 = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        val profile2 = ServerProfile("id2", "name2", "server2", "8081", "pass2")
+    fun addAndGetServerProfiles() {
+        val profile1 = createDummyProfile(id = "id1", name = "Profile 1")
+        val profile2 = createDummyProfile(id = "id2", name = "Profile 2")
 
-        // Simulate no profiles initially
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null)
+        assertTrue("Initially, profiles should be empty", pref.getServerProfiles().isEmpty())
+
         pref.addServerProfile(profile1)
+        var profiles = pref.getServerProfiles()
+        assertEquals("After adding one profile, size should be 1", 1, profiles.size)
+        assertEquals("The retrieved profile should match the added one", profile1, profiles[0])
 
-        // Simulate profile1 being saved
-        val json1 = json.encodeToString(listOf(profile1))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(json1)
         pref.addServerProfile(profile2)
-
-        val expectedJson = json.encodeToString(listOf(profile1, profile2))
-        verify(mockEditor).putString(Pref.SERVER_PROFILES, expectedJson)
-        verify(mockEditor, times(2)).apply() // Apply called for each add
-
-        // For verification, simulate the saved state
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(expectedJson)
-        val profiles = pref.getServerProfiles()
-        assertEquals(2, profiles.size)
-        assertTrue(profiles.contains(profile1))
-        assertTrue(profiles.contains(profile2))
+        profiles = pref.getServerProfiles()
+        assertEquals("After adding a second profile, size should be 2", 2, profiles.size)
+        assertTrue("Profiles list should contain profile1", profiles.contains(profile1))
+        assertTrue("Profiles list should contain profile2", profiles.contains(profile2))
     }
 
     @Test
-    fun `setActiveServer - set and get active profile`() {
-        val profile1 = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        // Simulate profile1 being the only profile
-        val profilesJson = json.encodeToString(listOf(profile1))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(profilesJson)
+    fun updateServerProfile() {
+        val profileId = "id_to_update"
+        val originalProfile = createDummyProfile(id = profileId, name = "Original Name")
+        pref.addServerProfile(originalProfile)
 
-        pref.setActiveServer(profile1.id)
-        verify(mockEditor).putString(Pref.ACTIVE_SERVER_ID, profile1.id)
-        verify(mockEditor).apply()
-
-        // Simulate active ID being saved
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(profile1.id)
-        val activeProfile = pref.getActiveServerProfile()
-        assertNotNull(activeProfile)
-        assertEquals(profile1, activeProfile)
-    }
-
-    @Test
-    fun `setActiveServer - set active to non-existent ID`() {
-        val profile1 = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        // Simulate profile1 being the only profile
-        val profilesJson = json.encodeToString(listOf(profile1))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(profilesJson)
-        // Active server is initially null or some other ID
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(null)
-
-
-        pref.setActiveServer("nonExistentId")
-        verify(mockEditor).putString(Pref.ACTIVE_SERVER_ID, "nonExistentId")
-        verify(mockEditor).apply()
-
-        // Simulate nonExistentId being saved as active
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn("nonExistentId")
-        val activeProfile = pref.getActiveServerProfile()
-        assertNull(activeProfile) // Because "nonExistentId" does not match any profile in the list
-    }
-
-    @Test
-    fun `updateServerProfile - update existing profile`() {
-        val originalProfile = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        val updatedProfile = originalProfile.copy(name = "newName", serverPort = "8081")
-
-        // Simulate originalProfile being saved
-        val originalJson = json.encodeToString(listOf(originalProfile))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(originalJson)
-
+        val updatedProfile = originalProfile.copy(name = "Updated Name", server = "new.server.com")
         pref.updateServerProfile(updatedProfile)
 
-        val expectedJson = json.encodeToString(listOf(updatedProfile))
-        verify(mockEditor).putString(Pref.SERVER_PROFILES, expectedJson)
-        verify(mockEditor).apply()
-
-        // For verification, simulate the updated state
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(expectedJson)
         val profiles = pref.getServerProfiles()
-        assertEquals(1, profiles.size)
-        assertEquals(updatedProfile, profiles[0])
+        assertEquals("Profile list size should remain 1", 1, profiles.size)
+        assertEquals("The updated profile should be retrieved", updatedProfile, profiles[0])
+        assertEquals("Profile name should be updated", "Updated Name", profiles[0].name)
+        assertEquals("Profile server should be updated", "new.server.com", profiles[0].server)
     }
 
     @Test
-    fun `updateServerProfile - attempt to update non-existent profile`() {
-        val existingProfile = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        val profileToUpdate = ServerProfile("nonExistentId", "name2", "server2", "8081", "pass2")
+    fun deleteServerProfile() {
+        val profile1 = createDummyProfile("id1")
+        val profile2 = createDummyProfile("id2")
+        pref.addServerProfile(profile1)
+        pref.addServerProfile(profile2)
 
-        // Simulate existingProfile being saved
-        val existingJson = json.encodeToString(listOf(existingProfile))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(existingJson)
+        pref.deleteServerProfile("id1")
+        var profiles = pref.getServerProfiles()
+        assertEquals("After deleting one profile, size should be 1", 1, profiles.size)
+        assertEquals("The remaining profile should be profile2", profile2, profiles[0])
 
-        pref.updateServerProfile(profileToUpdate) // This profile's ID is not in the list
-
-        // Verify that putString was NOT called with a list containing profileToUpdate if it's not found
-        // (Current implementation of updateServerProfile only saves if index != -1)
-        verify(mockEditor, never()).putString(Pref.SERVER_PROFILES, json.encodeToString(listOf(existingProfile, profileToUpdate)))
-        verify(mockEditor, never()).putString(Pref.SERVER_PROFILES, json.encodeToString(listOf(profileToUpdate)))
-        // Verify that apply was not called if no change was made
-        verify(mockEditor, never()).apply()
-
-
-        // For verification, ensure the list remains unchanged
-        val profiles = pref.getServerProfiles() // Should still return existingJson
-        assertEquals(1, profiles.size)
-        assertEquals(existingProfile, profiles[0])
+        pref.deleteServerProfile("id2")
+        profiles = pref.getServerProfiles()
+        assertTrue("After deleting all profiles, list should be empty", profiles.isEmpty())
     }
 
     @Test
-    fun `deleteServerProfile - delete existing profile`() {
-        val profile1 = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        val profile2 = ServerProfile("id2", "name2", "server2", "8081", "pass2")
+    fun deleteActiveServerProfile_clearsActiveId() {
+        val activeProfile = createDummyProfile("active_id")
+        pref.addServerProfile(activeProfile)
+        pref.setActiveServer(activeProfile.id)
+        assertEquals("Active server ID should be set in SharedPreferences", activeProfile.id, sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
 
-        // Simulate profiles being saved
-        val initialJson = json.encodeToString(listOf(profile1, profile2))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(initialJson)
+        pref.deleteServerProfile(activeProfile.id)
+        assertNull("Active server ID should be cleared from SharedPreferences after deletion", sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
+        assertTrue("Server profiles list should be empty", pref.getServerProfiles().isEmpty())
+    }
+    
+    @Test
+    fun setActiveAndGetActiveServerProfile() {
+        assertNull("Initially, active profile should be null", pref.getActiveServerProfile())
 
-        pref.deleteServerProfile(profile1.id)
+        val profile1 = createDummyProfile("id1")
+        val profile2 = createDummyProfile("id2")
+        pref.addServerProfile(profile1)
+        pref.addServerProfile(profile2)
 
-        val expectedJson = json.encodeToString(listOf(profile2))
-        verify(mockEditor).putString(Pref.SERVER_PROFILES, expectedJson)
-        verify(mockEditor).apply()
+        pref.setActiveServer("id1")
+        var active = pref.getActiveServerProfile()
+        assertNotNull("Active profile should not be null after setting", active)
+        assertEquals("Active profile should be profile1", profile1, active)
 
-        // For verification, simulate the updated state
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(expectedJson)
-        val profiles = pref.getServerProfiles()
-        assertEquals(1, profiles.size)
-        assertEquals(profile2, profiles[0])
+        pref.setActiveServer("id2")
+        active = pref.getActiveServerProfile()
+        assertNotNull("Active profile should not be null after setting to profile2", active)
+        assertEquals("Active profile should be profile2", profile2, active)
     }
 
     @Test
-    fun `deleteServerProfile - delete active profile`() {
-        val profile1 = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-        val profile2 = ServerProfile("id2", "name2", "server2", "8081", "pass2")
-
-        // Simulate profiles being saved and profile1 being active
-        val initialJson = json.encodeToString(listOf(profile1, profile2))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(initialJson)
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(profile1.id)
-
-        pref.deleteServerProfile(profile1.id)
-
-        val expectedJson = json.encodeToString(listOf(profile2))
-        verify(mockEditor).putString(Pref.SERVER_PROFILES, expectedJson)
-        verify(mockEditor).remove(Pref.ACTIVE_SERVER_ID) // Verify active ID is removed
-        verify(mockEditor, times(2)).apply() // Apply for profiles string and remove active_id
-
-        // For verification
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(expectedJson)
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(null) // Simulate active ID cleared
-
-        val profiles = pref.getServerProfiles()
-        assertEquals(1, profiles.size)
-        assertEquals(profile2, profiles[0])
-        assertNull(pref.getActiveServerProfile())
+    fun getActiveServerProfile_whenNoneSet_returnsNull() {
+        val profile1 = createDummyProfile("id1")
+        pref.addServerProfile(profile1)
+        // No active server set yet
+        assertNull("Active profile should be null when none is explicitly set", pref.getActiveServerProfile())
     }
 
     @Test
-    fun `deleteServerProfile - attempt to delete non-existent profile`() {
-        val profile1 = ServerProfile("id1", "name1", "server1", "8080", "pass1")
-
-        // Simulate profile1 being saved
-        val initialJson = json.encodeToString(listOf(profile1))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(initialJson)
-
-        pref.deleteServerProfile("nonExistentId")
-
-        // Verify that putString was NOT called again with the same list if no change
-        // (Current implementation removes all matching, so if none match, list is same, but still saves)
-        // We should verify it was called with the original list, or that the list remains the same.
-        verify(mockEditor).putString(Pref.SERVER_PROFILES, initialJson)
-        verify(mockEditor).apply() // Apply is called even if list content is identical after removal attempt
+    fun setAndGetIsServiceEnabled() {
+        assertFalse("Initially, isServiceEnabled should be false", pref.isServiceEnabled)
+        assertFalse("SharedPreferences should reflect false initially", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, true))
 
 
-        // For verification, ensure the list remains unchanged
-        val profiles = pref.getServerProfiles()
-        assertEquals(1, profiles.size)
-        assertEquals(profile1, profiles[0])
+        pref.isServiceEnabled = true
+        assertTrue("isServiceEnabled should be true after setting to true", pref.isServiceEnabled)
+        assertTrue("SharedPreferences should reflect true", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, false))
+
+
+        pref.isServiceEnabled = false
+        assertFalse("isServiceEnabled should be false after setting to false", pref.isServiceEnabled)
+        assertFalse("SharedPreferences should reflect false", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, true))
     }
 
     @Test
-    fun `getEasyssInfo - no active server`() {
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null) // No profiles
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(null) // No active server
+    fun getEasyssInfo_noActiveProfile_returnsInvalid() {
+        val info = pref.getEasyssInfo()
+        assertFalse("easyssInfo.valid should be false when no active profile", info.valid)
+        assertTrue("easyssInfo.info should be empty", info.info.isEmpty())
+        assertTrue("easyssInfo.cmdList should be empty", info.cmdList.isEmpty())
+    }
+
+    @Test
+    fun getEasyssInfo_withActiveProfile_returnsValidInfoAndCorrectSocksPort() {
+        val profile = createDummyProfile(id = "active_profile_id", name = "Active Profile")
+        profile.server = "my.server.org"
+        profile.serverPort = "8888"
+        profile.serverNameIndication = "my.sni.org" // SNI is different from server
+        profile.password = "secret"
+        profile.encryption = "aes-256-gcm"
+        profile.proxyRule = "bypass_lan"
+        profile.outbound = "ipv4_only"
+        profile.logLevel = "debug"
+        profile.disableQuic = "true"
+        profile.ipv6Rule = "ipv6_only"
+
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
+
+        // Set SOCKS port in preferences
+        sharedPreferences.edit().putString("socks_port", "1080").apply()
 
         val info = pref.getEasyssInfo()
-        assertFalse(info.valid)
-        assertTrue(info.cmdList.isEmpty())
-    }
 
-    @Test
-    fun `getEasyssInfo - with active server`() {
-        val activeProfile = ServerProfile(
-            id = "activeId", name = "activeName", server = "active.server.com", serverPort = "1234",
-            password = "activePassword", encryption = "aes-256-gcm", proxyRule = "bypass_lan",
-            outbound = "direct", logLevel = "debug", disableQuic = "true", ipv6Rule = "prefer_ipv6",
-            serverNameIndication = "active.sni.com", customCa = "ACTIVE_CA_CONTENT"
+        assertTrue("easyssInfo should be valid", info.valid)
+        assertEquals("Info string should be server:port", "my.server.org:8888", info.info)
+        
+        val expectedCmdList = listOf(
+            "-s", "my.server.org",
+            "-p", "8888",
+            "-k", "secret",
+            "-m", "aes-256-gcm",
+            "-proxy-rule", "bypass_lan",
+            "-outbound-proto", "ipv4_only",
+            "-l", "1080", // Verifies SOCKS port from prefs
+            "-t", "60",
+            "-log-level", "debug",
+            "-disable-quic=true",
+            "-ipv6-rule", "ipv6_only",
+            "-sn", "my.sni.org", // Verifies SNI is used
+            "-enable-tun2socks=false",
+            "-daemon=false"
         )
-        val profilesJson = json.encodeToString(listOf(activeProfile))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(profilesJson)
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(activeProfile.id)
-        `when`(mockContext.cacheDir).thenReturn(java.io.File(".")) // Mock cacheDir for custom CA file
-
-        val info = pref.getEasyssInfo()
-
-        assertTrue(info.valid)
-        assertEquals("${activeProfile.server}:${activeProfile.serverPort}", info.info)
-        assertFalse(info.cmdList.isEmpty())
-
-        // Check some key parameters in cmdList
-        assertTrue(info.cmdList.contains("-s"))
-        assertTrue(info.cmdList.contains(activeProfile.server))
-        assertTrue(info.cmdList.contains("-p"))
-        assertTrue(info.cmdList.contains(activeProfile.serverPort))
-        assertTrue(info.cmdList.contains("-k"))
-        assertTrue(info.cmdList.contains(activeProfile.password))
-        assertTrue(info.cmdList.contains("-m"))
-        assertTrue(info.cmdList.contains(activeProfile.encryption))
-        assertTrue(info.cmdList.contains("-proxy-rule"))
-        assertTrue(info.cmdList.contains(activeProfile.proxyRule))
-        assertTrue(info.cmdList.contains("-outbound-proto"))
-        assertTrue(info.cmdList.contains(activeProfile.outbound))
-        assertTrue(info.cmdList.contains("-log-level"))
-        assertTrue(info.cmdList.contains(activeProfile.logLevel))
-        assertTrue(info.cmdList.contains("-disable-quic=true"))
-        assertTrue(info.cmdList.contains("-ipv6-rule"))
-        assertTrue(info.cmdList.contains(activeProfile.ipv6Rule))
-        assertTrue(info.cmdList.contains("-sn"))
-        assertTrue(info.cmdList.contains(activeProfile.serverNameIndication))
-        assertTrue(info.cmdList.contains("-ca-path"))
-        // Filename is "easyss_custom_ca.conf" in cacheDir, so path will contain it
-        assertTrue(info.cmdList.any { it.contains("easyss_custom_ca.conf") })
-
-        // Clean up the dummy file if created - though mocking should prevent actual file creation
-        // java.io.File(mockContext.cacheDir, "easyss_custom_ca.conf").delete()
-    }
-     @Test
-    fun `getEasyssInfo - active server with blank SNI`() {
-        val activeProfile = ServerProfile(
-            id = "activeId", name = "activeName", server = "active.server.com", serverPort = "1234",
-            password = "activePassword", serverNameIndication = "" // Blank SNI
-        )
-        val profilesJson = json.encodeToString(listOf(activeProfile))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(profilesJson)
-        `when`(mockPrefs.getString(Pref.ACTIVE_SERVER_ID, null)).thenReturn(activeProfile.id)
-        `when`(mockContext.cacheDir).thenReturn(java.io.File("."))
-
-        val info = pref.getEasyssInfo()
-
-        assertTrue(info.valid)
-        // SNI should fall back to server address
-        assertTrue(info.cmdList.contains("-sn"))
-        assertTrue(info.cmdList.contains(activeProfile.server))
+        assertEquals("Command list should match expected", expectedCmdList, info.cmdList)
     }
 
     @Test
-    fun `migration - migrates old config when no new profiles exist`() {
-        // Simulate old config
-        `when`(mockPrefs.contains("easyss_server")).thenReturn(true)
-        `when`(mockPrefs.getString("easyss_server", null)).thenReturn("old.server.com")
-        `when`(mockPrefs.getString("easyss_serverport", "")).thenReturn("1234")
-        `when`(mockPrefs.getString("easyss_password", "")).thenReturn("oldPass")
-        `when`(mockPrefs.getString("easyss_encryption", "chacha20-poly1305")).thenReturn("aes-128-gcm")
-        // ... mock other old preferences as needed, or assume defaults if not explicitly mocked
+    fun getEasyssInfo_withActiveProfile_SNIisBlank_usesServerAsSNI() {
+        val profile = createDummyProfile(id = "active_profile_sni_blank")
+        profile.server = "actual.server.name"
+        profile.serverNameIndication = "" // SNI is blank
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
 
-        // Simulate no existing server profiles
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null)
-
-
-        // Re-initialize Pref to trigger init block with migration
-        pref = Pref(mockContext) // This calls migrateOldConfig()
-
-        // Verify a new profile was created and saved
-        verify(mockEditor).putString(eq(Pref.SERVER_PROFILES), anyString())
-        // Verify active server was set (it will be a UUID, so match anyString())
-        verify(mockEditor).putString(eq(Pref.ACTIVE_SERVER_ID), anyString())
-
-        // Verify old keys were removed
-        verify(mockEditor).remove("easyss_server")
-        verify(mockEditor).remove("easyss_serverport")
-        verify(mockEditor).remove("easyss_password")
-        verify(mockEditor).remove("easyss_encryption")
-        // ... verify removal of other old keys
-
-        verify(mockEditor, atLeastOnce()).apply()
+        val info = pref.getEasyssInfo()
+        assertTrue(info.valid)
+        val snIndex = info.cmdList.indexOf("-sn")
+        assertTrue("cmdList should contain -sn", snIndex != -1 && snIndex + 1 < info.cmdList.size)
+        assertEquals("SNI should be actual.server.name when original SNI is blank", "actual.server.name", info.cmdList[snIndex + 1])
+    }
 
 
-        // Setup mocks for getServerProfiles and getActiveServerProfile to read the migrated data
-        // This requires capturing the arguments passed to putString or making broad assumptions
-        // For simplicity, we'll assume the migration logic inside Pref.kt correctly uses addServerProfile and setActiveServer
-        // and those methods correctly interact with the mocked editor.
+    @Test
+    fun getEasyssInfo_withActiveProfile_usesDefaultSocksPortIfNotSet() {
+        val profile = createDummyProfile(id = "active_profile_id_default_socks")
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
 
-        // To actually test the *result* of migration, we need to capture the generated profile
-        // This is tricky with current setup. A more direct test would be to call migrateOldConfig() and
-        // then use the mocked SharedPreferences to see what was written.
+        // SOCKS port NOT set in preferences, should use default "2080"
+        sharedPreferences.edit().remove("socks_port").apply()
 
-        // Let's refine the verification for what was written.
-        // We expect one profile to be added.
-        val captor = argumentCaptor<String>()
-        verify(mockEditor).putString(eq(Pref.SERVER_PROFILES), captor.capture())
-        val savedProfilesJson = captor.firstValue
-        val savedProfiles = json.decodeFromString<List<ServerProfile>>(savedProfilesJson)
-        assertEquals(1, savedProfiles.size)
-        assertEquals("old.server.com", savedProfiles[0].server)
-        assertEquals("1234", savedProfiles[0].serverPort)
-        assertEquals("oldPass", savedProfiles[0].password)
-        assertEquals("aes-128-gcm", savedProfiles[0].encryption)
 
-        // Verify active ID was set to the ID of the migrated profile
-        verify(mockEditor).putString(Pref.ACTIVE_SERVER_ID, savedProfiles[0].id)
+        val info = pref.getEasyssInfo()
+        assertTrue("easyssInfo should be valid", info.valid)
+        val localPortIndex = info.cmdList.indexOf("-l")
+        assertTrue("cmdList should contain -l parameter", localPortIndex != -1 && localPortIndex + 1 < info.cmdList.size)
+        assertEquals("Default SOCKS port should be 2080", "2080", info.cmdList[localPortIndex + 1])
     }
 
     @Test
-    fun `migration - does not migrate if new profiles already exist`() {
-        // Simulate old config present
-        `when`(mockPrefs.contains("easyss_server")).thenReturn(true)
-        `when`(mockPrefs.getString("easyss_server", null)).thenReturn("old.server.com")
+    fun migrateOldConfig_createsProfileRemovesOldKeysAndSetsActive() {
+        // Setup old preference values
+        sharedPreferences.edit()
+            .putString("easyss_server", "old.server.com")
+            .putString("easyss_serverport", "12345")
+            .putString("easyss_password", "old_password")
+            .putString("easyss_encryption", "old_encryption")
+            .putString("easyss_proxyrule", "old_rule")
+            .putString("easyss_outbound", "old_outbound")
+            .putString("easyss_loglevel", "old_log")
+            .putString("easyss_disable_quic", "true")
+            .putString("easyss_ipv6_rule", "old_ipv6")
+            .putString("easyss_sn", "old.sni.com")
+            .putString("easyss_custom_ca", "old_ca_content")
+            .apply() // Use apply for consistency, though commit is fine in tests
 
-        // Simulate new profiles already exist
-        val existingProfile = ServerProfile("idExisting", "existing", "e.server", "80", "ePass")
-        val existingProfilesJson = json.encodeToString(listOf(existingProfile))
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(existingProfilesJson)
+        // Re-initialize Pref to trigger init block which calls migrateOldConfig
+        pref = Pref(context) 
 
-        // Re-initialize Pref
-        pref = Pref(mockContext)
+        // Verify new profile creation
+        val profiles = pref.getServerProfiles()
+        assertEquals("Should be 1 profile after migration", 1, profiles.size)
+        val migratedProfile = profiles[0]
+        assertEquals("Name should be derived from old server address", "old.server.com", migratedProfile.name)
+        assertEquals("old.server.com", migratedProfile.server)
+        assertEquals("12345", migratedProfile.serverPort)
+        assertEquals("old_password", migratedProfile.password)
+        assertEquals("old_encryption", migratedProfile.encryption)
+        assertEquals("old_rule", migratedProfile.proxyRule)
+        assertEquals("old_outbound", migratedProfile.outbound)
+        assertEquals("old_log", migratedProfile.logLevel)
+        assertEquals("true", migratedProfile.disableQuic)
+        assertEquals("old_ipv6", migratedProfile.ipv6Rule)
+        assertEquals("old.sni.com", migratedProfile.serverNameIndication)
+        assertEquals("old_ca_content", migratedProfile.customCa)
 
-        // Verify that no attempt was made to save new profiles (meaning migration didn't run addServerProfile)
-        // We check that putString for SERVER_PROFILES was not called as part of migration.
-        // Since getServerProfiles itself might be called during init (it is),
-        // we need to be careful. Migration adds a *new* profile.
-        // The key is that old keys are not removed and no *new* profile based on old keys is added.
-        verify(mockEditor, never()).remove("easyss_server")
-        // Verify that addServerProfile was not called with a profile derived from old settings
-        // This is hard to verify directly without deeper mocking or argument capturing of addServerProfile itself.
-        // A simpler check: if migration happened, it would call putString for SERVER_PROFILES.
-        // If it didn't, putString for SERVER_PROFILES would only be called if other methods are invoked.
-        // Since Pref constructor triggers migration, if it *doesn't* migrate, it shouldn't call putString to save a migrated profile.
-        // This test needs careful thought on verification.
-        // The easiest is to check that old keys are NOT removed.
-        verify(mockEditor, never()).remove("easyss_serverport") // if one is not removed, others likely too.
+        // Verify active server is set to the migrated profile
+        assertNotNull("Active server should be set after migration", pref.getActiveServerProfile())
+        assertEquals("Active server ID should match the migrated profile's ID", migratedProfile.id, pref.getActiveServerProfile()?.id)
 
-        // And no new profile was added *from migration*
-        // (the existing one is still there - this is not testing that, but that no *additional* one was added)
-        // This is also tricky. If `getServerProfiles` is called in `init` after `migrateOldConfig`, it will return `existingProfilesJson`.
-        // The core idea is that `migrateOldConfig` should effectively do nothing in this case.
+        // Verify old keys are removed
+        assertFalse("Old key 'easyss_server' should be removed", sharedPreferences.contains("easyss_server"))
+        assertFalse("Old key 'easyss_serverport' should be removed", sharedPreferences.contains("easyss_serverport"))
+        assertFalse("Old key 'easyss_password' should be removed", sharedPreferences.contains("easyss_password"))
+        assertFalse("Old key 'easyss_encryption' should be removed", sharedPreferences.contains("easyss_encryption"))
+        assertFalse("Old key 'easyss_proxyrule' should be removed", sharedPreferences.contains("easyss_proxyrule"))
+        assertFalse("Old key 'easyss_outbound' should be removed", sharedPreferences.contains("easyss_outbound"))
+        assertFalse("Old key 'easyss_loglevel' should be removed", sharedPreferences.contains("easyss_loglevel"))
+        assertFalse("Old key 'easyss_disable_quic' should be removed", sharedPreferences.contains("easyss_disable_quic"))
+        assertFalse("Old key 'easyss_ipv6_rule' should be removed", sharedPreferences.contains("easyss_ipv6_rule"))
+        assertFalse("Old key 'easyss_sn' should be removed", sharedPreferences.contains("easyss_sn"))
+        assertFalse("Old key 'easyss_custom_ca' should be removed", sharedPreferences.contains("easyss_custom_ca"))
     }
 
-     @Test
-    fun `migration - does not migrate if old server config is missing or blank`() {
-        // Case 1: "easyss_server" key does not exist
-        `when`(mockPrefs.contains("easyss_server")).thenReturn(false)
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null) // No new profiles
+    @Test
+    fun migrateOldConfig_noOldConfig_doesNothing() {
+        // No old prefs set, SharedPreferences is clear from setUp
+        assertTrue("Initially server profiles should be empty", pref.getServerProfiles().isEmpty())
+        
+        pref = Pref(context) // Re-initialize to run migrateOldConfig
 
-        pref = Pref(mockContext) // Re-initialize
-
-        verify(mockEditor, never()).putString(eq(Pref.SERVER_PROFILES), anyString()) // No profile should be added
-        verify(mockEditor, never()).remove(anyString()) // No old keys should be removed
-
-        // Reset mocks for next part of test or use a new test method
-        reset(mockEditor) // Reset interactions on editor for a clean verification slate
-        `when`(mockPrefs.edit()).thenReturn(mockEditor) // Re-associate editor after reset
-
-        // Case 2: "easyss_server" is blank
-        `when`(mockPrefs.contains("easyss_server")).thenReturn(true)
-        `when`(mockPrefs.getString("easyss_server", null)).thenReturn("") // Blank server
-        `when`(mockPrefs.getString(Pref.SERVER_PROFILES, null)).thenReturn(null) // No new profiles
-
-        pref = Pref(mockContext) // Re-initialize
-
-        verify(mockEditor, never()).putString(eq(Pref.SERVER_PROFILES), anyString())
-        verify(mockEditor, never()).remove(anyString())
+        assertTrue("Server profiles should still be empty if no old config", pref.getServerProfiles().isEmpty())
+        assertNull("Active server should be null if no old config", pref.getActiveServerProfile())
     }
 
+    @Test
+    fun migrateOldConfig_oldConfigExistsButNewProfilesExist_doesNothing() {
+        // Setup old preference values
+        sharedPreferences.edit()
+            .putString("easyss_server", "old.server.com")
+            .apply()
+        
+        // Setup existing new profile
+        val existingProfile = createDummyProfile("existing_id")
+        // Add directly to SharedPreferences to simulate Pref being initialized later
+        val initialProfiles = listOf(existingProfile)
+        val profilesJson = kotlinx.serialization.json.Json.encodeToString(initialProfiles)
+        sharedPreferences.edit().putString(Pref.SERVER_PROFILES, profilesJson).apply()
+
+
+        pref = Pref(context) // Re-initialize to run migrateOldConfig
+
+        val profiles = pref.getServerProfiles()
+        assertEquals("Should still be 1 profile (the existing one)", 1, profiles.size)
+        assertEquals("The existing profile should remain unchanged", existingProfile, profiles[0])
+        assertTrue("Old key 'easyss_server' should still exist as migration was skipped", sharedPreferences.contains("easyss_server"))
+    }
+
+    @Test
+    fun migrateOldConfig_oldServerKeyExistsButBlank_doesNothing() {
+        sharedPreferences.edit().putString("easyss_server", "").apply() // Blank old server
+
+        pref = Pref(context)
+
+        assertTrue("Server profiles should be empty", pref.getServerProfiles().isEmpty())
+        assertNull("Active server should be null", pref.getActiveServerProfile())
+        assertTrue("Old key should still exist", sharedPreferences.contains("easyss_server")) // It's not removed if blank
+    }
 }
-
-// Helper for argument capturing with Mockito-Kotlin
-inline fun <reified T> argumentCaptor(): org.mockito.ArgumentCaptor<T> = org.mockito.ArgumentCaptor.forClass(T::class.java)
