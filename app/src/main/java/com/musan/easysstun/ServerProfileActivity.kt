@@ -1,6 +1,8 @@
 package com.musan.easysstun
 
+import android.app.AlertDialog
 import android.os.Bundle
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import java.util.*
@@ -25,6 +27,7 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var profileDisableQuic: Spinner
     private lateinit var profileIpv6Rule: Spinner
     private lateinit var saveProfileButton: Button
+    private lateinit var deleteProfileButton: Button // Added delete button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +50,7 @@ class ServerProfileActivity : AppCompatActivity() {
         profileDisableQuic = findViewById(R.id.profile_disable_quic)
         profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
         saveProfileButton = findViewById(R.id.save_profile_button)
+        deleteProfileButton = findViewById(R.id.delete_profile_button) // Initialize delete button
 
         // Populate Spinners
         val encryptionAdapter = ArrayAdapter.createFromResource(
@@ -103,11 +107,37 @@ class ServerProfileActivity : AppCompatActivity() {
 
                 profileServerNameIndication.setText(it.serverNameIndication)
                 profileCustomCa.setText(it.customCa)
+
+                // Show delete button if editing an existing profile
+                deleteProfileButton.visibility = View.VISIBLE
             }
         }
 
         saveProfileButton.setOnClickListener {
             saveProfile()
+        }
+
+        deleteProfileButton.setOnClickListener {
+            showDeleteConfirmationDialog()
+        }
+    }
+
+    private fun showDeleteConfirmationDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Confirm Delete")
+            .setMessage("Are you sure you want to delete this server profile?")
+            .setPositiveButton("Delete") { _, _ ->
+                deleteProfileAndFinish()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun deleteProfileAndFinish() {
+        profileId?.let {
+            pref.deleteServerProfile(it)
+            Toast.makeText(this, "Profile deleted", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 

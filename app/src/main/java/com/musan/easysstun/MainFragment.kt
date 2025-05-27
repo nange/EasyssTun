@@ -146,11 +146,88 @@ class MainFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Ensure spinner is enabled on resume
-        view?.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
+        // Update spinner on resume and ensure it's enabled
+        view?.let {
+            updateServerSpinner(it)
+            it.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = !isSwitchingServer
+        }
+    }
+
+    private fun updateServerSpinner(view: View) {
+        val serverSpinner = view.findViewById<Spinner>(R.id.server_spinner)
+        val serverProfiles = pref.getServerProfiles()
+        val serverNames = serverProfiles.map { it.name } // Or it.name if that's the display string
+        val adapter = ArrayAdapter(mContext, android.R.layout.simple_spinner_item, serverNames)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        serverSpinner.adapter = adapter
+
+        val activeServerProfile = pref.getActiveServerProfile()
+        if (activeServerProfile != null) {
+            val activeServerPosition = serverProfiles.indexOfFirst { it.id == activeServerProfile.id }
+            if (activeServerPosition != -1) {
+                serverSpinner.setSelection(activeServerPosition, false) // set false to avoid triggering onItemSelected
+            }
+        }
+
+        // Re-attach or ensure the listener is set.
+        // If the listener logic depends on serverProfiles, it must be correctly scoped or passed.
+        // For this refactoring, we assume the existing listener logic in setup() will be part of the spinner setup.
+        // The existing onItemSelectedListener is defined below and will be set after this method in setup().
+        // However, for onResume, if the adapter is reset, the listener might need to be reset as well.
+        // For now, let's keep the listener setup within the setup() method which calls this.
+        // If issues arise, the listener setup might need to be part of this method too.
+        // Let's re-add the listener here to be safe for onResume calls.
+        serverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, viewOfItem: View?, position: Int, id: Long) {
+                val selectedProfile = serverProfiles[position] // serverProfiles must be in scope
+
+                if (pref.getActiveServerProfile()?.id == selectedProfile.id && !isSwitchingServer) {
+                    Log.d("MainFragment", "Spinner selected current active server. No change.")
+                    this@MainFragment.view?.let { updateServiceStatu(it) }
+                    return
+                }
+
+                Log.d("MainFragment", "Server selected: ${selectedProfile.name}. Current isServiceEnabled: ${pref.isServiceEnabled}")
+
+                if (pref.isServiceEnabled) {
+                    if (isSwitchingServer) {
+                        Log.i("MainFragment", "Server switch already in progress. Updating pending server to: ${selectedProfile.id}")
+                        pendingServerProfileId = selectedProfile.id
+                        return
+                    }
+                    
+                    Log.i("MainFragment", "Initiating server switch. Setting pending server to: ${selectedProfile.id}")
+                    pendingServerProfileId = selectedProfile.id
+                    isSwitchingServer = true
+                    serverSpinner.isEnabled = false
+                    stopVPNService()
+                } else {
+                    Log.i("MainFragment", "VPN not running. Setting active server to: ${selectedProfile.id}")
+                    pref.setActiveServer(selectedProfile.id)
+                    easyssInfo = pref.getEasyssInfo()
+                    isSwitchingServer = false
+                    serverSpinner.isEnabled = true
+                    this@MainFragment.view?.let {
+                        val serviceSummaryTextView = it.findViewById<TextView>(R.id.service_summary)
+                        if (easyssInfo.valid) {
+                            serviceSummaryTextView.text = easyssInfo.info
+                        } else {
+                            serviceSummaryTextView.text = getString(R.string.easyss_need_config)
+                        }
+                        updateServiceStatu(it)
+                    }
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                serverSpinner.isEnabled = true
+            }
+        }
     }
 
     private fun setup(view: View) {
+        updateServerSpinner(view) // Call the new method to setup spinner
+
         var service_button =
             view.findViewById<MaterialButton>(R.id.service_button)
         service_button.let {
@@ -172,84 +249,9 @@ class MainFragment : Fragment() {
             }
         }
 
-        // Server Spinner Setup
-        val serverSpinner = view.findViewById<Spinner>(R.id.server_spinner)
-        val serverProfiles = pref.getServerProfiles()
-        val serverNames = serverProfiles.map { it.name }
-        val adapter = ArrayAdapter(mContext, android.R.layout.simple_spinner_item, serverNames)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        serverSpinner.adapter = adapter
-        // Ensure spinner is enabled before setting listener and selection
-        serverSpinner.isEnabled = true
-
-        val activeServerProfile = pref.getActiveServerProfile()
-        if (activeServerProfile != null) {
-            val activeServerPosition = serverProfiles.indexOfFirst { it.id == activeServerProfile.id }
-            if (activeServerPosition != -1) {
-                serverSpinner.setSelection(activeServerPosition)
-            }
-        }
-
-        serverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, viewOfItem: View?, position: Int, id: Long) {
-                val selectedProfile = serverProfiles[position]
-
-                // If the selected server is already the active one, do nothing.
-                if (pref.getActiveServerProfile()?.id == selectedProfile.id && !isSwitchingServer) {
-                     Log.d("MainFragment", "Spinner selected current active server. No change.")
-                     // Ensure UI reflects current state if needed, though it should be correct.
-                     view?.let { updateServiceStatu(it) }
-                     return
-                }
-
-                Log.d("MainFragment", "Server selected: ${selectedProfile.name}. Current isServiceEnabled: ${pref.isServiceEnabled}")
-
-                if (pref.isServiceEnabled) {
-                    // VPN is running, need to stop, then restart with new server.
-                    if (isSwitchingServer) {
-                        // Already switching, just update to the latest selection.
-                        Log.i("MainFragment", "Server switch already in progress. Updating pending server to: ${selectedProfile.id}")
-                        pendingServerProfileId = selectedProfile.id
-                        // The existing stop process will continue, and then pick up this latest pendingServerProfileId.
-                        return // Don't call stopVPNService again.
-                    }
-                    
-                    Log.i("MainFragment", "Initiating server switch. Setting pending server to: ${selectedProfile.id}")
-                    pendingServerProfileId = selectedProfile.id
-                    isSwitchingServer = true // Set switching state
-                    
-                    // For now, just disable the spinner to prevent further changes during switch
-                    serverSpinner.isEnabled = false 
-
-                    stopVPNService() // Tell service to stop
-                    // Do NOT call pref.setActiveServer() or startVPNService() here.
-                    // The broadcast receiver will handle that after service confirms stop.
-                } else {
-                    // VPN is not running, just change the active server and update UI.
-                    Log.i("MainFragment", "VPN not running. Setting active server to: ${selectedProfile.id}")
-                    pref.setActiveServer(selectedProfile.id)
-                    easyssInfo = pref.getEasyssInfo() // Refresh local easyssInfo
-                    isSwitchingServer = false // Ensure this is false
-                    // Update UI, including spinner re-enabling if it was disabled by a previous incomplete switch
-                    serverSpinner.isEnabled = true
-                    view?.let {
-                        // Update summary text directly
-                        val serviceSummaryTextView = it.findViewById<TextView>(R.id.service_summary)
-                        if (easyssInfo.valid) {
-                            serviceSummaryTextView.text = easyssInfo.info
-                        } else {
-                            serviceSummaryTextView.text = getString(R.string.easyss_need_config)
-                        }
-                        updateServiceStatu(it) // This will show correct "stopped" state with new server info
-                    }
-                }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-                // Do nothing
-                serverSpinner.isEnabled = true // Re-enable spinner if nothing selected somehow
-            }
-        }
+        // The onItemSelectedListener is now set within updateServerSpinner.
+        // We might need to ensure serverSpinner variable is accessible or passed if it's used elsewhere in setup
+        // For now, assuming it's only used for the listener which is now part of updateServerSpinner.
 
         var selected_apps = pref.getApps()!!
         view.findViewById<TextView>(R.id.text1).let {
