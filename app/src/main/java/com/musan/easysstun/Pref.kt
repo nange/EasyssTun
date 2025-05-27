@@ -94,7 +94,7 @@ class Pref(private val ctx: Context) {
     var isServiceEnabled: Boolean
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
         set(value) {
-            prefs.edit().putBoolean(SERVICE_ENABLED, value).commit()
+            prefs.edit().putBoolean(SERVICE_ENABLED, value).apply()
         }
 
     fun getApps(): Set<String>? {
@@ -123,7 +123,7 @@ class Pref(private val ctx: Context) {
         val profilesJson = json.encodeToString(profiles)
         val editor = prefs.edit()
         editor.putString(SERVER_PROFILES, profilesJson)
-        editor.commit()
+        editor.apply()
     }
 
     fun addServerProfile(profile: ServerProfile) {
@@ -154,7 +154,7 @@ class Pref(private val ctx: Context) {
     }
 
     fun setActiveServer(profileId: String) {
-        prefs.edit().putString(ACTIVE_SERVER_ID, profileId).commit()
+        prefs.edit().putString(ACTIVE_SERVER_ID, profileId).apply()
     }
 
     fun getActiveServerProfile(): ServerProfile? {
@@ -183,6 +183,7 @@ class Pref(private val ctx: Context) {
             sn = activeProfile.server
         }
 
+        val localSocksPort = prefs.getString("socks_port", "2080") ?: "2080"
         val cmdList = mutableListOf(
             "-s", activeProfile.server,
             "-p", activeProfile.serverPort,
@@ -190,7 +191,7 @@ class Pref(private val ctx: Context) {
             "-m", activeProfile.encryption,
             "-proxy-rule", activeProfile.proxyRule,
             "-outbound-proto", activeProfile.outbound,
-            "-l", "2080", // This seems to be a fixed local port, kept as is.
+            "-l", localSocksPort, // Use the variable here
             "-t", "60", // This seems to be a fixed timeout, kept as is.
             "-log-level", activeProfile.logLevel,
             "-disable-quic=${activeProfile.disableQuic}",

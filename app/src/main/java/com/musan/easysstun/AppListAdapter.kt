@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageInfo
-import android.preference.PreferenceManager.getDefaultSharedPreferencesName
+import androidx.preference.PreferenceManager // Add this import
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -26,7 +26,7 @@ class AppListAdapter(
 
     private val selectedApps = mutableListOf<String>()
     private val sharedPreferences: SharedPreferences by lazy {
-        context.getSharedPreferences(getDefaultSharedPreferencesName(context), Context.MODE_PRIVATE)
+        PreferenceManager.getDefaultSharedPreferences(context)
     }
 
     init {
@@ -72,8 +72,6 @@ class AppListAdapter(
         fun bind(appInfo: PackageInfo) {
             packageNameTextView.text = appInfo.packageName
             checkBox.isChecked = selectedApps.contains(appInfo.packageName)
-//        appNameTextView.text = appInfo.applicationInfo.loadLabel(context.packageManager).toString()
-//        appIconImageView.setImageDrawable(appInfo.applicationInfo.loadIcon(context.packageManager))
 
             appNameTextView.text = context.getString(R.string.app_name_placeholder)
             appIconImageView.setImageResource(R.drawable.sync_24px)
