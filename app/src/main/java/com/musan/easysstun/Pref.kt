@@ -166,46 +166,48 @@ class Pref(private val ctx: Context) {
         }
     }
 
-    fun getEasyssInfo(): easyssInfo {
-        val activeProfile = getActiveServerProfile()
+    fun getEasyssInfo(profile: ServerProfile? = null): easyssInfo {
+        val profileToUse = profile ?: getActiveServerProfile()
         val easyssInfo = easyssInfo()
 
-        if (activeProfile == null) {
+        if (profileToUse == null) {
             easyssInfo.valid = false
             return easyssInfo
         }
 
         easyssInfo.valid = true
-        easyssInfo.info = "${activeProfile.server}:${activeProfile.serverPort}"
+        easyssInfo.info = "${profileToUse.server}:${profileToUse.serverPort}"
 
-        var sn = activeProfile.serverNameIndication
+        var sn = profileToUse.serverNameIndication
         if (sn.isBlank()) {
-            sn = activeProfile.server
+            sn = profileToUse.server
         }
 
+        val socksPort = prefs.getString(Constants.PREF_SOCKS_PORT, Constants.DEFAULT_SOCKS_PORT) ?: Constants.DEFAULT_SOCKS_PORT
+
         val cmdList = mutableListOf(
-            "-s", activeProfile.server,
-            "-p", activeProfile.serverPort,
-            "-k", activeProfile.password,
-            "-m", activeProfile.encryption,
-            "-proxy-rule", activeProfile.proxyRule,
-            "-outbound-proto", activeProfile.outbound,
-            "-l", "2080", // This seems to be a fixed local port, kept as is.
+            "-s", profileToUse.server,
+            "-p", profileToUse.serverPort,
+            "-k", profileToUse.password,
+            "-m", profileToUse.encryption,
+            "-proxy-rule", profileToUse.proxyRule,
+            "-outbound-proto", profileToUse.outbound,
+            "-l", socksPort,
             "-t", "60", // This seems to be a fixed timeout, kept as is.
-            "-log-level", activeProfile.logLevel,
-            "-disable-quic=${activeProfile.disableQuic}",
-            "-ipv6-rule", activeProfile.ipv6Rule,
+            "-log-level", profileToUse.logLevel,
+            "-disable-quic=${profileToUse.disableQuic}",
+            "-ipv6-rule", profileToUse.ipv6Rule,
             "-sn", sn,
             "-enable-tun2socks=false",
             "-daemon=false"
         )
 
-        if (activeProfile.customCa.isNotBlank()) {
-            val customCaFile = File(ctx.cacheDir, "easyss_custom_ca.conf")
+        if (profileToUse.customCa.isNotBlank()) {
+            val customCaFile = File(ctx.cacheDir, Constants.EASYSS_CUSTOM_CA_FILE_NAME)
             try {
                 customCaFile.createNewFile()
                 FileOutputStream(customCaFile, false).use { fos ->
-                    fos.write(activeProfile.customCa.toByteArray())
+                    fos.write(profileToUse.customCa.toByteArray())
                 }
                 cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
             } catch (e: IOException) {
@@ -216,7 +218,6 @@ class Pref(private val ctx: Context) {
         easyssInfo.cmdList = cmdList
         return easyssInfo
     }
-
 }
 
 data class easyssInfo(

@@ -54,29 +54,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     startActivity(intent)
                     true
                 }
-                // Add long-click listener for editing
-                // For Preference objects, there isn't a direct setOnLongClickListener.
-                // We'd typically handle this by navigating to an edit screen on regular click,
-                // or by adding a custom preference with an edit button.
-                // For simplicity here, we will make the regular click navigate to edit,
-                // and a separate button/mechanism would be needed to "select/activate" if that's desired
-                // OR we make the "active" status part of the edit screen.
-                // Let's adjust the click to open edit, and selection happens in ServerProfileActivity or via a dedicated "select" button.
-
-                // Re-thinking: The current click sets it active. This is good.
-                // To add "edit", we need a different interaction.
-                // A common pattern is to add an icon to the preference layout for editing.
-                // Or, as the subtask suggests, a long-press.
-                // However, Preference class doesn't directly support onLongClick.
-                // A workaround is to use a custom Preference layout or a context menu.
-
-                // Let's stick to the subtask's current focus: click sets active,
-                // "Add new" button works. Edit can be added later.
-                // For now, I will just make the "add new" button work.
-                // If an edit functionality is strictly required by this step,
-                // I'll need to rethink the interaction. The subtask says:
-                // "To enable editing... For now, let's focus on adding new profiles."
-                // So, I will proceed with just the add button functionality.
+                // Note: Editing is handled by clicking the preference.
+                // Activation status is also managed within ServerProfileActivity or by re-selecting.
             }
             serverProfilesCategory.addPreference(serverPref)
         }

@@ -52,9 +52,6 @@ class LogFragment : Fragment() {
         val layoutManager = LinearLayoutManager(requireContext())
         recyclerView.layoutManager = layoutManager
 
-//        val dividerItemDecoration = DividerItemDecoration(requireContext(), layoutManager.orientation)
-//        dividerItemDecoration.setDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.divider_drawable)!!)
-//        recyclerView.addItemDecoration(dividerItemDecoration)
         recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = logAdapter
         logViewModel = ViewModelProvider(this).get(LogViewModel::class.java)
@@ -73,17 +70,15 @@ class LogFragment : Fragment() {
         var fabToBotton = view.findViewById<FloatingActionButton>(R.id.fabToBotton)
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-//                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                    if (changingState)
-                        return
-                    if (!recyclerView.canScrollVertically(1)) {
-                        isAtBottom = true
-                        fabToBotton.hide()
-                    } else {
-                        isAtBottom = false
-                        fabToBotton.show()
-                    }
-//                }
+                if (changingState)
+                    return
+                if (!recyclerView.canScrollVertically(1)) {
+                    isAtBottom = true
+                    fabToBotton.hide()
+                } else {
+                    isAtBottom = false
+                    fabToBotton.show()
+                }
             }
         })
 
@@ -109,7 +104,6 @@ class LogFragment : Fragment() {
             var bufferedReader: BufferedReader? = null
             var process: Process? = null
             try {
-//                process = ProcessBuilder("logcat", "-c").start()
                 var cleanprocess = Runtime.getRuntime().exec("logcat -c")
                 cleanprocess.waitFor();
                 process = Runtime.getRuntime().exec("logcat -s easyss")
@@ -130,7 +124,7 @@ class LogFragment : Fragment() {
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("LogFragment", "Error reading logs: ${e.message}", e)
             } finally {
                 inputStream?.close()
                 bufferedReader?.close()
