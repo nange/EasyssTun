@@ -339,73 +339,98 @@ class TProxyService : VpnService() {
     }
 
     private fun launchEasyssProcess(easyssCmdList: List<String>): Job {
-        return easyScope.launch {
-            // This outer while(true) loop implies an auto-restart mechanism for the easyss process.
-            // If the process exits for any reason (crash or normal termination not initiated by stopService),
-            // it will be restarted unless the managing coroutine (processEasyJob) itself is cancelled.
-            // This ensures the easyss core process is kept alive as long as the VPN service is intended to be active.
-            while (isActive) { // Loop only if the coroutine itself is active
+        return easyScope.launch { // easyScope is a CoroutineScope
+            // Get a reference to this coroutine's job.
+            // This job instance is what `processEasyJob` (the return value of this function) will point to.
+            val currentJob = coroutineContext[Job]!!
+
+            while (true) { // Outer loop for auto-restart
+                var localProcess: Process? = null // Define localProcess to be used in this iteration
                 try {
+                    // Check for cancellation at the start of each attempt to run the process.
+                    // ensureActive() will throw a CancellationException if the job is cancelled.
+                    currentJob.ensureActive()
+
                     val libraryPath = applicationInfo.nativeLibraryDir.toString() + "/libeasyss.so"
                     val fullCmdList = listOf(libraryPath) + easyssCmdList
                     Log.i(TAG, "launchEasyssProcess: Attempting to start libeasyss.so. Server: ${easyssCmdList.getOrNull(easyssCmdList.indexOf("-s") + 1)}, Local Port: ${easyssCmdList.getOrNull(easyssCmdList.indexOf("-l") + 1)}")
-                    process = ProcessBuilder(fullCmdList).start()
-                    Log.i(TAG, "launchEasyssProcess: libeasyss.so process started. isAlive: ${process.isAlive}")
 
-                    // Log output from easyss process
-                    val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
-                    var line: String? = null // Explicitly initialized to null
-                    while (isActive && bufferedReader.readLine().also { line = it } != null) { // Check isActive and readLine
-                        Log.i("easyss", line!!) // Use "easyss" tag for its own logs; line is non-null here
-                    }
-                    Log.i(TAG, "launchEasyssProcess: Finished reading from easyss process output stream (isActive: $isActive).")
+                    // Initialize process within the try block so it's fresh for each attempt
+                    localProcess = ProcessBuilder(fullCmdList).start()
+                    process = localProcess // Assign to class member `process`
+                    Log.i(TAG, "launchEasyssProcess: libeasyss.so process started. isAlive: ${localProcess.isAlive}")
 
-                    // Ensure to wait for process exit after loop breaks or is cancelled
-                    if (::process.isInitialized && process.isAlive) {
-                         val exitCode = process.waitFor()
-                         Log.i(TAG, "launchEasyssProcess: libeasyss.so process exited with code (after log reading loop): $exitCode")
-                    } else if (::process.isInitialized) {
-                        Log.i(TAG, "launchEasyssProcess: easyss process was already exited before explicit waitFor(). Exit code: ${process.exitValue()}")
-                    }
+                    val bufferedReader = BufferedReader(InputStreamReader(localProcess.inputStream))
+                    var line: String? = null
 
-                } catch (e: IOException) {
-                    Log.e(TAG, "launchEasyssProcess: IOException - ${e.message}", e)
-                } catch (e: InterruptedException) {
-                    Log.w(TAG, "launchEasyssProcess: Interrupted - ${e.message}", e)
-                    Thread.currentThread().interrupt() // Restore interrupt status
-                    if (!isActive) { // If interruption is due to coroutine cancellation
-                        Log.i(TAG, "launchEasyssProcess: Interruption due to coroutine cancellation. Breaking loop.")
-                        break // Exit while loop
-                    }
-                } catch (e: Exception) { // Catch any other unexpected exceptions
-                    Log.e(TAG, "launchEasyssProcess: Unexpected error - ${e.message}", e)
-                } finally {
-                    Log.i(TAG, "launchEasyssProcess: 'finally' block. Process initialized: ${::process.isInitialized}")
-                    if (::process.isInitialized) {
-                        if (process.isAlive) {
-                            Log.i(TAG, "launchEasyssProcess: Process was still alive in finally, destroying.")
-                            process.destroy()
+                    // Inner loop for reading logs
+                    while (true) {
+                        // Check for cancellation before each potentially blocking readLine call.
+                        currentJob.ensureActive()
+
+                        val read = bufferedReader.readLine()
+                        if (read == null) { // End of stream from process
+                            Log.i(TAG, "launchEasyssProcess: End of stream from easyss process.")
+                            break // Exit inner log reading loop
                         }
-                        // It's good practice to wait for the process to ensure resources are cleaned up,
-                        // but be mindful of blocking if this 'finally' is on a critical path without Dispatchers.IO
-                        // However, this whole coroutine is on easyScope (Default dispatcher).
-                        val exitCode = process.waitFor()
-                        Log.i(TAG, "launchEasyssProcess: libeasyss.so process exited in 'finally' with code: $exitCode")
+                        line = read
+                        Log.i("easyss", line!!) // Log the output from the easyss process
+                    }
+                    Log.i(TAG, "launchEasyssProcess: Finished reading from easyss process output stream (job cancelled: ${currentJob.isCancelled}).")
+
+                    // If we exited the log reading loop cleanly (readLine returned null), wait for the process to terminate.
+                    if (localProcess.isAlive) {
+                        val exitCode = localProcess.waitFor()
+                        Log.i(TAG, "launchEasyssProcess: libeasyss.so process exited cleanly with code (after log reading loop): $exitCode")
                     } else {
-                        Log.w(TAG, "launchEasyssProcess: Process was not initialized in 'finally'.")
+                        Log.i(TAG, "launchEasyssProcess: easyss process was already exited after log reading. Exit code: ${localProcess.exitValue()}")
                     }
 
-                    if (!isActive) { // If the coroutine (processEasyJob) was cancelled (e.g., by stopService)
-                        Log.i(TAG, "launchEasyssProcess: Coroutine no longer active, breaking while(true) loop. This is expected during service stop.")
-                        break // Exit the while(true) loop
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    Log.i(TAG, "launchEasyssProcess: Coroutine cancelled (e.g., service stopping). Breaking outer process loop.", e)
+                    break // Exit outer while(true) loop, effectively stopping process restarts.
+                } catch (e: IOException) {
+                    // Log IOExceptions (e.g., pipe closed, read error)
+                    Log.e(TAG, "launchEasyssProcess: IOException - ${e.message}", e)
+                    // The outer loop will cause a retry after a delay.
+                } catch (e: InterruptedException) {
+                    Log.w(TAG, "launchEasyssProcess: Coroutine or thread interrupted - ${e.message}", e)
+                    Thread.currentThread().interrupt() // Restore interrupt status
+                    // Check if the interruption was due to coroutine cancellation.
+                    if (currentJob.isCancelled) {
+                        Log.i(TAG, "launchEasyssProcess: Interruption was due to coroutine cancellation. Breaking outer process loop.")
+                        break // Exit outer while(true) loop.
                     }
-                    // If the process died but the service is still supposed to be running,
-                    // a small delay can prevent rapid, tight restart loops in case of persistent failure.
-                    Log.w(TAG, "launchEasyssProcess: Process loop ended. If coroutine is still active, it will restart after a short delay.")
-                    kotlinx.coroutines.delay(1000) // Delay 1 second before restarting
+                    // If not cancelled, it might be an external interrupt. The loop may retry.
+                } catch (e: Exception) { // Catch any other unexpected exceptions during process management.
+                    Log.e(TAG, "launchEasyssProcess: Unexpected error in process management loop - ${e.message}", e)
+                    // The outer loop will cause a retry after a delay.
+                } finally {
+                    Log.i(TAG, "launchEasyssProcess: 'finally' block of process attempt. localProcess initialized: ${localProcess != null}")
+                    // Use localProcess for cleanup if it was initialized in this iteration's try block
+                    localProcess?.let {
+                        if (it.isAlive) {
+                            Log.i(TAG, "launchEasyssProcess (finally): localProcess was still alive, destroying it.")
+                            it.destroy()
+                        }
+                        val exitCode = it.waitFor()
+                        Log.i(TAG, "launchEasyssProcess (finally): localProcess exited in 'finally' with code: $exitCode")
+                    } ?: Log.w(TAG, "launchEasyssProcess (finally): localProcess was null, nothing to clean up for this attempt.")
+
+
+                    // If the coroutine (currentJob) was cancelled (e.g., by stopService),
+                    // ensureActive() at the top of the outer while(true) loop will catch it on the next iteration.
+                    // If we are here due to a non-cancellation error, and the job is still not cancelled, delay and retry.
+                    if (currentJob.isCancelled) {
+                         Log.i(TAG, "launchEasyssProcess (finally): Coroutine is cancelled, ensuring outer loop terminates on next check.")
+                         // ensureActive() at the loop top will handle breaking.
+                    } else {
+                        Log.w(TAG, "launchEasyssProcess (finally): Process attempt loop ended. If coroutine is still active, it will restart after a short delay.")
+                        kotlinx.coroutines.delay(1000) // Delay 1 second before restarting to prevent rapid failures.
+                    }
                 }
             }
-            Log.i(TAG, "launchEasyssProcess: Coroutine has completed (isActive: $isActive).")
+            Log.i(TAG, "launchEasyssProcess: Coroutine (Job: $currentJob) has completed its lifecycle (cancelled: ${currentJob.isCancelled}).")
         }
     }
 
