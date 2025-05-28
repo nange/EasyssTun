@@ -41,6 +41,7 @@ class TProxyService : VpnService() {
     private lateinit var processEasyJob: Job
     lateinit var process: Process
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job()) // For managing shutdown and other service-level tasks
+    private var statsJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
@@ -351,8 +352,22 @@ tunnel:
         try {
             TProxyStartService(tproxy_file.absolutePath, tunFd!!.fd)
             Log.i(TAG, "TProxyStartService called successfully.")
+
+            statsJob = serviceScope.launch {
+                Log.d(TAG, "Stats collection coroutine started.")
+                while (isActive) {
+                    try {
+                        val stats = TProxyGetStats()
+                        Log.d(TAG, "TProxy Stats: ${stats.contentToString()}")
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Error calling or logging TProxyGetStats", e)
+                    }
+                    delay(30000L)
+                }
+                Log.d(TAG, "Stats collection coroutine finishing.")
+            }
         } catch (e: Throwable) {
-            Log.e(TAG, "Error calling TProxyStartService", e)
+            Log.e(TAG, "Error calling TProxyStartService or starting stats job", e)
             // Consider how to handle this error, e.g., stop the service
         }
         pref.prefs.edit { apply { putBoolean("enable", true) } }
@@ -374,6 +389,8 @@ tunnel:
         }
         Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}") // Keep Log.i - User-driven or high-level state change
         stopForeground(true)
+        statsJob?.cancel()
+        Log.d(TAG, "statsJob cancellation requested.")
 
         serviceScope.launch { 
             try {
@@ -443,6 +460,8 @@ tunnel:
         }
         tunFd = null 
         Log.d(TAG, "actualFinalizeStop: tunFd set to null.")
+        statsJob = null
+        Log.d(TAG, "actualFinalizeStop: statsJob set to null.")
 
         if (::pref.isInitialized) {
             pref.isServiceEnabled = false
