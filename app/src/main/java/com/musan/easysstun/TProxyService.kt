@@ -220,10 +220,11 @@ class TProxyService : VpnService() {
             builder.setMetered(false)
         }
         builder.setBlocking(false)
-        builder.setMtu(8500)
+        builder.setMtu(1400)
 
         builder.addAddress("198.18.0.1", 32)
         builder.addDnsServer("1.1.1.1")
+        builder.addDnsServer("8.8.8.8")
 
         resources.getStringArray(R.array.bypass_private_route).forEach {
             val parts = it.split('/', limit = 2)
@@ -284,6 +285,16 @@ class TProxyService : VpnService() {
                         }
                     }
 
+//                    while (isActive) {
+//                        if (bufferedReader.ready()) {
+//                            val line = bufferedReader.readLine()
+//                            if (line != null) {
+//                                Log.i("easyss", line)
+//                            }
+//                        } else {
+//                            delay(100)
+//                        }
+//                    }
                 } catch (e: IOException) {
                     Log.e("easyss", "msg=[EasyssTun] IOException: " + e.message)
                 } catch (e: InterruptedException) {
@@ -303,7 +314,7 @@ class TProxyService : VpnService() {
                     }
                     // Removed break to allow restart
                 }
-                if (!processEasyJob.isActive) { // Check if the job itself is cancelled
+                if (!isActive) { // Check if the job itself is cancelled
                     Log.d(TAG, "processEasyJob: job is no longer active, breaking loop.")
                     break
                 }
@@ -324,7 +335,7 @@ class TProxyService : VpnService() {
   task-stack-size: 81920
   read-write-timeout: 1800000
 tunnel:
-  mtu: 8500
+  mtu: 1400
 """
             tproxy_conf += """socks5:
   port: ${pref.prefs.getString("socks_port", "2080")?.toInt()}
@@ -337,7 +348,13 @@ tunnel:
             return
         }
         Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${tunFd?.fd}.")
-        TProxyStartService(tproxy_file.absolutePath, tunFd!!.fd)
+        try {
+            TProxyStartService(tproxy_file.absolutePath, tunFd!!.fd)
+            Log.i(TAG, "TProxyStartService called successfully.")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error calling TProxyStartService", e)
+            // Consider how to handle this error, e.g., stop the service
+        }
         pref.prefs.edit { apply { putBoolean("enable", true) } }
         val channelName = "easysstun"
         initNotificationChannel(channelName)
@@ -365,9 +382,12 @@ tunnel:
                     try {
                         Log.d(TAG, "stopService: TProxyStopService coroutine calling TProxyStopService()")
                         TProxyStopService()
-                        Log.d(TAG, "stopService: TProxyStopService coroutine TProxyStopService() completed.")
+                        Log.i(TAG, "TProxyStopService called successfully.")
+                        Log.d(TAG, "stopService: TProxyStopService coroutine TProxyStopService() completed.") // Kept for detailed debug
                     } catch (e: Throwable) {
-                        Log.e(TAG, "stopService: Exception during TProxyStopService: ${e.message}", e)
+                        Log.e(TAG, "Error calling TProxyStopService", e) // General error for the JNI call
+                        // Original specific log can be kept if desired, or removed if redundant
+                        // Log.e(TAG, "stopService: Exception during TProxyStopService: ${e.message}", e) 
                     }
                 }
 
