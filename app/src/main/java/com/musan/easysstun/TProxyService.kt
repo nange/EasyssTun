@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -20,6 +22,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.SerializationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel // Added this import
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withContext
@@ -39,7 +42,10 @@ class TProxyService : VpnService() {
     private val easyScope = CoroutineScope(Dispatchers.Default + easyJob)
     private lateinit var processEasyJob: Job
     lateinit var process: Process
-    private val serviceScope = CoroutineScope(Dispatchers.IO + Job()) // For managing shutdown and other service-level tasks
+    private val serviceJob = Job() // Parent job for all service coroutines
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob) 
+    private var periodicBindingJob: Job? = null
+
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
@@ -85,8 +91,8 @@ class TProxyService : VpnService() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(prefsUpdatedReceiver)
-        Log.d(TAG, "onDestroy: Cancelling serviceScope.")
-        serviceScope.cancel() // Cancel all coroutines launched by serviceScope
+        Log.d(TAG, "onDestroy: Cancelling serviceJob, which cancels serviceScope.")
+        serviceJob.cancel() // Cancel all coroutines launched by serviceScope (including periodicBindingJob)
         Log.i(TAG, "onDestroy: Service being destroyed.") // Keep Log.i - Core lifecycle
         // stopSelf() // This should be handled by actualFinalizeStop now
     }
@@ -255,6 +261,73 @@ class TProxyService : VpnService() {
         tunFd = builder.establish()
         if (tunFd != null) {
             Log.i(TAG, "startService: Successfully established new tunFd: ${tunFd!!.fd}") // Keep Log.i - Core lifecycle
+
+            // Start periodic network binding
+            periodicBindingJob = serviceScope.launch {
+                val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                var vpnNetwork: Network? = null
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        vpnNetwork = this@TProxyService.network // VpnService.getNetwork() (API 29+)
+                        if (vpnNetwork == null) {
+                            Log.w(TAG, "PeriodicBinding: VpnService.getNetwork() returned null. Process binding might not work as expected.")
+                        }
+                    } catch (e: IllegalStateException) {
+                        Log.e(TAG, "PeriodicBinding: Failed to get VPN network using VpnService.getNetwork()", e)
+                    }
+                } else {
+                    // For API < 29, VpnService.getNetwork() is not available.
+                    // VpnService.setUnderlyingNetworks() is for declaring networks *before* establish.
+                    // If we need to bind, we might have to rely on other mechanisms or accept limitations.
+                    // For now, we'll log and proceed; binding will likely fail if vpnNetwork remains null.
+                    Log.i(TAG, "PeriodicBinding: VpnService.getNetwork() not available on this API level (${Build.VERSION.SDK_INT}). Process binding might rely on system defaults or earlier setUnderlyingNetworks call if made.")
+                }
+
+                if (vpnNetwork == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) { // LOLLIPOP_MR1 is 22, where bindProcessToNetwork was added
+                    // Attempt to get the currently bound network for the process, hoping it's the VPN.
+                    // This is a fallback if VpnService.getNetwork() is not available or failed.
+                    // Note: This might return null if no network is explicitly bound.
+                    try {
+                        vpnNetwork = connectivityManager.getBoundNetworkForProcess(android.os.Process.myPid())
+                        if (vpnNetwork != null) {
+                            Log.i(TAG, "PeriodicBinding: Fallback, using ConnectivityManager.getBoundNetworkForProcess(). Network: $vpnNetwork")
+                        } else {
+                            Log.w(TAG, "PeriodicBinding: Fallback, ConnectivityManager.getBoundNetworkForProcess() also returned null.")
+                        }
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "PeriodicBinding: SecurityException getting bound network for process.", e)
+                    }
+                }
+
+
+                if (vpnNetwork != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) { // LOLLIPOP_MR1 is 22
+                        while (isActive) { // Use isActive from CoroutineScope
+                            try {
+                                Log.d(TAG, "PeriodicBinding: Attempting to bind process to VPN network: $vpnNetwork")
+                                connectivityManager.bindProcessToNetwork(vpnNetwork)
+                                Log.i(TAG, "PeriodicBinding: Successfully bound process to VPN network: $vpnNetwork")
+                            } catch (e: SecurityException) {
+                                Log.e(TAG, "PeriodicBinding: SecurityException when binding process to network. VPN permissions might be missing or revoked.", e)
+                                // Potentially stop the loop here if binding consistently fails
+                                break 
+                            } catch (e: Exception) {
+                                Log.e(TAG, "PeriodicBinding: Failed to bind process to VPN network: $vpnNetwork", e)
+                                // Consider if retrying is appropriate or if we should break
+                            }
+                            delay(10000) // 10 seconds
+                        }
+                        Log.d(TAG, "PeriodicBinding: Loop finished.")
+                    } else {
+                        Log.i(TAG, "PeriodicBinding: bindProcessToNetwork is not available on this API level (${Build.VERSION.SDK_INT} < 22). Skipping periodic binding.")
+                    }
+                } else {
+                    Log.w(TAG, "PeriodicBinding: VPN Network object is null. Cannot perform periodic binding.")
+                }
+            }
+            Log.d(TAG, "startService: Periodic binding coroutine launched.")
+
         } else {
             Log.w(TAG, "startService: Failed to establish new tunFd, it's null.")
             // stopSelf() is called by the original code if tunFd is null, which is fine.
@@ -360,6 +433,16 @@ tunnel:
             return
         }
         Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}") // Keep Log.i - User-driven or high-level state change
+        
+        // Cancel the periodic binding job first
+        if (periodicBindingJob != null && periodicBindingJob!!.isActive) {
+            Log.d(TAG, "stopService: Cancelling periodicBindingJob.")
+            periodicBindingJob?.cancel() // Request cancellation
+        } else {
+            Log.d(TAG, "stopService: periodicBindingJob is null or not active.")
+        }
+        // No need to join periodicBindingJob here, serviceScope.cancel() in onDestroy or completion of serviceScope tasks will handle it.
+
         stopForeground(true)
 
         serviceScope.launch { 
