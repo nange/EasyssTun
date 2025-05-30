@@ -78,10 +78,10 @@ class AppListAdapter(
 
             lifecycleScope.launch {
                 val label = withContext(Dispatchers.IO) {
-                    appInfo.applicationInfo.loadLabel(context.packageManager).toString()
+                    appInfo.applicationInfo?.loadLabel(context.packageManager).toString()
                 }
                 val icon = withContext(Dispatchers.IO) {
-                    appInfo.applicationInfo.loadIcon(context.packageManager)
+                    appInfo.applicationInfo?.loadIcon(context.packageManager)
                 }
 
                 // Update UI on the main thread

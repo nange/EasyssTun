@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace 'com.musan.easysstun'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.musan.easysstun"
-        minSdk 26
+        minSdk 29
         targetSdk 33
         versionCode 33
-        versionName "1.13"
+        versionName "1.15"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

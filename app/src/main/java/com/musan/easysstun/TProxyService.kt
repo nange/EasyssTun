@@ -1,5 +1,7 @@
 package com.musan.easysstun
 
+import VpnDnsBinder
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -40,6 +43,7 @@ class TProxyService : VpnService() {
     private lateinit var processEasyJob: Job
     lateinit var process: Process
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job()) // For managing shutdown and other service-level tasks
+    private lateinit var dnsBinder: VpnDnsBinder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
@@ -77,12 +81,15 @@ class TProxyService : VpnService() {
         }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onCreate() {
         super.onCreate()
+        dnsBinder = VpnDnsBinder(this)
         registerReceiver(prefsUpdatedReceiver, IntentFilter("prefs_updated"))
     }
 
     override fun onDestroy() {
+        dnsBinder.stopPeriodicBinding()
         super.onDestroy()
         unregisterReceiver(prefsUpdatedReceiver)
         Log.d(TAG, "onDestroy: Cancelling serviceScope.")
@@ -260,6 +267,16 @@ class TProxyService : VpnService() {
             // stopSelf() is called by the original code if tunFd is null, which is fine.
             stopSelf()
             return
+        }
+
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork
+
+        if (network != null) {
+            dnsBinder.setVpnNetwork(network)
+            dnsBinder.startPeriodicBinding()
+        } else {
+            Log.w(TAG, "No active network available")
         }
 
         processEasyJob = easyScope.launch {
