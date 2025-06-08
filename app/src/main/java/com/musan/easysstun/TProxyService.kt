@@ -11,9 +11,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
@@ -31,6 +37,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
+import kotlinx.coroutines.delay
 
 
 class TProxyService : VpnService() {
@@ -44,6 +51,33 @@ class TProxyService : VpnService() {
     lateinit var process: Process
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job()) // For managing shutdown and other service-level tasks
     private lateinit var dnsBinder: VpnDnsBinder
+
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var dnsCheckJob: Job? = null
+    private var lastNetworkCheck = 0L
+
+    // 网络状态监听器
+    private val networkStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ConnectivityManager.CONNECTIVITY_ACTION -> {
+                    Log.d(TAG, "Network connectivity changed")
+                    checkAndRestoreVpnConnection()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    Log.d(TAG, "Screen turned on, checking VPN status")
+                    checkAndRestoreVpnConnection()
+                }
+                PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
+                    Log.d(TAG, "Device idle mode changed")
+                    checkAndRestoreVpnConnection()
+                }
+            }
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
@@ -63,6 +97,9 @@ class TProxyService : VpnService() {
             Log.w(TAG, "onStartCommand: No profile JSON in Intent or unexpected action. Intent: $intent")
             receivedProfileJson = null
         }
+
+        // 获取WakeLock
+        wakeLock?.acquire(10*60*1000L /*10 minutes*/)
 
         try {
             startService()
@@ -86,12 +123,281 @@ class TProxyService : VpnService() {
         super.onCreate()
         dnsBinder = VpnDnsBinder(this)
         registerReceiver(prefsUpdatedReceiver, IntentFilter("prefs_updated"))
+
+        // 注册网络状态监听
+        setupNetworkMonitoring()
+        // 获取WakeLock防止休眠
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "EasyssTun::VpnWakeLock"
+        )
+    }
+
+    private fun setupNetworkMonitoring() {
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        // 注册广播接收器
+        val filter = IntentFilter().apply {
+            addAction(ConnectivityManager.CONNECTIVITY_ACTION)
+            addAction(Intent.ACTION_SCREEN_ON)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+            }
+        }
+        registerReceiver(networkStateReceiver, filter)
+
+        // Android N及以上使用NetworkCallback
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.d(TAG, "Network available: $network")
+                    mainHandler.post {
+                        checkAndRestoreVpnConnection()
+                    }
+                }
+
+                override fun onLost(network: Network) {
+                    Log.d(TAG, "Network lost: $network")
+                    mainHandler.post {
+                        scheduleVpnReconnection()
+                    }
+                }
+
+                override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                    Log.d(TAG, "Network capabilities changed: $network")
+                    mainHandler.post {
+                        checkAndRestoreVpnConnection()
+                    }
+                }
+            }
+
+            val networkRequest = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            connectivityManager?.registerNetworkCallback(networkRequest, networkCallback!!)
+        }
+    }
+
+    private fun checkAndRestoreVpnConnection() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastNetworkCheck < 5000) {
+            return // 避免频繁检查
+        }
+        lastNetworkCheck = currentTime
+
+        serviceScope.launch {
+            try {
+                if (tunFd != null && ::processEasyJob.isInitialized) {
+                    // 检查VPN连接状态
+                    val isVpnActive = isVpnConnectionActive()
+                    val isProcessAlive = processEasyJob.isActive && ::process.isInitialized && process.isAlive
+
+                    Log.d(TAG, "VPN status check - VPN active: $isVpnActive, Process alive: $isProcessAlive")
+
+                    if (!isVpnActive || !isProcessAlive) {
+                        Log.w(TAG, "VPN connection lost, attempting to restore")
+                        restoreVpnConnection()
+                    } else {
+                        // 重新设置DNS服务器
+                        refreshDnsConfiguration()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking VPN connection: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun isVpnConnectionActive(): Boolean {
+        return try {
+            tunFd?.fileDescriptor?.valid() == true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun refreshDnsConfiguration() {
+        try {
+            // 重新设置DNS服务器到VPN接口
+            if (tunFd != null) {
+                Log.d(TAG, "Refreshing DNS configuration")
+                // 这里可以调用native方法重新设置DNS
+                // 或者重新建立VPN连接
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refreshing DNS configuration: ${e.message}", e)
+        }
+    }
+
+    private fun restoreVpnConnection() {
+        serviceScope.launch {
+            try {
+                Log.i(TAG, "Restoring VPN connection")
+
+                // 停止当前连接
+                if (::processEasyJob.isInitialized && processEasyJob.isActive) {
+                    processEasyJob.cancel()
+                }
+
+                if (::process.isInitialized && process.isAlive) {
+                    process.destroy()
+                }
+
+                // 等待一段时间后重新启动
+                delay(2000)
+
+                if (tunFd != null) {
+                    // 重新启动代理进程
+                    startProxyProcess()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error restoring VPN connection: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun scheduleVpnReconnection() {
+        mainHandler.postDelayed({
+            checkAndRestoreVpnConnection()
+        }, 10000) // 10秒后重新检查
+    }
+
+    private fun startProxyProcess() {
+        if (::processEasyJob.isInitialized && processEasyJob.isActive) {
+            return
+        }
+
+        processEasyJob = easyScope.launch {
+            var retryCount = 0
+            val maxRetries = 3
+
+            while (retryCount < maxRetries && !processEasyJob.isCancelled) {
+                try {
+                    val libraryPath = applicationInfo.nativeLibraryDir.toString() + "/libeasyss.so"
+                    val cmdList = listOf(libraryPath) + easyssInfo().cmdList
+
+                    Log.d(TAG, "Starting proxy process (attempt ${retryCount + 1})")
+                    process = ProcessBuilder(cmdList).start()
+
+                    if (process.isAlive) {
+                        Log.i(TAG, "Proxy process started successfully")
+                        retryCount = 0 // 重置重试计数
+
+                        val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
+
+                        while (!processEasyJob.isCancelled && process.isAlive) {
+                            val line = bufferedReader.readLine()
+                            if (line != null) {
+                                Log.i("easyss", line)
+                            } else {
+                                break
+                            }
+                        }
+                    }
+                } catch (e: IOException) {
+                    Log.e(TAG, "Proxy process IOException (attempt ${retryCount + 1}): ${e.message}")
+                    retryCount++
+                    if (retryCount < maxRetries) {
+                        delay(5000L * retryCount) // 递增延迟
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Proxy process error (attempt ${retryCount + 1}): ${e.message}")
+                    retryCount++
+                    if (retryCount < maxRetries) {
+                        delay(5000L * retryCount)
+                    }
+                } finally {
+                    if (::process.isInitialized && process.isAlive) {
+                        try {
+                            process.destroy()
+                            process.waitFor()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error destroying process: ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            if (retryCount >= maxRetries) {
+                Log.e(TAG, "Failed to start proxy process after $maxRetries attempts")
+                // 可以选择重启整个VPN服务
+                mainHandler.post {
+                    restartVpnService()
+                }
+            }
+        }
+    }
+
+    private fun restartVpnService() {
+        Log.w(TAG, "Restarting VPN service due to proxy process failure")
+        serviceScope.launch {
+            stopService()
+            delay(3000)
+            try {
+                startService()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restart VPN service: ${e.message}", e)
+            }
+        }
+    }
+
+    // 启动DNS状态监控
+    private fun startDnsMonitoring() {
+        dnsCheckJob = serviceScope.launch {
+            while (tunFd != null && !dnsCheckJob!!.isCancelled) {
+                try {
+                    // 定期检查DNS解析是否正常
+                    checkDnsResolution()
+                    delay(30000) // 每30秒检查一次
+                } catch (e: Exception) {
+                    Log.e(TAG, "DNS monitoring error: ${e.message}")
+                    delay(60000) // 出错时延长检查间隔
+                }
+            }
+        }
+    }
+
+    private suspend fun checkDnsResolution() {
+        try {
+            // 这里可以尝试解析一个测试域名
+            // 如果解析失败，则重新配置DNS
+            withContext(Dispatchers.IO) {
+                val testHost = "www.google.com"
+                try {
+                    java.net.InetAddress.getByName(testHost)
+                    Log.d(TAG, "DNS resolution test passed")
+                } catch (e: Exception) {
+                    Log.w(TAG, "DNS resolution test failed: ${e.message}")
+                    refreshDnsConfiguration()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "DNS check error: ${e.message}")
+        }
     }
 
     override fun onDestroy() {
         dnsBinder.stopPeriodicBinding()
         super.onDestroy()
-        unregisterReceiver(prefsUpdatedReceiver)
+        // 清理资源
+        try {
+            unregisterReceiver(prefsUpdatedReceiver)
+            unregisterReceiver(networkStateReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering receivers: ${e.message}")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && networkCallback != null) {
+            connectivityManager?.unregisterNetworkCallback(networkCallback!!)
+        }
+        dnsCheckJob?.cancel()
+
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+
         Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel() // Cancel all coroutines launched by serviceScope
         Log.i(TAG, "onDestroy: Service being destroyed.") // Keep Log.i - Core lifecycle
@@ -277,6 +583,12 @@ class TProxyService : VpnService() {
             dnsBinder.startPeriodicBinding()
         } else {
             Log.w(TAG, "No active network available")
+        }
+
+        // 在VPN建立后启动监控
+        if (tunFd != null) {
+            startDnsMonitoring()
+            Log.i(TAG, "VPN service started with enhanced monitoring")
         }
 
         processEasyJob = easyScope.launch {
