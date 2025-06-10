@@ -325,8 +325,8 @@ class TProxyService : VpnService() {
             tproxy_file.createNewFile()
             val fos = FileOutputStream(tproxy_file, false)
             var tproxy_conf = """misc:
-  task-stack-size: 81920
-  read-write-timeout: 1800000
+  task-stack-size: 86016
+  read-write-timeout: 60000
 tunnel:
   mtu: 8500
 """
