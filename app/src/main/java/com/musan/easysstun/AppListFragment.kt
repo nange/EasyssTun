@@ -61,7 +61,7 @@ class AppListFragment : Fragment() {
 
         var appList = packages
             .filter { packageInfo ->
-                (packageInfo.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
+                (packageInfo.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM)) == 0 &&
                         packageInfo.requestedPermissions?.contains(Manifest.permission.INTERNET) == true &&
                         packageInfo.packageName != requireActivity().applicationContext.packageName
             }

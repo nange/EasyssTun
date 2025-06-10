@@ -12,6 +12,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
+import android.content.pm.ServiceInfo;
 
 
 class TProxyService : VpnService() {
@@ -43,7 +45,7 @@ class TProxyService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
-        if (intent != null && ACTION_DISCONNECT == intent.action) {
+        if (ACTION_DISCONNECT == intent?.action) {
             Log.i(TAG, "onStartCommand: Received ACTION_DISCONNECT.")
             receivedProfileJson = null // Clear any old JSON on disconnect
             stopService()
@@ -79,7 +81,11 @@ class TProxyService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        registerReceiver(prefsUpdatedReceiver, IntentFilter("prefs_updated"))
+        registerReceiver(
+            prefsUpdatedReceiver,
+            IntentFilter("prefs_updated"),
+            RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onDestroy() {
@@ -452,7 +458,11 @@ tunnel:
             .setSmallIcon(R.drawable.ic_launcher_foreground_big)
             .setContentIntent(pi)
             .build()
-        startForeground(1, notify)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1, notify);
+        } else {
+            startForeground(1, notify, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        }
     }
 
     //     create NotificationChannel
