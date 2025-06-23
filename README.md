@@ -19,6 +19,7 @@ git submodule update --init --recursive
 cd path/to/submodule
 git fetch origin 
 git checkout <commit version>
+git submodule update
 
 git add path/to/submodule
 git commit -m "Updated submodule to <version>"
