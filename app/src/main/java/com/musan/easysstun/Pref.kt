@@ -110,8 +110,9 @@ class Pref(private val ctx: Context) {
         return if (profilesJson != null) {
             try {
                 json.decodeFromString<List<ServerProfile>>(profilesJson)
-            } catch (e: Exception) {
+            } catch (e: Exception) { // Catches any exception during deserialization
                 // In a real scenario, one might log e.message here.
+                Log.e("Pref", "Error deserializing server profiles: ${e.message}", e) // Added logging
                 emptyList() // Return empty list if deserialization fails
             }
         } else {
