@@ -199,8 +199,7 @@ class ServerProfileActivity : AppCompatActivity() {
 
         if (profileId == null) { // A new profile is being added
             pref.addServerProfile(profileToSave)
-            pref.setActiveServer(profileToSave.id) // Ensure this line is added
-            Toast.makeText(this, "Profile saved and set as active", Toast.LENGTH_SHORT).show() // Update this line
+            Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
         } else { // An existing profile is being updated
             pref.updateServerProfile(profileToSave)
             Toast.makeText(this, "Profile updated", Toast.LENGTH_SHORT).show()
