@@ -58,30 +58,48 @@ class MainFragment : Fragment() {
 
     private val serviceStoppedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d("MainFragmentReceiver", "serviceStoppedReceiver - Entry. Action: ${intent?.action}")
             if (intent?.action == TProxyService.ACTION_SERVICE_STOPPED) {
-                Log.d("MainFragment", "Received ACTION_SERVICE_STOPPED. Pending server ID: $pendingServerProfileId")
+                Log.d("MainFragmentReceiver", "ACTION_SERVICE_STOPPED received. Pending server ID: $pendingServerProfileId, isSwitchingServer: $isSwitchingServer")
                 if (pendingServerProfileId != null) {
+                    Log.d("MainFragmentReceiver", "pendingServerProfileId is NOT null. Attempting to switch.")
                     pref.setActiveServer(pendingServerProfileId!!)
-                    easyssInfo = pref.getEasyssInfo() // Refresh local easyssInfo after changing active server
+                    Log.d("MainFragmentReceiver", "pref.setActiveServer called with ID: $pendingServerProfileId")
+                    easyssInfo = pref.getEasyssInfo()
+                    Log.d("MainFragmentReceiver", "pref.getEasyssInfo called. easyssInfo.valid=${easyssInfo.valid}")
 
-                    Log.i("MainFragment", "Restarting VPN service with new server: $pendingServerProfileId")
-                    startVPNService(isCalledFromReceiver = true) // This should now use the new server settings
+                    Log.i("MainFragmentReceiver", "Calling startVPNService for server switch. ID: $pendingServerProfileId")
+                    startVPNService(isCalledFromReceiver = true)
+                    Log.d("MainFragmentReceiver", "Returned from startVPNService call.")
 
                     pendingServerProfileId = null
-                    isSwitchingServer = false // Reset switching state
+                    Log.d("MainFragmentReceiver", "pendingServerProfileId reset to null.")
+                    isSwitchingServer = false
+                    Log.d("MainFragmentReceiver", "isSwitchingServer reset to false.")
 
-                    // Update UI after server switch is complete
                     view?.let {
+                        Log.d("MainFragmentReceiver", "Calling updateServiceStatu (after switch).")
                         updateServiceStatu(it)
+                        Log.d("MainFragmentReceiver", "Returned from updateServiceStatu (after switch).")
                     }
                 } else {
-                    // Service stopped for other reasons (e.g. user clicked main stop button)
-                    isSwitchingServer = false // Reset if it was somehow true
-                    view?.let { updateServiceStatu(it) }
+                    Log.d("MainFragmentReceiver", "pendingServerProfileId IS null. Service stopped for other reasons or switch already processed/failed.")
+                    // Service stopped for other reasons (e.g. user clicked main stop button, or pendingId was already cleared)
+                    if (isSwitchingServer) { // If it's still true, something went wrong, reset it.
+                        Log.w("MainFragmentReceiver", "isSwitchingServer was true but pendingServerProfileId is null. Resetting isSwitchingServer.")
+                        isSwitchingServer = false
+                    }
+                    view?.let {
+                        Log.d("MainFragmentReceiver", "Calling updateServiceStatu (no pendingId).")
+                        updateServiceStatu(it)
+                        Log.d("MainFragmentReceiver", "Returned from updateServiceStatu (no pendingId).")
+                    }
                 }
-                // Re-enable spinner after processing
-                view?.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
-                Log.d("MainFragment", "Spinner re-enabled in serviceStoppedReceiver.")
+                val spinner = view?.findViewById<Spinner>(R.id.server_spinner)
+                spinner?.isEnabled = true
+                Log.d("MainFragmentReceiver", "Spinner explicitly re-enabled. Current state: ${spinner?.isEnabled}")
+            } else {
+                Log.d("MainFragmentReceiver", "Received some other action or null action: ${intent?.action}")
             }
         }
     }
@@ -344,16 +362,20 @@ class MainFragment : Fragment() {
 
 
     private fun startVPNService(isCalledFromReceiver: Boolean = false) {
+        Log.d("MainFragmentSVC", "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver")
         val intent = VpnService.prepare(mContext)
         if (intent != null) {
+            Log.d("MainFragmentSVC", "VpnService.prepare needs permissions. Calling startActivityForResult.")
             startActivityForResult(intent, 0)
             // If permission is needed, do not proceed to start the service here.
             // onActivityResult will call startVPNService() again.
             return
         }
+        Log.d("MainFragmentSVC", "VpnService.prepare returned null (permissions granted). Proceeding to try block.")
 
         // Permission already granted, proceed to start the service.
         try {
+            Log.d("MainFragmentSVC", "startVPNService - Inside try block, attempting to get active profile.")
             val activeProfile = pref.getActiveServerProfile() // Get the full profile object
             val intent2 = Intent(mContext, TProxyService::class.java)
 
