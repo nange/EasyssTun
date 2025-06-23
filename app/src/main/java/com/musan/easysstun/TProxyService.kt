@@ -443,8 +443,10 @@ tunnel:
         Log.d(TAG, "actualFinalizeStop: Calling stopSelf().")
         stopSelf()
         Log.d(TAG, "actualFinalizeStop: Broadcasting ACTION_SERVICE_STOPPED")
-        sendBroadcast(Intent(ACTION_SERVICE_STOPPED))
-        Log.i(TAG, "actualFinalizeStop: Service fully stopped and broadcast sent.") // Keep Log.i - High-level outcome
+        val broadcastIntent = Intent(ACTION_SERVICE_STOPPED)
+        broadcastIntent.setPackage(packageName)
+        sendBroadcast(broadcastIntent)
+        Log.i(TAG, "actualFinalizeStop: Service fully stopped and broadcast sent to package $packageName.") // Keep Log.i - High-level outcome
     }
 
     private fun createNotification(channelName: String) {
