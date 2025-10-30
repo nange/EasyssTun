@@ -228,7 +228,7 @@ class TProxyService : VpnService() {
         builder.setMtu(8500)
 
         builder.addAddress("198.18.0.1", 32)
-        builder.addDnsServer("1.1.1.1")
+        builder.addDnsServer("8.8.8.8")
 
         resources.getStringArray(R.array.bypass_private_route).forEach {
             val parts = it.split('/', limit = 2)
@@ -331,10 +331,9 @@ class TProxyService : VpnService() {
             tproxy_file.createNewFile()
             val fos = FileOutputStream(tproxy_file, false)
             var tproxy_conf = """misc:
-  task-stack-size: 86016
-  read-write-timeout: 180000
-tunnel:
-  mtu: 8500
+  tcp-read-write-timeout: 300000
+  udp-read-write-timeout: 15000
+
 """
             tproxy_conf += """socks5:
   port: ${pref.prefs.getString("socks_port", "2080")?.toInt()}

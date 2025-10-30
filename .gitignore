@@ -9,3 +9,9 @@
 .cxx
 local.properties
 /app/release
+android
+caches
+daemon
+native
+wrapper
+kotlin-profile

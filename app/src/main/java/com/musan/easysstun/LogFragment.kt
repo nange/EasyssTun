@@ -119,12 +119,13 @@ class LogFragment : Fragment() {
                     var line: String = bufferedReader.readLine()
                     if (line != null) {
                         val pattern =
-                            Pattern.compile("\\s(\\d{2}:\\d{2}:\\d{2})\\.\\d{3}.*msg=(.*)")
+                            Pattern.compile("\\s(\\d{2}:\\d{2}:\\d{2})\\.\\d{3}.*source=(.*) msg=(.*)")
                         val matcher = pattern.matcher(line)
                         if (matcher.find()) {
                             val timestampString = matcher.group(1)
-                            val msg = matcher.group(2)
-                            val logItem = LogItem(msg, timestampString)
+                            val source = matcher.group(2)
+                            val msg = matcher.group(3)
+                            val logItem = LogItem(msg, timestampString, source)
                             logViewModel.addLog(logItem)
                         }
                     }
@@ -168,16 +169,18 @@ class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
         private val logTextView: TextView = itemView.findViewById(R.id.logTextView)
         private val logTimestampTextView: TextView =
             itemView.findViewById(R.id.logTimestampTextView)
+        private val logSourceTextView: TextView = itemView.findViewById(R.id.logSourceTextView)
 
         fun bind(logItem: LogItem) {
             logTextView.text = logItem.message
             logTimestampTextView.text = logItem.time
+            logSourceTextView.text = logItem.source
         }
     }
 }
 
 
-data class LogItem(val message: String, var time: String)
+data class LogItem(val message: String, var time: String, var source: String)
 
 class LogViewModel : ViewModel() {
     private val _logItems = MutableLiveData<List<LogItem>>()

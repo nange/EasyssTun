@@ -18,8 +18,21 @@
         android:layout_height="wrap_content"
         android:paddingStart="2dp"
         android:paddingEnd="2dp"
-        app:layout_constraintEnd_toStartOf="@id/logTextView"
-        tools:ignore="MissingConstraints,UnknownId" />
+        app:layout_constraintStart_toStartOf="parent"
+        tools:ignore="MissingConstraints" />
+
+    <TextView
+        android:id="@+id/logSourceTextView"
+        android:textSize="12sp"
+        android:background="@color/teal_700"
+        android:textColor="@color/white"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:layout_marginStart="4dp"
+        app:layout_constraintStart_toEndOf="@id/logTimestampTextView"
+        tools:ignore="MissingConstraints" />
 
     <TextView
         android:id="@+id/logTextView"
@@ -29,6 +42,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:ellipsize="end"
-        app:layout_constraintStart_toEndOf="@id/logTimestampTextView"
+        app:layout_constraintStart_toEndOf="@id/logSourceTextView"
+        app:layout_constraintEnd_toEndOf="parent"
         tools:ignore="MissingConstraints" />
 </androidx.constraintlayout.widget.ConstraintLayout>
