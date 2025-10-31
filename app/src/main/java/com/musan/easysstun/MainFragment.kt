@@ -347,7 +347,8 @@ class MainFragment : Fragment() {
         override fun onPostExecute(gitTag: String) {
             // 将 Git tag 设置到 TextView 上
             val versionPlaceholder = rootView.findViewById<TextView>(R.id.version_placeholder)
-            versionPlaceholder.text = gitTag
+            val appVersion = BuildConfig.VERSION_NAME
+            versionPlaceholder.text = "$gitTag | EasyssTun: v$appVersion"
         }
     }
 
