@@ -17,6 +17,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -70,7 +71,7 @@ class LogFragment : Fragment() {
             changingState = false
         }
 
-        var fabToBotton = view.findViewById<FloatingActionButton>(R.id.fabToBotton)
+        val fabToBotton = view.findViewById<FloatingActionButton>(R.id.fabToBotton)
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
 //                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
@@ -109,14 +110,13 @@ class LogFragment : Fragment() {
             var bufferedReader: BufferedReader? = null
             var process: Process? = null
             try {
-//                process = ProcessBuilder("logcat", "-c").start()
-                var cleanprocess = Runtime.getRuntime().exec("logcat -c")
-                cleanprocess.waitFor();
+                val cleanprocess = Runtime.getRuntime().exec("logcat -c")
+                cleanprocess.waitFor()
                 process = Runtime.getRuntime().exec("logcat -s easyss")
                 inputStream = process.inputStream
                 bufferedReader = BufferedReader(InputStreamReader(inputStream))
-                while (!logJob?.isCancelled!!) {
-                    var line: String = bufferedReader.readLine()
+                while (isActive) {
+                    val line: String? = bufferedReader.readLine()
                     if (line != null) {
                         val pattern =
                             Pattern.compile("\\s(\\d{2}:\\d{2}:\\d{2})\\.\\d{3}.*source=(.*) msg=(.*)")

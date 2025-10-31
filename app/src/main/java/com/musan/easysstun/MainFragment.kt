@@ -277,7 +277,7 @@ class MainFragment : Fragment() {
         // We might need to ensure serverSpinner variable is accessible or passed if it's used elsewhere in setup
         // For now, assuming it's only used for the listener which is now part of updateServerSpinner.
 
-        var selected_apps = pref.getApps()!!
+        val selected_apps = pref.getApps()
         view.findViewById<TextView>(R.id.text1).let {
             it.text = getString(R.string.skipped_app_list, selected_apps.size.toString())
         }
@@ -294,14 +294,12 @@ class MainFragment : Fragment() {
             .let {
                 it.setOnClickListener {
                     findNavController().navigate(R.id.action_main_to_setting)
-                    true
                 }
             }
 
         view.findViewById<LinearLayout>(R.id.applist).let {
             it.setOnClickListener {
                 findNavController().navigate(R.id.action_main_to_applist)
-                true
             }
         }
 
@@ -313,12 +311,11 @@ class MainFragment : Fragment() {
                 if (!speedTesting){
                     getResponseTimeUsingSocksProxy("https://www.google.com", "127.0.0.1", 2080)
                 }
-
-                true
             }
         }
     }
 
+    @Suppress("DEPRECATION")
     private inner class GitTagTask(private val rootView: View, private val context: Context) : AsyncTask<Void, Void, String>() {
 
         override fun doInBackground(vararg params: Void): String {
@@ -353,6 +350,7 @@ class MainFragment : Fragment() {
     }
 
 
+    @Suppress("DEPRECATION")
     override fun onActivityResult(request: Int, result: Int, data: Intent?) {
         if (pref.isServiceEnabled) {
             startVPNService()
@@ -362,6 +360,8 @@ class MainFragment : Fragment() {
 
 
 
+    @Suppress("DEPRECATION")
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun startVPNService(isCalledFromReceiver: Boolean = false) {
         Log.d("MainFragmentSVC", "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver")
         val intent = VpnService.prepare(mContext)
@@ -433,9 +433,7 @@ class MainFragment : Fragment() {
         mContext.startService(intent2.setAction(TProxyService.ACTION_DISCONNECT))
     }
 
-    private fun statuVPNService(): Boolean {
-        return isServiceRunning(mContext, TProxyService::class.java)
-    }
+    // Removed deprecated service status check helper; rely on Pref state and service lifecycle
 
     private fun updateServiceStatu(view: View) {
         val service_button = view.findViewById<MaterialButton>(R.id.service_button)
@@ -535,11 +533,11 @@ class MainFragment : Fragment() {
         speed_test_icon.startAnimation(rotateAnimation)
         speedTesting = true
 
-        var res = ""
         CoroutineScope(Dispatchers.Default).launch {
+            var res: String
             if (!pref.isServiceEnabled){
                 res = getString(R.string.service_stopped)
-            }else {
+            } else {
                 val url = URL(urlString)
                 val proxy =
                     Proxy(Proxy.Type.SOCKS, InetSocketAddress(socksProxyHost, socksProxyPort))
@@ -596,15 +594,5 @@ class MainFragment : Fragment() {
         }
     }
 
-    private fun isServiceRunning(context: Context, serviceClass: Class<*>): Boolean {
-        val manager = mContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val services = manager.getRunningServices(Int.MAX_VALUE)
-        for (service in services) {
-            if (serviceClass.name == service.service.className) {
-                return true
-            }
-        }
-        return false
-    }
-
+    
 }

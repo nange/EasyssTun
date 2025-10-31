@@ -3,6 +3,7 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -11,7 +12,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
 
-
+@OptIn(ExperimentalSerializationApi::class)
 class Pref(private val ctx: Context) {
     companion object {
         const val SERVICE_ENABLED = "enable"
@@ -98,12 +99,8 @@ class Pref(private val ctx: Context) {
             prefs.edit().putBoolean(SERVICE_ENABLED, value).apply()
         }
 
-    fun getApps(): Set<String>? {
-        return prefs.getStringSet("selected_apps", HashSet<String>())
-    }
-
-    fun all(): Map<String, *> {
-        return prefs.all
+    fun getApps(): Set<String> {
+        return prefs.getStringSet("selected_apps", emptySet()) ?: emptySet()
     }
 
     fun getServerProfiles(): List<ServerProfile> {

@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel // Added this import
 import kotlinx.coroutines.launch
@@ -110,16 +111,16 @@ class TProxyService : VpnService() {
         // val TAG = "TProxyServiceDiag" // Already in companion object
 
         var loadedProfile: com.musan.easysstun.ServerProfile? = null 
-        var profileSource = "Unknown" // For logging
+        var profileSource = "Unknown"
 
         if (receivedProfileJson != null && receivedProfileJson!!.isNotBlank()) {
             Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
             val json = Json { ignoreUnknownKeys = true; encodeDefaults = true } 
             try {
-                loadedProfile = json.decodeFromString(com.musan.easysstun.ServerProfile.serializer(), receivedProfileJson!!)
+                loadedProfile = json.decodeFromString<com.musan.easysstun.ServerProfile>(receivedProfileJson!!)
                 profileSource = "Intent JSON"
-                Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${loadedProfile?.id}") // Keep Log.i - High-level outcome
-            } catch (e: SerializationException) {
+                loadedProfile?.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
+            } catch (e: kotlinx.serialization.SerializationException) {
                 Log.e(TAG, "Error deserializing profile from Intent JSON: ${e.message}. Falling back.")
                 profileSource = "Intent JSON Deserialization Error -> Fallback"
                 // loadedProfile remains null, will trigger fallback
@@ -137,9 +138,11 @@ class TProxyService : VpnService() {
             if (activeIdFromPrefs != null) {
                 loadedProfile = pref.getServerProfiles().find { it.id == activeIdFromPrefs }
                 if (loadedProfile != null) {
-                    Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${loadedProfile.id}") // Keep Log.i - High-level outcome
+                    loadedProfile?.let { Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${it.id}") } // Keep Log.i - High-level outcome
                     // If profile was null before due to deserialization error, but fallback succeeded, update source
-                    if (profileSource.startsWith("Intent JSON Deserialization Error")) profileSource = "SharedPreferences Fallback (after Deserialization Error)"
+                    if (profileSource.startsWith("Intent JSON Deserialization Error")) {
+                        profileSource = "SharedPreferences Fallback (after Deserialization Error)"
+                    }
                 } else {
                     Log.w(TAG, "Fallback: Profile with ID '$activeIdFromPrefs' not found in SharedPreferences list.")
                 }
@@ -239,7 +242,7 @@ class TProxyService : VpnService() {
 
         builder.addAddress("2001:0db8:0:f101::1", 64)
 
-        for (appName in pref.getApps()!!) {
+        for (appName in pref.getApps()) {
             try {
                 builder.addDisallowedApplication(appName)
             } catch (e: PackageManager.NameNotFoundException) {
@@ -279,14 +282,11 @@ class TProxyService : VpnService() {
                     Log.i(TAG, "processEasyJob: libeasyss.so process started (ProcessBuilder executed). isAlive: ${process.isAlive}") // Keep Log.i - Core lifecycle
 
                     Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.") // This is an existing log, TAG is different
-                    val bufferedReader =
-                        BufferedReader(InputStreamReader(process.inputStream))
-
+                    val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
                     while (!processEasyJob.isCancelled) {
-                        var line: String = bufferedReader.readLine()
-                        if (line != null) {
-                            Log.i("easyss", line)
-                        }
+                        val line = bufferedReader.readLine()
+                        if (line == null) break
+                        Log.i("easyss", line)
                     }
 
 //                    while (isActive) {

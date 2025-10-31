@@ -31,11 +31,12 @@ class AppListFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
         adapter = AppListAdapter(requireContext(), lifecycleScope)
-        recyclerView.recycledViewPool.setMaxRecycledViews(0, 100)
+        // Avoid overly large recycled view pool for a simple item layout
+        recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = adapter
 
         lifecycleScope.launch {
-            var progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
+            val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
             progressBar.visibility = View.VISIBLE
             val appList = withContext(Dispatchers.IO) {
                 getInstalledApps()
@@ -56,7 +57,7 @@ class AppListFragment : Fragment() {
                     or PackageManager.GET_META_DATA
         )
 
-        var pref = Pref(requireContext())
+        val pref = Pref(requireContext())
         val selectedApps = pref.getApps()
 
         var appList = packages
@@ -66,9 +67,9 @@ class AppListFragment : Fragment() {
                         packageInfo.packageName != requireActivity().applicationContext.packageName
             }
 
-        appList =  appList.sortedWith(
+        appList = appList.sortedWith(
             compareBy<PackageInfo>{
-                selectedApps?.contains(it.packageName) !=true }
+                selectedApps.contains(it.packageName) != true }
                 .thenBy { it.packageName }
         )
 

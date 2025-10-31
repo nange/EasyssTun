@@ -59,7 +59,10 @@ class AppListAdapter(
     private fun saveSelectedApps() {
         sharedPreferences.edit().putStringSet("selected_apps", selectedApps.toSet()).apply()
 
-        val intent = Intent("prefs_updated")
+        val intent = Intent("prefs_updated").apply {
+            // Ensure the broadcast targets only this app's non-exported receiver
+            setPackage(context.packageName)
+        }
         context.sendBroadcast(intent)
     }
 

@@ -143,13 +143,15 @@ class ServerProfileActivity : AppCompatActivity() {
 
     private fun setSpinnerSelection(spinner: Spinner, value: String?, valuesArrayResId: Int, entriesArrayResId: Int? = null) {
         value?.let {
-            val adapter = spinner.adapter as ArrayAdapter<String>? ?: ArrayAdapter(
-                this,
-                android.R.layout.simple_spinner_item,
-                resources.getStringArray(entriesArrayResId ?: valuesArrayResId)
-            ).also {
-                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                spinner.adapter = it
+            if (spinner.adapter == null) {
+                val entries = resources.getStringArray(entriesArrayResId ?: valuesArrayResId)
+                val aa = ArrayAdapter(
+                    this,
+                    android.R.layout.simple_spinner_item,
+                    entries
+                )
+                aa.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                spinner.adapter = aa
             }
 
             val values = resources.getStringArray(valuesArrayResId)
@@ -206,7 +208,10 @@ class ServerProfileActivity : AppCompatActivity() {
 
             // Check if the updated profile is the active one
             if (profileToSave.id == pref.getActiveServerProfile()?.id) {
-                val intent = android.content.Intent("prefs_updated")
+                val intent = android.content.Intent("prefs_updated").apply {
+                    // Ensure the broadcast targets only this app's non-exported receiver
+                    setPackage(packageName)
+                }
                 sendBroadcast(intent)
             }
         }
