@@ -53,9 +53,6 @@ class LogFragment : Fragment() {
         val layoutManager = LinearLayoutManager(requireContext())
         recyclerView.layoutManager = layoutManager
 
-//        val dividerItemDecoration = DividerItemDecoration(requireContext(), layoutManager.orientation)
-//        dividerItemDecoration.setDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.divider_drawable)!!)
-//        recyclerView.addItemDecoration(dividerItemDecoration)
         recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = logAdapter
         logViewModel = ViewModelProvider(this).get(LogViewModel::class.java)
@@ -74,7 +71,6 @@ class LogFragment : Fragment() {
         val fabToBotton = view.findViewById<FloatingActionButton>(R.id.fabToBotton)
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-//                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                     if (changingState)
                         return
                     if (!recyclerView.canScrollVertically(1)) {
@@ -84,7 +80,6 @@ class LogFragment : Fragment() {
                         isAtBottom = false
                         fabToBotton.show()
                     }
-//                }
             }
         })
 

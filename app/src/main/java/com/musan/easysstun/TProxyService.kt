@@ -257,8 +257,7 @@ class TProxyService : VpnService() {
         } catch (e: PackageManager.NameNotFoundException) {
         }
 
-        //test
-//        builder.addAllowedApplication("com.tencent.mm")
+        
 
         builder.setSession(session)
         tunFd = builder.establish()
@@ -281,7 +280,7 @@ class TProxyService : VpnService() {
                     process = ProcessBuilder(cmdList).start()
                     Log.i(TAG, "processEasyJob: libeasyss.so process started (ProcessBuilder executed). isAlive: ${process.isAlive}") // Keep Log.i - Core lifecycle
 
-                    Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.") // This is an existing log, TAG is different
+                    Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.")
                     val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
                     while (!processEasyJob.isCancelled) {
                         val line = bufferedReader.readLine()
@@ -289,16 +288,6 @@ class TProxyService : VpnService() {
                         Log.i("easyss", line)
                     }
 
-//                    while (isActive) {
-//                        if (bufferedReader.ready()) {
-//                            val line = bufferedReader.readLine()
-//                            if (line != null) {
-//                                Log.i("easyss", line)
-//                            }
-//                        } else {
-//                            delay(100)
-//                        }
-//                    }
                 } catch (e: IOException) {
                     Log.e("easyss", "msg=[EasyssTun] IOException: " + e.message)
                 } catch (e: InterruptedException) {

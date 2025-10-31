@@ -153,7 +153,6 @@ class MainFragment : Fragment() {
         return when (item.itemId) {
             R.id.action_tips -> {
                 findNavController().navigate(R.id.action_main_to_log)
-//                Toast.makeText(mContext, list.shuffled().first(), Toast.LENGTH_SHORT).show()
                 true
             }
 
