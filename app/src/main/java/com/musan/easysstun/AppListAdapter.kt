@@ -23,6 +23,8 @@ class AppListAdapter(
     private val lifecycleScope: CoroutineScope
 ) : RecyclerView.Adapter<AppListAdapter.AppViewHolder>() {
     private var appList: List<PackageInfo> = emptyList()
+    private var allApps: List<PackageInfo> = emptyList()
+    private var filterJob: kotlinx.coroutines.Job? = null
 
     private val selectedApps = mutableListOf<String>()
     private val sharedPreferences: SharedPreferences by lazy {
@@ -35,8 +37,27 @@ class AppListAdapter(
     }
 
     fun setAppList(list: List<PackageInfo>) {
+        allApps = list
         appList = list
         notifyDataSetChanged()
+    }
+
+    fun filter(query: String) {
+        filterJob?.cancel()
+        filterJob = lifecycleScope.launch(Dispatchers.IO) {
+            val filtered = if (query.isEmpty()) {
+                allApps
+            } else {
+                allApps.filter {
+                    val label = it.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: ""
+                    label.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                appList = filtered
+                notifyDataSetChanged()
+            }
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AppViewHolder {

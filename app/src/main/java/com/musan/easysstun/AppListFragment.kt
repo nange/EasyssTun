@@ -11,6 +11,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import android.Manifest
 import android.content.pm.PackageInfo
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.EditText
 import android.widget.ProgressBar
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +37,15 @@ class AppListFragment : Fragment() {
         // Avoid overly large recycled view pool for a simple item layout
         recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = adapter
+
+        val searchEditText = view.findViewById<EditText>(R.id.searchEditText)
+        searchEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                adapter.filter(s.toString())
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
 
         lifecycleScope.launch {
             val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
