@@ -121,6 +121,16 @@ class MainFragment : Fragment() {
         updateServiceStatu(view)
         updateVersionInfo(view)
 
+        // Ensure spinner is enabled when view is created
+        view.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         val intentFilter = IntentFilter(TProxyService.ACTION_SERVICE_STOPPED)
         ContextCompat.registerReceiver(
             requireActivity(),
@@ -129,19 +139,12 @@ class MainFragment : Fragment() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         Log.d("MainFragment", "serviceStoppedReceiver registered.")
-
-        // Ensure spinner is enabled when view is created
-        view.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
     }
 
-    override fun onDestroyView() {
+    override fun onDestroy() {
         requireActivity().unregisterReceiver(serviceStoppedReceiver)
         Log.d("MainFragment", "serviceStoppedReceiver unregistered.")
-        super.onDestroyView()
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        super.onDestroy()
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
