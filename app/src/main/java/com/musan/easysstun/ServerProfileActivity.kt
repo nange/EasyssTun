@@ -24,7 +24,7 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var profileServerNameIndication: EditText
     private lateinit var profileCustomCa: EditText
     private lateinit var profileLogLevel: Spinner
-    private lateinit var profileDisableQuic: Spinner
+    private lateinit var profileEnableQuic: Spinner
     private lateinit var profileIpv6Rule: Spinner
     private lateinit var saveProfileButton: Button
     private lateinit var deleteProfileButton: Button // Added delete button
@@ -47,7 +47,7 @@ class ServerProfileActivity : AppCompatActivity() {
         profileServerNameIndication = findViewById(R.id.profile_server_name_indication)
         profileCustomCa = findViewById(R.id.profile_custom_ca)
         profileLogLevel = findViewById(R.id.profile_log_level)
-        profileDisableQuic = findViewById(R.id.profile_disable_quic)
+        profileEnableQuic = findViewById(R.id.profile_enable_quic)
         profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
         saveProfileButton = findViewById(R.id.save_profile_button)
         deleteProfileButton = findViewById(R.id.delete_profile_button) // Initialize delete button
@@ -77,11 +77,11 @@ class ServerProfileActivity : AppCompatActivity() {
         logLevelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         profileLogLevel.adapter = logLevelAdapter
 
-        val disableQuicAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_disable_quic_list, android.R.layout.simple_spinner_item
+        val enableQuicAdapter = ArrayAdapter.createFromResource(
+            this, R.array.easyss_enable_quic_list, android.R.layout.simple_spinner_item
         )
-        disableQuicAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileDisableQuic.adapter = disableQuicAdapter
+        enableQuicAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileEnableQuic.adapter = enableQuicAdapter
 
         val ipv6RuleAdapter = ArrayAdapter.createFromResource(
             this, R.array.easyss_ipv6_rule_list, android.R.layout.simple_spinner_item
@@ -102,7 +102,7 @@ class ServerProfileActivity : AppCompatActivity() {
                 setSpinnerSelection(profileProxyRule, it.proxyRule, R.array.easyss_proxyrule_list_value, R.array.easyss_proxyrule_list_value)
                 setSpinnerSelection(profileOutbound, it.outbound, R.array.easyss_outbound_list_value, R.array.easyss_outbound_list_value)
                 setSpinnerSelection(profileLogLevel, it.logLevel, R.array.easyss_loglevel_list_value, R.array.easyss_loglevel_list_value)
-                setSpinnerSelection(profileDisableQuic, it.disableQuic, R.array.easyss_disable_quic_list_value, R.array.easyss_disable_quic_list_value)
+                setSpinnerSelection(profileEnableQuic, it.enableQuic, R.array.easyss_enable_quic_list_value, R.array.easyss_enable_quic_list_value)
                 setSpinnerSelection(profileIpv6Rule, it.ipv6Rule, R.array.easyss_ipv6_rule_value, R.array.easyss_ipv6_rule_value)
 
                 profileServerNameIndication.setText(it.serverNameIndication)
@@ -174,7 +174,7 @@ class ServerProfileActivity : AppCompatActivity() {
         val serverNameIndication = profileServerNameIndication.text.toString()
         val customCa = profileCustomCa.text.toString()
         val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
-        val disableQuic = getSpinnerValue(profileDisableQuic, R.array.easyss_disable_quic_list_value)
+        val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value)
         val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
 
 
@@ -193,7 +193,7 @@ class ServerProfileActivity : AppCompatActivity() {
             proxyRule = proxyRule,
             outbound = outbound,
             logLevel = logLevel,
-            disableQuic = disableQuic,
+            enableQuic = enableQuic,
             ipv6Rule = ipv6Rule,
             serverNameIndication = serverNameIndication,
             customCa = customCa

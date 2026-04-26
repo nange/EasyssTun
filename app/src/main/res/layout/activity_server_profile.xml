@@ -140,13 +140,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Disable QUIC" />
+            android:text="Enable QUIC" />
         <Spinner
-            android:id="@+id/profile_disable_quic"
+            android:id="@+id/profile_enable_quic"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:entries="@array/easyss_disable_quic_list"
-            android:entryValues="@array/easyss_disable_quic_list_value" />
+            android:entries="@array/easyss_enable_quic_list"
+            android:entryValues="@array/easyss_enable_quic_list_value" />
 
         <TextView
             android:layout_width="wrap_content"

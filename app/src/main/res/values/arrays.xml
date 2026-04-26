@@ -192,11 +192,11 @@
         <item>Warn</item>
         <item>Error</item>
     </string-array>
-    <string-array name="easyss_disable_quic_list">
+    <string-array name="easyss_enable_quic_list">
         <item>否</item>
         <item>是</item>
     </string-array>
-    <string-array name="easyss_disable_quic_list_value">
+    <string-array name="easyss_enable_quic_list_value">
         <item>false</item>
         <item>true</item>
     </string-array>

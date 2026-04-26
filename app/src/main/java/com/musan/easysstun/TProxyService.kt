@@ -181,7 +181,7 @@ class TProxyService : VpnService() {
                 "-l", "2080", 
                 "-t", "60", 
                 "-log-level", loadedProfile.logLevel,
-                "-disable-quic=${loadedProfile.disableQuic}",
+                "-enable-quic=${loadedProfile.enableQuic}",
                 "-ipv6-rule", loadedProfile.ipv6Rule,
                 "-sn", sn,
                 "-enable-tun2socks=false",

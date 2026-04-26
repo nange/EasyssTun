@@ -52,7 +52,7 @@ class PrefTest {
             proxyRule = "auto",
             outbound = "native",
             logLevel = "info",
-            disableQuic = "false",
+            enableQuic = "false",
             ipv6Rule = "auto",
             serverNameIndication = "test.sni.com",
             customCa = ""
@@ -186,7 +186,7 @@ class PrefTest {
         profile.proxyRule = "bypass_lan"
         profile.outbound = "ipv4_only"
         profile.logLevel = "debug"
-        profile.disableQuic = "true"
+        profile.enableQuic = "true"
         profile.ipv6Rule = "ipv6_only"
 
         pref.addServerProfile(profile)
@@ -210,7 +210,7 @@ class PrefTest {
             "-l", "1080", // Verifies SOCKS port from prefs
             "-t", "60",
             "-log-level", "debug",
-            "-disable-quic=true",
+            "-enable-quic=true",
             "-ipv6-rule", "ipv6_only",
             "-sn", "my.sni.org", // Verifies SNI is used
             "-enable-tun2socks=false",
@@ -263,7 +263,7 @@ class PrefTest {
             .putString("easyss_proxyrule", "old_rule")
             .putString("easyss_outbound", "old_outbound")
             .putString("easyss_loglevel", "old_log")
-            .putString("easyss_disable_quic", "true")
+            .putString("easyss_enable_quic", "true")
             .putString("easyss_ipv6_rule", "old_ipv6")
             .putString("easyss_sn", "old.sni.com")
             .putString("easyss_custom_ca", "old_ca_content")
@@ -284,7 +284,7 @@ class PrefTest {
         assertEquals("old_rule", migratedProfile.proxyRule)
         assertEquals("old_outbound", migratedProfile.outbound)
         assertEquals("old_log", migratedProfile.logLevel)
-        assertEquals("true", migratedProfile.disableQuic)
+        assertEquals("true", migratedProfile.enableQuic)
         assertEquals("old_ipv6", migratedProfile.ipv6Rule)
         assertEquals("old.sni.com", migratedProfile.serverNameIndication)
         assertEquals("old_ca_content", migratedProfile.customCa)
@@ -301,7 +301,7 @@ class PrefTest {
         assertFalse("Old key 'easyss_proxyrule' should be removed", sharedPreferences.contains("easyss_proxyrule"))
         assertFalse("Old key 'easyss_outbound' should be removed", sharedPreferences.contains("easyss_outbound"))
         assertFalse("Old key 'easyss_loglevel' should be removed", sharedPreferences.contains("easyss_loglevel"))
-        assertFalse("Old key 'easyss_disable_quic' should be removed", sharedPreferences.contains("easyss_disable_quic"))
+        assertFalse("Old key 'easyss_enable_quic' should be removed", sharedPreferences.contains("easyss_enable_quic"))
         assertFalse("Old key 'easyss_ipv6_rule' should be removed", sharedPreferences.contains("easyss_ipv6_rule"))
         assertFalse("Old key 'easyss_sn' should be removed", sharedPreferences.contains("easyss_sn"))
         assertFalse("Old key 'easyss_custom_ca' should be removed", sharedPreferences.contains("easyss_custom_ca"))

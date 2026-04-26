@@ -43,7 +43,7 @@ class Pref(private val ctx: Context) {
             val proxyRule = prefs.getString("easyss_proxyrule", "auto") ?: "auto"
             val outbound = prefs.getString("easyss_outbound", "native") ?: "native"
             val logLevel = prefs.getString("easyss_loglevel", "info") ?: "info"
-            val disableQuic = prefs.getString("easyss_disable_quic", "false") ?: "false"
+            val enableQuic = prefs.getString("easyss_enable_quic", "false") ?: "false"
             val ipv6Rule = prefs.getString("easyss_ipv6_rule", "auto") ?: "auto"
             val serverNameIndication = prefs.getString("easyss_sn", "") ?: ""
             val customCa = prefs.getString("easyss_custom_ca", "") ?: ""
@@ -58,7 +58,7 @@ class Pref(private val ctx: Context) {
                 proxyRule = proxyRule,
                 outbound = outbound,
                 logLevel = logLevel,
-                disableQuic = disableQuic,
+                enableQuic = enableQuic,
                 ipv6Rule = ipv6Rule,
                 serverNameIndication = serverNameIndication,
                 customCa = customCa
@@ -75,7 +75,7 @@ class Pref(private val ctx: Context) {
                 remove("easyss_proxyrule")
                 remove("easyss_outbound")
                 remove("easyss_loglevel")
-                remove("easyss_disable_quic")
+                remove("easyss_enable_quic")
                 remove("easyss_ipv6_rule")
                 remove("easyss_sn")
                 remove("easyss_custom_ca")
@@ -193,7 +193,7 @@ class Pref(private val ctx: Context) {
             "-l", localSocksPort, // Use the variable here
             "-t", "60", // This seems to be a fixed timeout, kept as is.
             "-log-level", activeProfile.logLevel,
-            "-disable-quic=${activeProfile.disableQuic}",
+            "-enable-quic=${activeProfile.enableQuic}",
             "-ipv6-rule", activeProfile.ipv6Rule,
             "-sn", sn,
             "-enable-tun2socks=false",

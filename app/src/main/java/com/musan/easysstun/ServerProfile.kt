@@ -13,7 +13,7 @@ data class ServerProfile(
     val proxyRule: String = "auto",
     val outbound: String = "native",
     val logLevel: String = "info",
-    val disableQuic: String = "false",
+    val enableQuic: String = "false",
     val ipv6Rule: String = "auto",
     val serverNameIndication: String = "",
     val customCa: String = ""

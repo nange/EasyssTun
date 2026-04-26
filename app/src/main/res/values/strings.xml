@@ -27,7 +27,7 @@
     <string name="easyss_proxyrule">Easyss Proxy Rule</string>
     <string name="easyss_outbound">Easyss Outbound Proto</string>
     <string name="easyss_loglevel">Easyss Log Level</string>
-    <string name="easyss_disable_quic">Easyss Disable QUIC</string>
+    <string name="easyss_enable_quic">Easyss Enable QUIC</string>
     <string name="easyss_ipv6_rule">Easyss IPv6 Rule</string>
     <string name="easyss_sn">Easyss Server Name</string>
     <string name="easyss_custom_ca">Easyss Custom CA</string>
