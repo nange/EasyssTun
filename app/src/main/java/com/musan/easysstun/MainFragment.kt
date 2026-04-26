@@ -186,14 +186,6 @@ class MainFragment : Fragment() {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         serverSpinner.adapter = adapter
 
-        val activeServerProfile = pref.getActiveServerProfile()
-        if (activeServerProfile != null) {
-            val activeServerPosition = serverProfiles.indexOfFirst { it.id == activeServerProfile.id }
-            if (activeServerPosition != -1) {
-                serverSpinner.setSelection(activeServerPosition, false) // set false to avoid triggering onItemSelected
-            }
-        }
-
         // Re-attach or ensure the listener is set.
         // If the listener logic depends on serverProfiles, it must be correctly scoped or passed.
         // For this refactoring, we assume the existing listener logic in setup() will be part of the spinner setup.
@@ -246,6 +238,32 @@ class MainFragment : Fragment() {
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 serverSpinner.isEnabled = true
+            }
+        }
+
+        // Set selection AFTER setting the listener, so if it's different from default (0),
+        // it doesn't trigger the listener if we don't want it to, OR it triggers it correctly.
+        // Actually, we use setSelection(position, false) which might still trigger onItemSelected in some cases
+        // but it's meant to suppress animation. To avoid triggering the listener during initialization,
+        // we can temporarily disable the listener, but we just set it.
+        // Wait, the issue is that when returning to the fragment, the active server might be the pending one,
+        // but it's not set as active yet (it's still pending). 
+        // If we are switching, we should show the pending server in the spinner, or the active one?
+        // Let's show the pending server if we are switching, else the active one.
+        val activeServerIdToDisplay = if (isSwitchingServer && pendingServerProfileId != null) {
+            pendingServerProfileId
+        } else {
+            pref.getActiveServerProfile()?.id
+        }
+
+        if (activeServerIdToDisplay != null) {
+            val activeServerPosition = serverProfiles.indexOfFirst { it.id == activeServerIdToDisplay }
+            if (activeServerPosition != -1) {
+                // Temporarily remove listener to avoid triggering switch logic during setup
+                val listener = serverSpinner.onItemSelectedListener
+                serverSpinner.onItemSelectedListener = null
+                serverSpinner.setSelection(activeServerPosition, false) 
+                serverSpinner.onItemSelectedListener = listener
             }
         }
     }
