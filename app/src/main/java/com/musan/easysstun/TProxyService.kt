@@ -25,6 +25,8 @@ import kotlinx.coroutines.cancel // Added this import
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -271,18 +273,24 @@ class TProxyService : VpnService() {
         }
 
         processEasyJob = easyScope.launch {
-            while (true) {
+            var restartCount = 0
+            val maxRestarts = 3
+            val minRunningTimeMs = 5000L
 
+            while (isActive) {
+                var processStartedTime = 0L
                 try {
                     val libraryPath = applicationInfo.nativeLibraryDir.toString() + "/libeasyss.so"
-                    var cmdList = listOf(libraryPath) + easyssInfo.cmdList
+                    val cmdList = listOf(libraryPath) + easyssInfo.cmdList
                     Log.d(TAG, "processEasyJob: Attempting to start libeasyss.so process. Command server: ${easyssInfo.cmdList.getOrNull(easyssInfo.cmdList.indexOf("-s") + 1)}, local port: ${easyssInfo.cmdList.getOrNull(easyssInfo.cmdList.indexOf("-l") + 1)}")
+                    
+                    processStartedTime = System.currentTimeMillis()
                     process = ProcessBuilder(cmdList).start()
                     Log.i(TAG, "processEasyJob: libeasyss.so process started (ProcessBuilder executed). isAlive: ${process.isAlive}") // Keep Log.i - Core lifecycle
 
                     Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.")
                     val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
-                    while (!processEasyJob.isCancelled) {
+                    while (isActive) {
                         val line = bufferedReader.readLine()
                         if (line == null) break
                         Log.i("easyss", line)
@@ -292,22 +300,50 @@ class TProxyService : VpnService() {
                     Log.e("easyss", "msg=[EasyssTun] IOException: " + e.message)
                 } catch (e: InterruptedException) {
                     Log.e("easyss", "msg=[EasyssTun] InterruptedException: " + e.message)
-                }
-
-                finally {
+                } finally {
                     Log.d(TAG, "processEasyJob: finally block entered. Process initialized: ${::process.isInitialized}")
+                    var exitCode = -999
                     if (::process.isInitialized) { // Check if process was even initialized
                         Log.d(TAG, "processEasyJob: About to call process.destroy(). Current process state: isAlive=${process.isAlive}")
                         process.destroy()
                         Log.d(TAG, "processEasyJob: process.destroy() called. About to call process.waitFor().")
-                        val exitCode = process.waitFor()
+                        exitCode = process.waitFor()
                         Log.i(TAG, "processEasyJob: libeasyss.so process exited with code: $exitCode") // Keep Log.i - Core lifecycle
                     } else {
                         Log.w(TAG, "processEasyJob: finally block, process was not initialized.")
                     }
-                    break // This break is for the while(true) loop inside processEasyJob
-                }
 
+                    // Check if this was a manual cancellation
+                    val isCancelled = coroutineContext[Job]?.isCancelled == true
+                    if (isCancelled) {
+                        Log.i(TAG, "processEasyJob: Coroutine was cancelled. Exiting process loop.")
+                        break // Break the while(true) loop on manual stop
+                    }
+
+                    // Calculate how long it was running
+                    val runningTime = System.currentTimeMillis() - processStartedTime
+                    if (runningTime > minRunningTimeMs) {
+                        // Reset restart count if it ran successfully for a reasonable time
+                        Log.d(TAG, "processEasyJob: Process ran stably for ${runningTime}ms. Resetting restart count.")
+                        restartCount = 0
+                    }
+
+                    if (restartCount < maxRestarts) {
+                        restartCount++
+                        val backoffDelay = restartCount * 1000L
+                        Log.w(TAG, "processEasyJob: libeasyss.so process exited (code $exitCode) unexpectedly! Restarting in ${backoffDelay}ms (Attempt $restartCount/$maxRestarts)")
+                        try {
+                            delay(backoffDelay)
+                        } catch (e: Exception) {
+                            // If delay is interrupted/cancelled
+                            break
+                        }
+                    } else {
+                        Log.e(TAG, "processEasyJob: libeasyss.so process exited unexpectedly and reached maximum restart attempts ($maxRestarts). Stopping VPN service.")
+                        stopService()
+                        break
+                    }
+                }
             }
         }
 
@@ -371,12 +407,28 @@ class TProxyService : VpnService() {
 
                 // 2. Stop libeasyss process
                 if (::processEasyJob.isInitialized && processEasyJob.isActive) {
-                    Log.d(TAG, "stopService: Cancelling and joining processEasyJob.")
+                    Log.d(TAG, "stopService: Cancelling processEasyJob.")
                     try {
-                        processEasyJob.cancelAndJoin() 
+                        processEasyJob.cancel()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "stopService: Exception during processEasyJob.cancel(): ${e.message}", e)
+                    }
+
+                    if (::process.isInitialized && process.isAlive) {
+                        Log.d(TAG, "stopService: Destroying process directly to unblock readLine().")
+                        try {
+                            process.destroy()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "stopService: Exception destroying process: ${e.message}", e)
+                        }
+                    }
+
+                    Log.d(TAG, "stopService: Joining processEasyJob.")
+                    try {
+                        processEasyJob.join() 
                         Log.d(TAG, "stopService: processEasyJob completed.")
                     } catch (e: Exception) {
-                        Log.e(TAG, "stopService: Exception during processEasyJob.cancelAndJoin(): ${e.message}", e)
+                        Log.e(TAG, "stopService: Exception during processEasyJob.join(): ${e.message}", e)
                     }
                 } else {
                     Log.d(TAG, "stopService: processEasyJob was not active or initialized.")
