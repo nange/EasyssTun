@@ -1,23 +1,24 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 android {
-    namespace 'com.musan.easysstun'
-    compileSdk 35
+    namespace = 'com.musan.easysstun'
+    compileSdk = 37
 
     defaultConfig {
-        applicationId "com.musan.easysstun"
-        minSdk 33
-        targetSdk 34
-        versionCode 116
-        versionName "2.7.1"
+        applicationId = "com.musan.easysstun"
+        minSdk = 33
+        targetSdk 37
+        versionCode = 118
+        versionName = "2.7.2"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
-            useSupportLibrary true
+            useSupportLibrary = true
         }
     }
 
@@ -38,69 +39,70 @@ android {
     buildTypes {
         debug {
             resValue "string", "app_name", "EasyssTun (Debug)"
-            applicationIdSuffix ".debug"
+            applicationIdSuffix = ".debug"
         }
         release {
             resValue "string", "app_name", "EasyssTun"
-//            minifyEnabled true
-//            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-//            ndk {
-//                abiFilters 'arm64-v8a', 'x86_64'
-//            }
         }
     }
 
     splits {
         abi {
-            enable true
+            enable = true
             reset()
             include "arm64-v8a", "x86_64"
-            universalApk false
+            universalApk = false
         }
     }
 
 
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def versionCode = variant.versionCode
-            def versionName = variant.versionName
-            def formattedDate = new Date().format('yyyyMMdd')
-            def abi = output.getFilter(com.android.build.OutputFile.ABI)
-            if (abi == null) abi = "all"
 
-            output.outputFileName = "EasyssTun_v${versionName}_${versionCode}_${abi}_${variant.name}_${formattedDate}.apk"
-        }
-    }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = '17'
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        viewBinding true
-        buildConfig true
+        viewBinding = true
+        buildConfig = true
+        resValues = true
     }
-    ndkVersion '25.0.8775105'
+    ndkVersion = '25.0.8775105'
     composeOptions {
-        kotlinCompilerExtensionVersion '1.4.3'
+        kotlinCompilerExtensionVersion = '1.4.3'
+    }
+    buildToolsVersion '36.0.0'
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
+            def abiFilter = output.filters.find { it.filterType.name() == 'ABI' }
+            def abi = abiFilter != null ? abiFilter.identifier : 'all'
+            def formattedDate = new Date().format('yyyyMMdd')
+            output.outputFileName.set("EasyssTun_v${output.versionName.get()}_${output.versionCode.get()}_${abi}_${variant.name}_${formattedDate}.apk")
+        }
     }
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'com.google.android.material:material:1.10.0'
-    implementation 'androidx.navigation:navigation-fragment-ktx:2.7.5'
-    implementation 'androidx.navigation:navigation-ui-ktx:2.7.5'
+    implementation 'androidx.core:core-ktx:1.18.0'
+    implementation 'com.google.android.material:material:1.14.0'
+    implementation 'androidx.navigation:navigation-fragment-ktx:2.9.8'
+    implementation 'androidx.navigation:navigation-ui-ktx:2.9.8'
     implementation 'androidx.preference:preference-ktx:1.2.1'
-    implementation 'androidx.recyclerview:recyclerview:1.3.2'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
-    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.2.2'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.2'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.10.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0'
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }
 
