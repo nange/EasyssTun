@@ -13,7 +13,7 @@ android {
         applicationId = "com.musan.easysstun"
         minSdk = 33
         targetSdk 37
-        versionCode = 120
+        versionCode = 121
         versionName = "3.0.0-beta1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
