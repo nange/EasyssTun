@@ -13,8 +13,8 @@ android {
         applicationId = "com.musan.easysstun"
         minSdk = 33
         targetSdk 37
-        versionCode = 119
-        versionName = "2.7.3"
+        versionCode = 120
+        versionName = "3.0.0-beta1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

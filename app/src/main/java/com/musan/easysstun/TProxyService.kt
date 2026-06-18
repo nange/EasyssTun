@@ -12,18 +12,14 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel // Added this import
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -32,7 +28,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
-import android.content.pm.ServiceInfo;
+import android.content.pm.ServiceInfo
+import kotlin.time.Duration.Companion.milliseconds
 
 
 class TProxyService : VpnService() {
@@ -67,7 +64,7 @@ class TProxyService : VpnService() {
 
         try {
             startService()
-        } catch (e: java.io.IOException) { // Ensure correct import for IOException
+        } catch (e: IOException) { // Ensure correct import for IOException
             Log.e(TAG, "Failed to start service due to IOException. Stopping service.", e)
             stopSelf()
         }
@@ -112,16 +109,16 @@ class TProxyService : VpnService() {
         pref = Pref(this)
         // val TAG = "TProxyServiceDiag" // Already in companion object
 
-        var loadedProfile: com.musan.easysstun.ServerProfile? = null 
+        var loadedProfile: ServerProfile? = null
         var profileSource = "Unknown"
 
         if (receivedProfileJson != null && receivedProfileJson!!.isNotBlank()) {
             Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
             val json = Json { ignoreUnknownKeys = true; encodeDefaults = true } 
             try {
-                loadedProfile = json.decodeFromString<com.musan.easysstun.ServerProfile>(receivedProfileJson!!)
+                loadedProfile = json.decodeFromString<ServerProfile>(receivedProfileJson!!)
                 profileSource = "Intent JSON"
-                loadedProfile?.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
+                loadedProfile.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
             } catch (e: kotlinx.serialization.SerializationException) {
                 Log.e(TAG, "Error deserializing profile from Intent JSON: ${e.message}. Falling back.")
                 profileSource = "Intent JSON Deserialization Error -> Fallback"
@@ -135,12 +132,12 @@ class TProxyService : VpnService() {
         if (loadedProfile == null) { // Fallback logic
             Log.d(TAG, "Executing fallback: Loading profile via SharedPreferences.")
             // This part uses pref to get active ID then find in list
-            val activeIdFromPrefs = pref.prefs.getString(com.musan.easysstun.Pref.ACTIVE_SERVER_ID, null) 
+            val activeIdFromPrefs = pref.prefs.getString(Pref.ACTIVE_SERVER_ID, null)
             Log.d(TAG, "Fallback: Active Server ID from SharedPreferences: '$activeIdFromPrefs'")
             if (activeIdFromPrefs != null) {
                 loadedProfile = pref.getServerProfiles().find { it.id == activeIdFromPrefs }
                 if (loadedProfile != null) {
-                    loadedProfile?.let { Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${it.id}") } // Keep Log.i - High-level outcome
+                    loadedProfile.let { Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${it.id}") } // Keep Log.i - High-level outcome
                     // If profile was null before due to deserialization error, but fallback succeeded, update source
                     if (profileSource.startsWith("Intent JSON Deserialization Error")) {
                         profileSource = "SharedPreferences Fallback (after Deserialization Error)"
@@ -162,7 +159,7 @@ class TProxyService : VpnService() {
         }
         
         // Construct easyssInfo based on loadedProfile
-        val easyssInfo = com.musan.easysstun.easyssInfo() 
+        val easyssInfo = easyssInfo()
         if (loadedProfile == null) {
             easyssInfo.valid = false
         } else {
@@ -186,18 +183,17 @@ class TProxyService : VpnService() {
                 "-enable-quic=${loadedProfile.enableQuic}",
                 "-ipv6-rule", loadedProfile.ipv6Rule,
                 "-sn", sn,
-                "-enable-tun2socks=false",
                 "-daemon=false"
             )
             if (loadedProfile.customCa.isNotBlank()) {
-                val customCaFile = java.io.File(cacheDir, "easyss_custom_ca.conf") // use 'this.cacheDir' or 'applicationContext.cacheDir'
+                val customCaFile = File(cacheDir, "easyss_custom_ca.conf") // use 'this.cacheDir' or 'applicationContext.cacheDir'
                 try {
                     customCaFile.createNewFile()
-                    java.io.FileOutputStream(customCaFile, false).use { fos ->
+                    FileOutputStream(customCaFile, false).use { fos ->
                         fos.write(loadedProfile.customCa.toByteArray())
                     }
                     cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
-                } catch (e: java.io.IOException) {
+                } catch (e: IOException) {
                     Log.e(TAG, "Error writing custom CA file", e)
                 }
             }
@@ -224,7 +220,7 @@ class TProxyService : VpnService() {
 
         /* VPN */
         var session = String()
-        val builder: Builder = Builder()
+        val builder = Builder()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
@@ -291,8 +287,7 @@ class TProxyService : VpnService() {
                     Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.")
                     val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
                     while (isActive) {
-                        val line = bufferedReader.readLine()
-                        if (line == null) break
+                        val line = bufferedReader.readLine() ?: break
                         Log.i("easyss", line)
                     }
 
@@ -333,7 +328,7 @@ class TProxyService : VpnService() {
                         val backoffDelay = restartCount * 1000L
                         Log.w(TAG, "processEasyJob: libeasyss.so process exited (code $exitCode) unexpectedly! Restarting in ${backoffDelay}ms (Attempt $restartCount/$maxRestarts)")
                         try {
-                            delay(backoffDelay)
+                            delay(backoffDelay.milliseconds)
                         } catch (e: Exception) {
                             // If delay is interrupted/cancelled
                             break
@@ -351,10 +346,10 @@ class TProxyService : VpnService() {
         val socksPortForTProxy = pref.prefs.getString("socks_port", "2080")
         Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPortForTProxy")
         /* TProxy */
-        val tproxy_file = File(cacheDir, "tproxy.conf")
+        val proxyFile = File(cacheDir, "tproxy.conf")
         try {
-            tproxy_file.createNewFile()
-            val fos = FileOutputStream(tproxy_file, false)
+            proxyFile.createNewFile()
+            val fos = FileOutputStream(proxyFile, false)
             var tproxy_conf = """misc:
   tcp-read-write-timeout: 300000
   udp-read-write-timeout: 15000
@@ -371,7 +366,7 @@ class TProxyService : VpnService() {
             return
         }
         Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${tunFd?.fd}.")
-        TProxyStartService(tproxy_file.absolutePath, tunFd!!.fd)
+        TProxyStartService(proxyFile.absolutePath, tunFd!!.fd)
         pref.prefs.edit { apply { putBoolean("enable", true) } }
         val channelName = "easysstun"
         initNotificationChannel(channelName)
@@ -501,7 +496,7 @@ class TProxyService : VpnService() {
             .setContentIntent(pi)
             .build()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notify);
+            startForeground(1, notify)
         } else {
             startForeground(1, notify, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         }
