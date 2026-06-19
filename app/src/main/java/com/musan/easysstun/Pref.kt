@@ -213,6 +213,30 @@ class Pref(private val ctx: Context) {
             }
         }
 
+        if (activeProfile.directFile.isNotBlank()) {
+            val directFile = File(ctx.cacheDir, "easyss_direct.conf")
+            try {
+                directFile.createNewFile()
+                FileOutputStream(directFile, false).use { fos ->
+                    fos.write(activeProfile.directFile.toByteArray())
+                }
+                cmdList.addAll(listOf("-direct-file", directFile.absolutePath))
+            } catch (e: IOException) {
+            }
+        }
+
+        if (activeProfile.proxyFile.isNotBlank()) {
+            val proxyFile = File(ctx.cacheDir, "easyss_proxy.conf")
+            try {
+                proxyFile.createNewFile()
+                FileOutputStream(proxyFile, false).use { fos ->
+                    fos.write(activeProfile.proxyFile.toByteArray())
+                }
+                cmdList.addAll(listOf("-proxy-file", proxyFile.absolutePath))
+            } catch (e: IOException) {
+            }
+        }
+
         easyssInfo.cmdList = cmdList
         return easyssInfo
     }

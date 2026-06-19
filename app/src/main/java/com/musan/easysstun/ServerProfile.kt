@@ -16,5 +16,7 @@ data class ServerProfile(
     val enableQuic: String = "false",
     val ipv6Rule: String = "auto",
     val serverNameIndication: String = "",
-    val customCa: String = ""
+    val customCa: String = "",
+    val directFile: String = "",
+    val proxyFile: String = ""
 )

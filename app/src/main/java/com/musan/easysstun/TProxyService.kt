@@ -197,6 +197,30 @@ class TProxyService : VpnService() {
                     Log.e(TAG, "Error writing custom CA file", e)
                 }
             }
+            if (loadedProfile.directFile.isNotBlank()) {
+                val directFile = File(cacheDir, "easyss_direct.conf")
+                try {
+                    directFile.createNewFile()
+                    FileOutputStream(directFile, false).use { fos ->
+                        fos.write(loadedProfile.directFile.toByteArray())
+                    }
+                    cmdList.addAll(listOf("-direct-file", directFile.absolutePath))
+                } catch (e: IOException) {
+                    Log.e(TAG, "Error writing direct file", e)
+                }
+            }
+            if (loadedProfile.proxyFile.isNotBlank()) {
+                val proxyFile = File(cacheDir, "easyss_proxy.conf")
+                try {
+                    proxyFile.createNewFile()
+                    FileOutputStream(proxyFile, false).use { fos ->
+                        fos.write(loadedProfile.proxyFile.toByteArray())
+                    }
+                    cmdList.addAll(listOf("-proxy-file", proxyFile.absolutePath))
+                } catch (e: IOException) {
+                    Log.e(TAG, "Error writing proxy file", e)
+                }
+            }
             easyssInfo.cmdList = cmdList
         }
         // The existing diagnostic logs for easyssInfo.valid and cmdList should follow this.

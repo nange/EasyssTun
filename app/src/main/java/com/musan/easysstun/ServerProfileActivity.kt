@@ -23,6 +23,8 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var profileOutbound: Spinner
     private lateinit var profileServerNameIndication: EditText
     private lateinit var profileCustomCa: EditText
+    private lateinit var profileDirectFile: EditText
+    private lateinit var profileProxyFile: EditText
     private lateinit var profileLogLevel: Spinner
     private lateinit var profileEnableQuic: Spinner
     private lateinit var profileIpv6Rule: Spinner
@@ -46,6 +48,8 @@ class ServerProfileActivity : AppCompatActivity() {
         profileOutbound = findViewById(R.id.profile_outbound)
         profileServerNameIndication = findViewById(R.id.profile_server_name_indication)
         profileCustomCa = findViewById(R.id.profile_custom_ca)
+        profileDirectFile = findViewById(R.id.profile_direct_file)
+        profileProxyFile = findViewById(R.id.profile_proxy_file)
         profileLogLevel = findViewById(R.id.profile_log_level)
         profileEnableQuic = findViewById(R.id.profile_enable_quic)
         profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
@@ -107,6 +111,8 @@ class ServerProfileActivity : AppCompatActivity() {
 
                 profileServerNameIndication.setText(it.serverNameIndication)
                 profileCustomCa.setText(it.customCa)
+                profileDirectFile.setText(it.directFile)
+                profileProxyFile.setText(it.proxyFile)
 
                 // Show delete button if editing an existing profile
                 deleteProfileButton.visibility = View.VISIBLE
@@ -173,6 +179,8 @@ class ServerProfileActivity : AppCompatActivity() {
         val outbound = getSpinnerValue(profileOutbound, R.array.easyss_outbound_list_value)
         val serverNameIndication = profileServerNameIndication.text.toString()
         val customCa = profileCustomCa.text.toString()
+        val directFile = profileDirectFile.text.toString()
+        val proxyFile = profileProxyFile.text.toString()
         val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
         val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value)
         val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
@@ -196,7 +204,9 @@ class ServerProfileActivity : AppCompatActivity() {
             enableQuic = enableQuic,
             ipv6Rule = ipv6Rule,
             serverNameIndication = serverNameIndication,
-            customCa = customCa
+            customCa = customCa,
+            directFile = directFile,
+            proxyFile = proxyFile
         )
 
         if (profileId == null) { // A new profile is being added

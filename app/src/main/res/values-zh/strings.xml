@@ -29,5 +29,7 @@
     <string name="easyss_ipv6_rule">Easyss IPv6规则</string>
     <string name="easyss_sn">Easyss Server Name</string>
     <string name="easyss_custom_ca">Easyss 自定义证书</string>
+    <string name="easyss_direct_file">直连域名/IP（每行一个）</string>
+    <string name="easyss_proxy_file">代理域名/IP（每行一个）</string>
     <string name="not_set">未配置</string>
 </resources>
