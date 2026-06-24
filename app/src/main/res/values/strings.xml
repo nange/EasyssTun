@@ -17,6 +17,18 @@
     <string name="easyss_configure">Configure</string>
     <string name="speedtest_placeholder">Test Speed</string>
     <string name="speedtest_summary">Tap to Test Connection Speed of EasyssTun.</string>
+
+    <!-- Stats Card -->
+    <string name="stats_title">Statistics</string>
+    <string name="stats_loading">Loading statistics…</string>
+    <string name="stats_updating">Updating…</string>
+    <string name="stats_unavailable">Statistics not available</string>
+    <string name="stats_streams_opened">Opened</string>
+    <string name="stats_streams_closed">Closed</string>
+    <string name="stats_bytes_sent">Sent</string>
+    <string name="stats_bytes_recv">Received</string>
+    <string name="stats_uptime">Uptime</string>
+    <string name="stats_active_streams">Active</string>
     <string name="applist_title">Choose Skip APPs</string>
     <string name="log_title">Easyss Log</string>
     <string name="easyss_configure_title">Easyss Configure</string>

@@ -7,16 +7,12 @@ import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.Animation
-import android.view.animation.RotateAnimation
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -27,86 +23,131 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getDrawable
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
-import java.net.InetSocketAddress
-import java.net.Proxy
 import java.net.URL
-
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import org.json.JSONObject
 
 class MainFragment : Fragment() {
     private lateinit var mContext: Context
     private lateinit var pref: Pref
     private lateinit var easyssInfo: easyssInfo
 
-    private var rotateAnimation: RotateAnimation? = null
-    private lateinit var speed_test_icon: ImageView
-    private var speedTesting = false
+    private var statsPollingJob: Job? = null
 
     private var pendingServerProfileId: String? = null
     private var isSwitchingServer: Boolean = false
 
-    private val serviceStoppedReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d("MainFragmentReceiver", "serviceStoppedReceiver - Entry. Action: ${intent?.action}")
-            if (intent?.action == TProxyService.ACTION_SERVICE_STOPPED) {
-                Log.d("MainFragmentReceiver", "ACTION_SERVICE_STOPPED received. Pending server ID: $pendingServerProfileId, isSwitchingServer: $isSwitchingServer")
-                if (pendingServerProfileId != null) {
-                    Log.d("MainFragmentReceiver", "pendingServerProfileId is NOT null. Attempting to switch.")
-                    pref.setActiveServer(pendingServerProfileId!!)
-                    Log.d("MainFragmentReceiver", "pref.setActiveServer called with ID: $pendingServerProfileId")
-                    easyssInfo = pref.getEasyssInfo()
-                    Log.d("MainFragmentReceiver", "pref.getEasyssInfo called. easyssInfo.valid=${easyssInfo.valid}")
+    private val serviceStoppedReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    Log.d(
+                            "MainFragmentReceiver",
+                            "serviceStoppedReceiver - Entry. Action: ${intent?.action}"
+                    )
+                    if (intent?.action == TProxyService.ACTION_SERVICE_STOPPED) {
+                        Log.d(
+                                "MainFragmentReceiver",
+                                "ACTION_SERVICE_STOPPED received. Pending server ID: $pendingServerProfileId, isSwitchingServer: $isSwitchingServer"
+                        )
+                        if (pendingServerProfileId != null) {
+                            Log.d(
+                                    "MainFragmentReceiver",
+                                    "pendingServerProfileId is NOT null. Attempting to switch."
+                            )
+                            pref.setActiveServer(pendingServerProfileId!!)
+                            Log.d(
+                                    "MainFragmentReceiver",
+                                    "pref.setActiveServer called with ID: $pendingServerProfileId"
+                            )
+                            easyssInfo = pref.getEasyssInfo()
+                            Log.d(
+                                    "MainFragmentReceiver",
+                                    "pref.getEasyssInfo called. easyssInfo.valid=${easyssInfo.valid}"
+                            )
 
-                    Log.i("MainFragmentReceiver", "Calling startVPNService for server switch. ID: $pendingServerProfileId")
-                    startVPNService(isCalledFromReceiver = true)
-                    Log.d("MainFragmentReceiver", "Returned from startVPNService call.")
+                            Log.i(
+                                    "MainFragmentReceiver",
+                                    "Calling startVPNService for server switch. ID: $pendingServerProfileId"
+                            )
+                            startVPNService(isCalledFromReceiver = true)
+                            Log.d("MainFragmentReceiver", "Returned from startVPNService call.")
 
-                    pendingServerProfileId = null
-                    Log.d("MainFragmentReceiver", "pendingServerProfileId reset to null.")
-                    isSwitchingServer = false
-                    Log.d("MainFragmentReceiver", "isSwitchingServer reset to false.")
+                            pendingServerProfileId = null
+                            Log.d("MainFragmentReceiver", "pendingServerProfileId reset to null.")
+                            isSwitchingServer = false
+                            Log.d("MainFragmentReceiver", "isSwitchingServer reset to false.")
 
-                    view?.let {
-                        Log.d("MainFragmentReceiver", "Calling updateServiceStatu (after switch).")
-                        updateServiceStatu(it)
-                        Log.d("MainFragmentReceiver", "Returned from updateServiceStatu (after switch).")
-                    }
-                } else {
-                    Log.d("MainFragmentReceiver", "pendingServerProfileId IS null. Service stopped for other reasons or switch already processed/failed.")
-                    // Service stopped for other reasons (e.g. user clicked main stop button, or pendingId was already cleared)
-                    if (isSwitchingServer) { // If it's still true, something went wrong, reset it.
-                        Log.w("MainFragmentReceiver", "isSwitchingServer was true but pendingServerProfileId is null. Resetting isSwitchingServer.")
-                        isSwitchingServer = false
-                    }
-                    view?.let {
-                        Log.d("MainFragmentReceiver", "Calling updateServiceStatu (no pendingId).")
-                        updateServiceStatu(it)
-                        Log.d("MainFragmentReceiver", "Returned from updateServiceStatu (no pendingId).")
+                            view?.let {
+                                Log.d(
+                                        "MainFragmentReceiver",
+                                        "Calling updateServiceStatu (after switch)."
+                                )
+                                updateServiceStatu(it)
+                                Log.d(
+                                        "MainFragmentReceiver",
+                                        "Returned from updateServiceStatu (after switch)."
+                                )
+                            }
+                        } else {
+                            Log.d(
+                                    "MainFragmentReceiver",
+                                    "pendingServerProfileId IS null. Service stopped for other reasons or switch already processed/failed."
+                            )
+                            // Service stopped for other reasons (e.g. user clicked main stop
+                            // button, or pendingId was already cleared)
+                            if (isSwitchingServer
+                            ) { // If it's still true, something went wrong, reset it.
+                                Log.w(
+                                        "MainFragmentReceiver",
+                                        "isSwitchingServer was true but pendingServerProfileId is null. Resetting isSwitchingServer."
+                                )
+                                isSwitchingServer = false
+                            }
+                            view?.let {
+                                Log.d(
+                                        "MainFragmentReceiver",
+                                        "Calling updateServiceStatu (no pendingId)."
+                                )
+                                updateServiceStatu(it)
+                                Log.d(
+                                        "MainFragmentReceiver",
+                                        "Returned from updateServiceStatu (no pendingId)."
+                                )
+                            }
+                        }
+                        val spinner = view?.findViewById<Spinner>(R.id.server_spinner)
+                        spinner?.isEnabled = true
+                        Log.d(
+                                "MainFragmentReceiver",
+                                "Spinner explicitly re-enabled. Current state: ${spinner?.isEnabled}"
+                        )
+                    } else {
+                        Log.d(
+                                "MainFragmentReceiver",
+                                "Received some other action or null action: ${intent?.action}"
+                        )
                     }
                 }
-                val spinner = view?.findViewById<Spinner>(R.id.server_spinner)
-                spinner?.isEnabled = true
-                Log.d("MainFragmentReceiver", "Spinner explicitly re-enabled. Current state: ${spinner?.isEnabled}")
-            } else {
-                Log.d("MainFragmentReceiver", "Received some other action or null action: ${intent?.action}")
             }
-        }
-    }
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_main, container, false)
         setHasOptionsMenu(true)
@@ -123,20 +164,26 @@ class MainFragment : Fragment() {
 
         // Ensure spinner is enabled when view is created
         view.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
+
+        // Start stats polling if service is running
+        if (pref.isServiceEnabled) {
+            startStatsPolling()
+        }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        stopStatsPolling()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val intentFilter = IntentFilter(TProxyService.ACTION_SERVICE_STOPPED)
         ContextCompat.registerReceiver(
-            requireActivity(),
-            serviceStoppedReceiver,
-            intentFilter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
+                requireActivity(),
+                serviceStoppedReceiver,
+                intentFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
         )
         Log.d("MainFragment", "serviceStoppedReceiver registered.")
     }
@@ -157,7 +204,6 @@ class MainFragment : Fragment() {
                 findNavController().navigate(R.id.action_main_to_log)
                 true
             }
-
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -166,7 +212,6 @@ class MainFragment : Fragment() {
         super.onAttach(context)
         mContext = context
         pref = Pref(context)
-
     }
 
     override fun onResume() {
@@ -188,81 +233,115 @@ class MainFragment : Fragment() {
 
         // Re-attach or ensure the listener is set.
         // If the listener logic depends on serverProfiles, it must be correctly scoped or passed.
-        // For this refactoring, we assume the existing listener logic in setup() will be part of the spinner setup.
-        // The existing onItemSelectedListener is defined below and will be set after this method in setup().
-        // However, for onResume, if the adapter is reset, the listener might need to be reset as well.
+        // For this refactoring, we assume the existing listener logic in setup() will be part of
+        // the spinner setup.
+        // The existing onItemSelectedListener is defined below and will be set after this method in
+        // setup().
+        // However, for onResume, if the adapter is reset, the listener might need to be reset as
+        // well.
         // For now, let's keep the listener setup within the setup() method which calls this.
         // If issues arise, the listener setup might need to be part of this method too.
         // Let's re-add the listener here to be safe for onResume calls.
-        serverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, viewOfItem: View?, position: Int, id: Long) {
-                val selectedProfile = serverProfiles[position] // serverProfiles must be in scope
+        serverSpinner.onItemSelectedListener =
+                object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(
+                            parent: AdapterView<*>?,
+                            viewOfItem: View?,
+                            position: Int,
+                            id: Long
+                    ) {
+                        val selectedProfile =
+                                serverProfiles[position] // serverProfiles must be in scope
 
-                if (pref.getActiveServerProfile()?.id == selectedProfile.id && !isSwitchingServer) {
-                    Log.d("MainFragment", "Spinner selected current active server. No change.")
-                    this@MainFragment.view?.let { updateServiceStatu(it) }
-                    return
-                }
-
-                Log.d("MainFragment", "Server selected: ${selectedProfile.name}. Current isServiceEnabled: ${pref.isServiceEnabled}")
-
-                if (pref.isServiceEnabled) {
-                    if (isSwitchingServer) {
-                        Log.i("MainFragment", "Server switch already in progress. Updating pending server to: ${selectedProfile.id}")
-                        pendingServerProfileId = selectedProfile.id
-                        return
-                    }
-                    
-                    Log.i("MainFragment", "Initiating server switch. Setting pending server to: ${selectedProfile.id}")
-                    pendingServerProfileId = selectedProfile.id
-                    isSwitchingServer = true
-                    serverSpinner.isEnabled = false
-                    stopVPNService()
-                } else {
-                    Log.i("MainFragment", "VPN not running. Setting active server to: ${selectedProfile.id}")
-                    pref.setActiveServer(selectedProfile.id)
-                    easyssInfo = pref.getEasyssInfo()
-                    isSwitchingServer = false
-                    serverSpinner.isEnabled = true
-                    this@MainFragment.view?.let {
-                        val serviceSummaryTextView = it.findViewById<TextView>(R.id.service_summary)
-                        if (easyssInfo.valid) {
-                            serviceSummaryTextView.text = easyssInfo.info
-                        } else {
-                            serviceSummaryTextView.text = getString(R.string.easyss_need_config)
+                        if (pref.getActiveServerProfile()?.id == selectedProfile.id &&
+                                        !isSwitchingServer
+                        ) {
+                            Log.d(
+                                    "MainFragment",
+                                    "Spinner selected current active server. No change."
+                            )
+                            this@MainFragment.view?.let { updateServiceStatu(it) }
+                            return
                         }
-                        updateServiceStatu(it)
+
+                        Log.d(
+                                "MainFragment",
+                                "Server selected: ${selectedProfile.name}. Current isServiceEnabled: ${pref.isServiceEnabled}"
+                        )
+
+                        if (pref.isServiceEnabled) {
+                            if (isSwitchingServer) {
+                                Log.i(
+                                        "MainFragment",
+                                        "Server switch already in progress. Updating pending server to: ${selectedProfile.id}"
+                                )
+                                pendingServerProfileId = selectedProfile.id
+                                return
+                            }
+
+                            Log.i(
+                                    "MainFragment",
+                                    "Initiating server switch. Setting pending server to: ${selectedProfile.id}"
+                            )
+                            pendingServerProfileId = selectedProfile.id
+                            isSwitchingServer = true
+                            serverSpinner.isEnabled = false
+                            stopVPNService()
+                        } else {
+                            Log.i(
+                                    "MainFragment",
+                                    "VPN not running. Setting active server to: ${selectedProfile.id}"
+                            )
+                            pref.setActiveServer(selectedProfile.id)
+                            easyssInfo = pref.getEasyssInfo()
+                            isSwitchingServer = false
+                            serverSpinner.isEnabled = true
+                            this@MainFragment.view?.let {
+                                val serviceSummaryTextView =
+                                        it.findViewById<TextView>(R.id.service_summary)
+                                if (easyssInfo.valid) {
+                                    serviceSummaryTextView.text = easyssInfo.info
+                                } else {
+                                    serviceSummaryTextView.text =
+                                            getString(R.string.easyss_need_config)
+                                }
+                                updateServiceStatu(it)
+                            }
+                        }
+                    }
+
+                    override fun onNothingSelected(parent: AdapterView<*>?) {
+                        serverSpinner.isEnabled = true
                     }
                 }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-                serverSpinner.isEnabled = true
-            }
-        }
 
         // Set selection AFTER setting the listener, so if it's different from default (0),
         // it doesn't trigger the listener if we don't want it to, OR it triggers it correctly.
-        // Actually, we use setSelection(position, false) which might still trigger onItemSelected in some cases
-        // but it's meant to suppress animation. To avoid triggering the listener during initialization,
+        // Actually, we use setSelection(position, false) which might still trigger onItemSelected
+        // in some cases
+        // but it's meant to suppress animation. To avoid triggering the listener during
+        // initialization,
         // we can temporarily disable the listener, but we just set it.
-        // Wait, the issue is that when returning to the fragment, the active server might be the pending one,
-        // but it's not set as active yet (it's still pending). 
+        // Wait, the issue is that when returning to the fragment, the active server might be the
+        // pending one,
+        // but it's not set as active yet (it's still pending).
         // If we are switching, we should show the pending server in the spinner, or the active one?
         // Let's show the pending server if we are switching, else the active one.
-        val activeServerIdToDisplay = if (isSwitchingServer && pendingServerProfileId != null) {
-            pendingServerProfileId
-        } else {
-            pref.getActiveServerProfile()?.id
-        }
+        val activeServerIdToDisplay =
+                if (isSwitchingServer && pendingServerProfileId != null) {
+                    pendingServerProfileId
+                } else {
+                    pref.getActiveServerProfile()?.id
+                }
 
         if (activeServerIdToDisplay != null) {
-            val activeServerPosition = serverProfiles.indexOfFirst { it.id == activeServerIdToDisplay }
+            val activeServerPosition =
+                    serverProfiles.indexOfFirst { it.id == activeServerIdToDisplay }
             if (activeServerPosition != -1) {
                 // Temporarily remove listener to avoid triggering switch logic during setup
                 val listener = serverSpinner.onItemSelectedListener
                 serverSpinner.onItemSelectedListener = null
-                serverSpinner.setSelection(activeServerPosition, false) 
+                serverSpinner.setSelection(activeServerPosition, false)
                 serverSpinner.onItemSelectedListener = listener
             }
         }
@@ -271,19 +350,28 @@ class MainFragment : Fragment() {
     private fun setup(view: View) {
         updateServerSpinner(view) // Call the new method to setup spinner
 
-        var service_button =
-            view.findViewById<MaterialButton>(R.id.service_button)
+        var service_button = view.findViewById<MaterialButton>(R.id.service_button)
         service_button.let {
             it.setOnClickListener {
                 if (isSwitchingServer) {
-                    Toast.makeText(mContext, "Server switch in progress, please wait.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                                    mContext,
+                                    "Server switch in progress, please wait.",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
                     return@setOnClickListener
                 }
                 if (pref.isServiceEnabled) {
                     pref.isServiceEnabled = false
                 } else {
                     if (!easyssInfo.valid) {
-                        Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                                        mContext,
+                                        getString(R.string.easyss_need_config),
+                                        Toast.LENGTH_SHORT
+                                )
+                                .show()
                         return@setOnClickListener
                     }
                     pref.isServiceEnabled = true
@@ -293,52 +381,44 @@ class MainFragment : Fragment() {
         }
 
         // The onItemSelectedListener is now set within updateServerSpinner.
-        // We might need to ensure serverSpinner variable is accessible or passed if it's used elsewhere in setup
-        // For now, assuming it's only used for the listener which is now part of updateServerSpinner.
+        // We might need to ensure serverSpinner variable is accessible or passed if it's used
+        // elsewhere in setup
+        // For now, assuming it's only used for the listener which is now part of
+        // updateServerSpinner.
 
         val selected_apps = pref.getApps()
         view.findViewById<TextView>(R.id.text1).let {
             it.text = getString(R.string.skipped_app_list, selected_apps.size.toString())
         }
 
-        if (easyssInfo.valid){
-            view.findViewById<TextView>(R.id.service_summary).let {
-                it.text = easyssInfo.info
-            }
-        }else{
+        if (easyssInfo.valid) {
+            view.findViewById<TextView>(R.id.service_summary).let { it.text = easyssInfo.info }
+        } else {
             pref.isServiceEnabled = false
         }
 
-        view.findViewById<MaterialButton>(R.id.service_setting)
-            .let {
-                it.setOnClickListener {
-                    findNavController().navigate(R.id.action_main_to_setting)
-                }
-            }
-
-        view.findViewById<LinearLayout>(R.id.applist).let {
-            it.setOnClickListener {
-                findNavController().navigate(R.id.action_main_to_applist)
-            }
+        view.findViewById<MaterialButton>(R.id.service_setting).let {
+            it.setOnClickListener { findNavController().navigate(R.id.action_main_to_setting) }
         }
 
-        speed_test_icon = view.findViewById<ImageView>(R.id.speed_test_icon)
-        initRotateAnimation()
+        view.findViewById<LinearLayout>(R.id.applist).let {
+            it.setOnClickListener { findNavController().navigate(R.id.action_main_to_applist) }
+        }
 
-        view.findViewById<LinearLayout>(R.id.speed_test).let {
-            it.setOnClickListener {
-                if (!speedTesting){
-                    getResponseTimeUsingSocksProxy("https://www.google.com", "127.0.0.1", 2080)
-                }
+        // Stats card — tap to manually refresh
+        view.findViewById<MaterialCardView>(R.id.stats_card).setOnClickListener {
+            if (pref.isServiceEnabled) {
+                // Brief loading feedback
+                val updatingText = getString(R.string.stats_updating)
+                view.findViewById<TextView>(R.id.stats_streams_opened)?.text = updatingText
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) { fetchAndUpdateStats() }
             }
         }
     }
 
     private fun updateVersionInfo(view: View) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val gitTag = withContext(Dispatchers.IO) {
-                fetchGitTag(requireContext())
-            }
+            val gitTag = withContext(Dispatchers.IO) { fetchGitTag(requireContext()) }
             val versionPlaceholder = view.findViewById<TextView>(R.id.version_placeholder)
             val appVersion = BuildConfig.VERSION_NAME
             versionPlaceholder.text = "$gitTag | EasyssTun: v$appVersion"
@@ -377,50 +457,78 @@ class MainFragment : Fragment() {
         }
     }
 
-
-
-
     @Suppress("DEPRECATION")
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun startVPNService(isCalledFromReceiver: Boolean = false) {
-        Log.d("MainFragmentSVC", "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver")
+        Log.d(
+                "MainFragmentSVC",
+                "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver"
+        )
         val intent = VpnService.prepare(mContext)
         if (intent != null) {
-            Log.d("MainFragmentSVC", "VpnService.prepare needs permissions. Calling startActivityForResult.")
+            Log.d(
+                    "MainFragmentSVC",
+                    "VpnService.prepare needs permissions. Calling startActivityForResult."
+            )
             startActivityForResult(intent, 0)
             // If permission is needed, do not proceed to start the service here.
             // onActivityResult will call startVPNService() again.
             return
         }
-        Log.d("MainFragmentSVC", "VpnService.prepare returned null (permissions granted). Proceeding to try block.")
+        Log.d(
+                "MainFragmentSVC",
+                "VpnService.prepare returned null (permissions granted). Proceeding to try block."
+        )
 
         // Permission already granted, proceed to start the service.
         try {
-            Log.d("MainFragmentSVC", "startVPNService - Inside try block, attempting to get active profile.")
+            Log.d(
+                    "MainFragmentSVC",
+                    "startVPNService - Inside try block, attempting to get active profile."
+            )
             val activeProfile = pref.getActiveServerProfile() // Get the full profile object
             val intent2 = Intent(mContext, TProxyService::class.java)
 
             if (activeProfile != null) {
-                val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+                val json = Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
                 try {
                     val profileJson = json.encodeToString(activeProfile)
-                    intent2.putExtra("com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA", profileJson)
+                    intent2.putExtra(
+                            "com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA",
+                            profileJson
+                    )
                 } catch (e: kotlinx.serialization.SerializationException) {
                     Log.e("MainFragment", "Error serializing active profile", e)
                     // If called from receiver, we must not crash it.
                     if (isCalledFromReceiver) {
-                        // Log and allow receiver to clean up UI. Service won't start with this profile.
-                        Toast.makeText(mContext, "Error: Could not serialize server profile.", Toast.LENGTH_LONG).show()
-                        return // Prevent service start if serialization fails and in receiver context
+                        // Log and allow receiver to clean up UI. Service won't start with this
+                        // profile.
+                        Toast.makeText(
+                                        mContext,
+                                        "Error: Could not serialize server profile.",
+                                        Toast.LENGTH_LONG
+                                )
+                                .show()
+                        return // Prevent service start if serialization fails and in receiver
+                        // context
                     }
-                    // For non-receiver calls, behavior might differ, but for now, let's be consistent:
+                    // For non-receiver calls, behavior might differ, but for now, let's be
+                    // consistent:
                     // don't proceed if profile can't be sent.
                     return
                 }
             } else {
                 Log.w("MainFragment", "No active server profile found to start TProxyService.")
                 if (isCalledFromReceiver) {
-                    Toast.makeText(mContext, "Error: No active server configured.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                                    mContext,
+                                    "Error: No active server configured.",
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
                     return // Prevent service start if no profile and in receiver context
                 }
                 // For non-receiver calls, if no profile, probably shouldn't start.
@@ -435,14 +543,17 @@ class MainFragment : Fragment() {
                 // as it would crash the receiver and leave the UI in a stuck state.
                 Toast.makeText(mContext, "Error starting VPN service.", Toast.LENGTH_LONG).show()
             } else {
-                // For other callers of startVPNService (e.g., direct user action, onActivityResult),
+                // For other callers of startVPNService (e.g., direct user action,
+                // onActivityResult),
                 // re-throwing might be acceptable or desired for immediate crash feedback,
                 // but for robustness, it's often better to handle gracefully.
                 // For now, let's be consistent and show a Toast.
                 Toast.makeText(mContext, "Error starting VPN service.", Toast.LENGTH_LONG).show()
                 // If strict crashing is desired for non-receiver contexts:
-                // if (e !is kotlinx.serialization.SerializationException) { // Already handled above
-                //    throw RuntimeException("Non-receiver context: Error starting TProxyService", e)
+                // if (e !is kotlinx.serialization.SerializationException) { // Already handled
+                // above
+                //    throw RuntimeException("Non-receiver context: Error starting TProxyService",
+                // e)
                 // }
             }
         }
@@ -460,18 +571,25 @@ class MainFragment : Fragment() {
         val service_title = view.findViewById<TextView>(R.id.service_title)
 
         if (isSwitchingServer) {
-            Log.d("MainFragment", "updateServiceStatu: Server switch in progress, UI set to switching state.")
+            Log.d(
+                    "MainFragment",
+                    "updateServiceStatu: Server switch in progress, UI set to switching state."
+            )
             service_button.text = "Switching..."
             service_button.isEnabled = false
             // Optionally set title or other UI elements
-            service_title.text = "Switching..." 
+            service_title.text = "Switching..."
             // It might be good to also change the card color or icon here to reflect "switching"
             // For now, just text and button state as per primary requirement.
             return
         } else {
-            // Ensure button is generally enabled if not switching, specific logic below will fine-tune this
-            service_button.isEnabled = true 
-            Log.d("MainFragment", "updateServiceStatu: Not switching server, proceeding with normal UI update.")
+            // Ensure button is generally enabled if not switching, specific logic below will
+            // fine-tune this
+            service_button.isEnabled = true
+            Log.d(
+                    "MainFragment",
+                    "updateServiceStatu: Not switching server, proceeding with normal UI update."
+            )
         }
 
         // Refresh easyssInfo at the beginning of UI update (if not switching)
@@ -485,7 +603,7 @@ class MainFragment : Fragment() {
             serviceSummaryTextView.text = getString(R.string.easyss_need_config)
             // If config is invalid, ensure service is marked as disabled
             if (pref.isServiceEnabled) { // only if it was previously enabled
-                 pref.isServiceEnabled = false
+                pref.isServiceEnabled = false
             }
         }
 
@@ -498,36 +616,58 @@ class MainFragment : Fragment() {
         var service_card = view.findViewById<MaterialCardView>(R.id.service_card)
 
         // This explicit enabling might conflict if !easyssInfo.valid later.
-        // The click listener for service_button handles invalid config by returning, not by disabling button.
+        // The click listener for service_button handles invalid config by returning, not by
+        // disabling button.
         // Let's make sure the button state is explicitly managed in each path.
         // service_button.isEnabled = true; // Default for non-switching, can be overridden below
 
         when {
             pref.isServiceEnabled -> { // Service is ON
-                if(!easyssInfo.valid) { // Should not happen if checks in click listener are effective
-                                      // And if startVPNService() is robust. But good to have a safeguard.
-                    Log.w("MainFragment", "updateServiceStatu: Service enabled but easyssInfo is invalid! Disabling service.")
-                    Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_LONG).show()
+                if (!easyssInfo.valid
+                ) { // Should not happen if checks in click listener are effective
+                    // And if startVPNService() is robust. But good to have a safeguard.
+                    Log.w(
+                            "MainFragment",
+                            "updateServiceStatu: Service enabled but easyssInfo is invalid! Disabling service."
+                    )
+                    Toast.makeText(
+                                    mContext,
+                                    getString(R.string.easyss_need_config),
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
                     pref.isServiceEnabled = false // Correct the state
+                    stopStatsPolling()
                     // Now recursively call to update UI to "stopped" state
                     updateServiceStatu(view)
                     return // Exit current processing
                 }
 
-                startVPNService() // This ensures the service is actually started if pref says it should be
+                startVPNService() // This ensures the service is actually started if pref says it
+                // should be
+                startStatsPolling()
                 service_button.text = getString(R.string.service_disable)
                 service_button.isEnabled = true // Explicitly enable
-                service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color_active))
-                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big))
+                service_card.setCardBackgroundColor(
+                        mContext.getColor(R.color.home_card_background_color_active)
+                )
+                service_icon.setImageDrawable(
+                        getDrawable(mContext, R.drawable.ic_launcher_foreground_big)
+                )
                 service_button.icon = getDrawable(mContext, R.drawable.ic_close_24)
                 service_button.setBackgroundColor(mContext.getColor(R.color.button_disable))
                 service_title.text = getString(R.string.service_running)
             }
             else -> { // Service is OFF (pref.isServiceEnabled == false)
                 stopVPNService() // Ensure service is actually stopped
+                stopStatsPolling()
                 service_button.text = getString(R.string.service_enable)
-                service_card.setCardBackgroundColor(mContext.getColor(R.color.home_card_background_color))
-                service_icon.setImageDrawable(getDrawable(mContext, R.drawable.ic_launcher_foreground_big))
+                service_card.setCardBackgroundColor(
+                        mContext.getColor(R.color.home_card_background_color)
+                )
+                service_icon.setImageDrawable(
+                        getDrawable(mContext, R.drawable.ic_launcher_foreground_big)
+                )
                 service_button.icon = getDrawable(mContext, R.drawable.ic_outline_play_arrow_24)
                 service_button.setBackgroundColor(mContext.getColor(R.color.button_enable))
                 service_title.text = getString(R.string.service_stopped)
@@ -536,83 +676,133 @@ class MainFragment : Fragment() {
                 if (!easyssInfo.valid) {
                     service_button.isEnabled = false
                     // Optionally, provide more visual feedback e.g. change button color
-                    Log.d("MainFragment", "updateServiceStatu: Config invalid and service stopped, service_button disabled.")
+                    Log.d(
+                            "MainFragment",
+                            "updateServiceStatu: Config invalid and service stopped, service_button disabled."
+                    )
                 } else {
                     service_button.isEnabled = true
-                    Log.d("MainFragment", "updateServiceStatu: Config valid and service stopped, service_button enabled.")
+                    Log.d(
+                            "MainFragment",
+                            "updateServiceStatu: Config valid and service stopped, service_button enabled."
+                    )
                 }
             }
         }
     }
 
-    fun getResponseTimeUsingSocksProxy(
-        urlString: String,
-        socksProxyHost: String,
-        socksProxyPort: Int
-    ) {
-        speed_test_icon.startAnimation(rotateAnimation)
-        speedTesting = true
+    // ── Stats polling ───────────────────────────────────────────
 
-        CoroutineScope(Dispatchers.Default).launch {
-            var res: String
-            if (!pref.isServiceEnabled){
-                res = getString(R.string.service_stopped)
-            } else {
-                val url = URL(urlString)
-                val proxy =
-                    Proxy(Proxy.Type.SOCKS, InetSocketAddress(socksProxyHost, socksProxyPort))
-
-                try {
-                    val startTime = System.currentTimeMillis()
-                    (url.openConnection(proxy) as? HttpURLConnection)?.run {
-                        requestMethod = "GET"
-                        connectTimeout = 3000 // 3 seconds timeout
-                        readTimeout = 3000    // 3 seconds read timeout
-
-                        // Force connection and get response code
-                        try {
-                            inputStream.close() // We just want to connect and get headers
-                        } catch (e: Exception) {
-                            // Ignore exceptions from closing stream if any, we care about connect time
-                        }
-                        // val responseCode = responseCode // Not strictly needed if we only measure connect time
-                        disconnect()
+    private fun startStatsPolling() {
+        if (statsPollingJob?.isActive == true) return
+        statsPollingJob =
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    while (isActive) {
+                        fetchAndUpdateStats()
+                        delay(60_000) // poll every 1 minute
                     }
-                    val endTime = System.currentTimeMillis()
-                    val responseTime = endTime - startTime
-                    res = "$responseTime ms"
-                } catch (e: Exception) {
-                    Log.w("SpeedTest", "Error during speed test: ${e.message}")
-                    res = getString(R.string.delay_test_fail)
                 }
-            }
+    }
 
-            withContext(Dispatchers.Main) {
-                speedTesting = false
-                speed_test_icon.clearAnimation()
-                // Ensure view is still valid if fragment is detached quickly
-                view?.findViewById<TextView>(R.id.speed_result)?.text = getString(R.string.delay_test_result, res)
-                if (isAdded) { // Check if fragment is currently added to its activity
-                    Toast.makeText(mContext, getString(R.string.delay_test_result, res), Toast.LENGTH_SHORT).show()
-                }
-            }
+    private fun stopStatsPolling() {
+        statsPollingJob?.cancel()
+        statsPollingJob = null
+        // Show placeholder when service is stopped
+        view?.let { v ->
+            val loadingText = getString(R.string.stats_unavailable)
+            arrayOf(
+                            R.id.stats_streams_opened,
+                            R.id.stats_streams_closed,
+                            R.id.stats_bytes_sent,
+                            R.id.stats_bytes_recv,
+                            R.id.stats_uptime,
+                            R.id.stats_active_streams
+                    )
+                    .forEach { id -> v.findViewById<TextView>(id)?.text = loadingText }
         }
     }
 
+    private suspend fun fetchAndUpdateStats() {
+        try {
+            val url = URL("http://127.0.0.1:3080/stats")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 2000
+            conn.readTimeout = 2000
+            conn.requestMethod = "GET"
 
-    private fun initRotateAnimation() {
-        rotateAnimation = RotateAnimation(
-            0f,
-            360f,
-            Animation.RELATIVE_TO_SELF,
-            0.5f,
-            Animation.RELATIVE_TO_SELF,
-            0.5f
-        ).apply {
-            duration = 1000 // 旋转一周的时间，单位毫秒
-            repeatCount = Animation.INFINITE // 无限循环
+            val status = conn.responseCode
+            if (status != 200) {
+                Log.w("MainFragment", "Stats endpoint returned HTTP $status")
+                withContext(Dispatchers.Main) { updateStatsUnavailable() }
+                return
+            }
+
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+
+            val json = JSONObject(body)
+            withContext(Dispatchers.Main) { updateStatsDisplay(json) }
+        } catch (e: Exception) {
+            Log.w("MainFragment", "Failed to fetch stats: ${e.message}")
+            withContext(Dispatchers.Main) { updateStatsUnavailable() }
         }
     }
 
-    
+    private fun updateStatsUnavailable() {
+        val v = view ?: return
+        val txt = getString(R.string.stats_unavailable)
+        v.findViewById<TextView>(R.id.stats_streams_opened)?.text = txt
+        v.findViewById<TextView>(R.id.stats_streams_closed)?.text = txt
+        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = txt
+        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = txt
+        v.findViewById<TextView>(R.id.stats_uptime)?.text = txt
+        v.findViewById<TextView>(R.id.stats_active_streams)?.text = txt
+    }
+
+    private fun updateStatsDisplay(json: JSONObject) {
+        val v = view ?: return
+
+        val opened = json.optLong("total_streams_opened", 0)
+        val closed = json.optLong("total_streams_closed", 0)
+        val sent = json.optLong("bytes_sent", 0)
+        val recv = json.optLong("bytes_recv", 0)
+        val uptime = json.optDouble("uptime_seconds", 0.0)
+        val active = json.optInt("active_streams", 0)
+
+        v.findViewById<TextView>(R.id.stats_streams_opened)?.text =
+                "${getString(R.string.stats_streams_opened)}: $opened"
+        v.findViewById<TextView>(R.id.stats_streams_closed)?.text =
+                "${getString(R.string.stats_streams_closed)}: $closed"
+        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text =
+                "${getString(R.string.stats_bytes_sent)}: ${formatBytes(sent)}"
+        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text =
+                "${getString(R.string.stats_bytes_recv)}: ${formatBytes(recv)}"
+        v.findViewById<TextView>(R.id.stats_uptime)?.text =
+                "${getString(R.string.stats_uptime)}: ${formatDuration(uptime)}"
+        v.findViewById<TextView>(R.id.stats_active_streams)?.text =
+                "${getString(R.string.stats_active_streams)}: $active"
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes >= 1_000_000_000 -> String.format("%.2f GB", bytes / 1_000_000_000.0)
+            bytes >= 1_000_000 -> String.format("%.2f MB", bytes / 1_000_000.0)
+            bytes >= 1_000 -> String.format("%.2f KB", bytes / 1_000.0)
+            else -> "$bytes B"
+        }
+    }
+
+    private fun formatDuration(seconds: Double): String {
+        val totalSecs = seconds.toLong()
+        val d = totalSecs / 86400
+        val h = (totalSecs % 86400) / 3600
+        val m = (totalSecs % 3600) / 60
+        val s = totalSecs % 60
+        return buildString {
+            if (d > 0) append("${d}d ")
+            if (h > 0) append("${h}h ")
+            if (m > 0) append("${m}m ")
+            append("${s}s")
+        }
+    }
 }

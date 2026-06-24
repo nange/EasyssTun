@@ -129,38 +129,110 @@
 
 
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/stats_card"
         style="@style/mCard"
         android:layout_marginTop="10dp">
 
         <LinearLayout
-            android:id="@+id/speed_test"
             style="@style/Card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
-            <ImageView
-                android:id="@+id/speed_test_icon"
-                style="@style/CardIcon"
-                android:src="@drawable/ic_outline_info_24" />
-
+            <!-- Header -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="20dp"
-                android:duplicateParentState="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    style="@style/CardIcon"
+                    android:src="@drawable/ic_outline_info_24" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    style="@style/CardTitle"
+                    android:text="@string/stats_title" />
+            </LinearLayout>
+
+            <!-- Stats grid: 2 columns -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/speed_result"
-                    style="@style/CardTitle"
-                    android:text="@string/speedtest_summary" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/version_placeholder"
-                    style="@style/CardSummary"/>
+                    <TextView
+                        android:id="@+id/stats_streams_opened"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="@string/stats_loading" />
+
+                    <TextView
+                        android:id="@+id/stats_streams_closed"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/stats_bytes_sent"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                    <TextView
+                        android:id="@+id/stats_bytes_recv"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/stats_uptime"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                    <TextView
+                        android:id="@+id/stats_active_streams"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                </LinearLayout>
+
             </LinearLayout>
+
+            <!-- Version info -->
+            <TextView
+                android:id="@+id/version_placeholder"
+                style="@style/CardSummary"
+                android:layout_marginTop="8dp"/>
         </LinearLayout>
 
     </com.google.android.material.card.MaterialCardView>
