@@ -168,6 +168,8 @@ class MainFragment : Fragment() {
         // Start stats polling if service is running
         if (pref.isServiceEnabled) {
             startStatsPolling()
+        } else {
+            view.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.GONE
         }
     }
 
@@ -410,7 +412,7 @@ class MainFragment : Fragment() {
             if (pref.isServiceEnabled) {
                 // Brief loading feedback
                 val updatingText = getString(R.string.stats_updating)
-                view.findViewById<TextView>(R.id.stats_streams_opened)?.text = updatingText
+                view.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = updatingText
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) { fetchAndUpdateStats() }
             }
         }
@@ -695,11 +697,15 @@ class MainFragment : Fragment() {
 
     private fun startStatsPolling() {
         if (statsPollingJob?.isActive == true) return
+        view?.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.VISIBLE
         statsPollingJob =
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    // Fetch immediately on service start for quick display
+                    delay(1_000) // brief wait for stats endpoint to be ready
+                    fetchAndUpdateStats()
                     while (isActive) {
-                        fetchAndUpdateStats()
                         delay(60_000) // poll every 1 minute
+                        fetchAndUpdateStats()
                     }
                 }
     }
@@ -707,19 +713,8 @@ class MainFragment : Fragment() {
     private fun stopStatsPolling() {
         statsPollingJob?.cancel()
         statsPollingJob = null
-        // Show placeholder when service is stopped
-        view?.let { v ->
-            val loadingText = getString(R.string.stats_unavailable)
-            arrayOf(
-                            R.id.stats_streams_opened,
-                            R.id.stats_streams_closed,
-                            R.id.stats_bytes_sent,
-                            R.id.stats_bytes_recv,
-                            R.id.stats_uptime,
-                            R.id.stats_active_streams
-                    )
-                    .forEach { id -> v.findViewById<TextView>(id)?.text = loadingText }
-        }
+        // Hide stats card when service is stopped
+        view?.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.GONE
     }
 
     private suspend fun fetchAndUpdateStats() {
@@ -751,32 +746,41 @@ class MainFragment : Fragment() {
     private fun updateStatsUnavailable() {
         val v = view ?: return
         val txt = getString(R.string.stats_unavailable)
-        v.findViewById<TextView>(R.id.stats_streams_opened)?.text = txt
-        v.findViewById<TextView>(R.id.stats_streams_closed)?.text = txt
-        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = txt
-        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = txt
-        v.findViewById<TextView>(R.id.stats_uptime)?.text = txt
-        v.findViewById<TextView>(R.id.stats_active_streams)?.text = txt
+        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = txt
+        v.findViewById<TextView>(R.id.stats_conns)?.text = ""
+        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = ""
+        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = ""
+        v.findViewById<TextView>(R.id.stats_streams_opened)?.text = ""
+        v.findViewById<TextView>(R.id.stats_streams_closed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_uptime)?.text = ""
+        v.findViewById<TextView>(R.id.stats_active_streams)?.text = ""
     }
 
     private fun updateStatsDisplay(json: JSONObject) {
         val v = view ?: return
-
-        val opened = json.optLong("total_streams_opened", 0)
-        val closed = json.optLong("total_streams_closed", 0)
+        // Ensure card is visible on successful data
+        v.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.VISIBLE
+        val avgRttMs = json.optDouble("avg_rtt_ms", 0.0)
+        val conns = json.optInt("conns", 0)
         val sent = json.optLong("bytes_sent", 0)
         val recv = json.optLong("bytes_recv", 0)
+        val opened = json.optLong("total_streams_opened", 0)
+        val closed = json.optLong("total_streams_closed", 0)
         val uptime = json.optDouble("uptime_seconds", 0.0)
         val active = json.optInt("active_streams", 0)
 
-        v.findViewById<TextView>(R.id.stats_streams_opened)?.text =
-                "${getString(R.string.stats_streams_opened)}: $opened"
-        v.findViewById<TextView>(R.id.stats_streams_closed)?.text =
-                "${getString(R.string.stats_streams_closed)}: $closed"
+        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text =
+                "${getString(R.string.stats_avg_rtt_ms)}: ${String.format("%.1f ms", avgRttMs)}"
+        v.findViewById<TextView>(R.id.stats_conns)?.text =
+                "${getString(R.string.stats_conns)}: $conns"
         v.findViewById<TextView>(R.id.stats_bytes_sent)?.text =
                 "${getString(R.string.stats_bytes_sent)}: ${formatBytes(sent)}"
         v.findViewById<TextView>(R.id.stats_bytes_recv)?.text =
                 "${getString(R.string.stats_bytes_recv)}: ${formatBytes(recv)}"
+        v.findViewById<TextView>(R.id.stats_streams_opened)?.text =
+                "${getString(R.string.stats_streams_opened)}: $opened"
+        v.findViewById<TextView>(R.id.stats_streams_closed)?.text =
+                "${getString(R.string.stats_streams_closed)}: $closed"
         v.findViewById<TextView>(R.id.stats_uptime)?.text =
                 "${getString(R.string.stats_uptime)}: ${formatDuration(uptime)}"
         v.findViewById<TextView>(R.id.stats_active_streams)?.text =

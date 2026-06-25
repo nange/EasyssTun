@@ -21,8 +21,10 @@
     <string name="stats_loading">正在加载统计信息…</string>
     <string name="stats_updating">更新中…</string>
     <string name="stats_unavailable">统计信息不可用</string>
-    <string name="stats_streams_opened">已建立连接</string>
-    <string name="stats_streams_closed">已关闭连接</string>
+    <string name="stats_avg_rtt_ms">请求延迟</string>
+    <string name="stats_conns">TCP连接数</string>
+    <string name="stats_streams_opened">已建立流</string>
+    <string name="stats_streams_closed">已关闭流</string>
     <string name="stats_bytes_sent">发送流量</string>
     <string name="stats_bytes_recv">接收流量</string>
     <string name="stats_uptime">运行时长</string>

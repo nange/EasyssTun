@@ -158,6 +158,7 @@
 
             <!-- Stats grid: 2 columns -->
             <LinearLayout
+                android:id="@+id/stats_grid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -169,14 +170,14 @@
                     android:orientation="horizontal">
 
                     <TextView
-                        android:id="@+id/stats_streams_opened"
+                        android:id="@+id/stats_avg_rtt_ms"
                         style="@style/CardSummary"
                         android:layout_width="0dp"
                         android:layout_weight="1"
                         android:text="@string/stats_loading" />
 
                     <TextView
-                        android:id="@+id/stats_streams_closed"
+                        android:id="@+id/stats_conns"
                         style="@style/CardSummary"
                         android:layout_width="0dp"
                         android:layout_weight="1"
@@ -198,6 +199,27 @@
 
                     <TextView
                         android:id="@+id/stats_bytes_recv"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/stats_streams_opened"
+                        style="@style/CardSummary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="" />
+
+                    <TextView
+                        android:id="@+id/stats_streams_closed"
                         style="@style/CardSummary"
                         android:layout_width="0dp"
                         android:layout_weight="1"

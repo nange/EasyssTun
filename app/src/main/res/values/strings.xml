@@ -23,8 +23,10 @@
     <string name="stats_loading">Loading statistics…</string>
     <string name="stats_updating">Updating…</string>
     <string name="stats_unavailable">Statistics not available</string>
-    <string name="stats_streams_opened">Opened</string>
-    <string name="stats_streams_closed">Closed</string>
+    <string name="stats_avg_rtt_ms">RTT</string>
+    <string name="stats_conns">Conns</string>
+    <string name="stats_streams_opened">Streams Opened</string>
+    <string name="stats_streams_closed">Streams Closed</string>
     <string name="stats_bytes_sent">Sent</string>
     <string name="stats_bytes_recv">Received</string>
     <string name="stats_uptime">Uptime</string>
