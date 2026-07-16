@@ -3,9 +3,14 @@ package com.easysstun
 import android.app.AlertDialog
 import android.os.Bundle
 import android.view.View
-import android.widget.*
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.Spinner
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import java.util.*
+import java.util.UUID
 
 class ServerProfileActivity : AppCompatActivity() {
 
@@ -218,7 +223,7 @@ class ServerProfileActivity : AppCompatActivity() {
 
             // Check if the updated profile is the active one
             if (profileToSave.id == pref.getActiveServerProfile()?.id) {
-                val intent = android.content.Intent("prefs_updated").apply {
+                val intent = android.content.Intent(Pref.PREFS_UPDATED).apply {
                     // Ensure the broadcast targets only this app's non-exported receiver
                     setPackage(packageName)
                 }

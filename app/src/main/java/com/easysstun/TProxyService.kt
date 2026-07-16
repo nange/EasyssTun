@@ -44,7 +44,6 @@ class TProxyService : VpnService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job()) // For managing shutdown and other service-level tasks
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // val TAG = TProxyService::class.java.simpleName // Using companion object TAG
         if (ACTION_DISCONNECT == intent?.action) {
             Log.i(TAG, "onStartCommand: Received ACTION_DISCONNECT.")
             receivedProfileJson = null // Clear any old JSON on disconnect
@@ -83,7 +82,7 @@ class TProxyService : VpnService() {
         super.onCreate()
         registerReceiver(
             prefsUpdatedReceiver,
-            IntentFilter("prefs_updated"),
+            IntentFilter(Pref.PREFS_UPDATED),
             RECEIVER_NOT_EXPORTED
         )
     }
@@ -107,16 +106,16 @@ class TProxyService : VpnService() {
         if (tunFd != null) return
 
         pref = Pref(this)
-        // val TAG = "TProxyServiceDiag" // Already in companion object
 
         var loadedProfile: ServerProfile? = null
         var profileSource = "Unknown"
 
-        if (receivedProfileJson != null && receivedProfileJson!!.isNotBlank()) {
+        val profileJson = receivedProfileJson
+        if (profileJson != null && profileJson.isNotBlank()) {
             Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
             val json = Json { ignoreUnknownKeys = true; encodeDefaults = true } 
             try {
-                loadedProfile = json.decodeFromString<ServerProfile>(receivedProfileJson!!)
+                loadedProfile = json.decodeFromString<ServerProfile>(profileJson)
                 profileSource = "Intent JSON"
                 loadedProfile.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
             } catch (e: kotlinx.serialization.SerializationException) {
@@ -166,62 +165,7 @@ class TProxyService : VpnService() {
             // This is the logic from Pref.getEasyssInfo(), adapted
             easyssInfo.valid = true
             easyssInfo.info = "${loadedProfile.server}:${loadedProfile.serverPort}"
-            var sn = loadedProfile.serverNameIndication
-            if (sn.isBlank()) {
-                sn = loadedProfile.server
-            }
-            val cmdList = mutableListOf(
-                "-s", loadedProfile.server,
-                "-p", loadedProfile.serverPort,
-                "-k", loadedProfile.password,
-                "-m", loadedProfile.encryption,
-                "-proxy-rule", loadedProfile.proxyRule,
-                "-outbound-proto", loadedProfile.outbound,
-                "-l", "2080", 
-                "-t", "60", 
-                "-log-level", loadedProfile.logLevel,
-                "-enable-quic=${loadedProfile.enableQuic}",
-                "-ipv6-rule", loadedProfile.ipv6Rule,
-                "-sn", sn,
-                "-daemon=false"
-            )
-            if (loadedProfile.customCa.isNotBlank()) {
-                val customCaFile = File(cacheDir, "easyss_custom_ca.conf") // use 'this.cacheDir' or 'applicationContext.cacheDir'
-                try {
-                    customCaFile.createNewFile()
-                    FileOutputStream(customCaFile, false).use { fos ->
-                        fos.write(loadedProfile.customCa.toByteArray())
-                    }
-                    cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
-                } catch (e: IOException) {
-                    Log.e(TAG, "Error writing custom CA file", e)
-                }
-            }
-            if (loadedProfile.directFile.isNotBlank()) {
-                val directFile = File(cacheDir, "easyss_direct.conf")
-                try {
-                    directFile.createNewFile()
-                    FileOutputStream(directFile, false).use { fos ->
-                        fos.write(loadedProfile.directFile.toByteArray())
-                    }
-                    cmdList.addAll(listOf("-direct-file", directFile.absolutePath))
-                } catch (e: IOException) {
-                    Log.e(TAG, "Error writing direct file", e)
-                }
-            }
-            if (loadedProfile.proxyFile.isNotBlank()) {
-                val proxyFile = File(cacheDir, "easyss_proxy.conf")
-                try {
-                    proxyFile.createNewFile()
-                    FileOutputStream(proxyFile, false).use { fos ->
-                        fos.write(loadedProfile.proxyFile.toByteArray())
-                    }
-                    cmdList.addAll(listOf("-proxy-file", proxyFile.absolutePath))
-                } catch (e: IOException) {
-                    Log.e(TAG, "Error writing proxy file", e)
-                }
-            }
-            easyssInfo.cmdList = cmdList
+            easyssInfo.cmdList = loadedProfile.buildCmdList(cacheDir, Pref.DEFAULT_SOCKS_PORT)
         }
         // The existing diagnostic logs for easyssInfo.valid and cmdList should follow this.
         Log.d(TAG, "Constructed easyssInfo.valid: ${easyssInfo.valid}")
@@ -268,6 +212,7 @@ class TProxyService : VpnService() {
             try {
                 builder.addDisallowedApplication(appName)
             } catch (e: PackageManager.NameNotFoundException) {
+                Log.w(TAG, "App not found for VPN bypass: $appName", e)
             }
         }
         session += "/per-App"
@@ -277,14 +222,16 @@ class TProxyService : VpnService() {
         try {
             builder.addDisallowedApplication(selfName)
         } catch (e: PackageManager.NameNotFoundException) {
+            Log.w(TAG, "Self app not found for VPN bypass: $selfName", e)
         }
 
         
 
         builder.setSession(session)
-        tunFd = builder.establish()
-        if (tunFd != null) {
-            Log.i(TAG, "startService: Successfully established new tunFd: ${tunFd!!.fd}") // Keep Log.i - Core lifecycle
+        val newTunFd = builder.establish()
+        tunFd = newTunFd
+        if (newTunFd != null) {
+            Log.i(TAG, "startService: Successfully established new tunFd: ${newTunFd.fd}") // Keep Log.i - Core lifecycle
         } else {
             Log.w(TAG, "startService: Failed to establish new tunFd, it's null.")
             // stopSelf() is called by the original code if tunFd is null, which is fine.
@@ -309,10 +256,11 @@ class TProxyService : VpnService() {
                     Log.i(TAG, "processEasyJob: libeasyss.so process started (ProcessBuilder executed). isAlive: ${process.isAlive}") // Keep Log.i - Core lifecycle
 
                     Log.d("easyss", "msg=[EasyssTun] Connected to the service successfully.")
-                    val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
-                    while (isActive) {
-                        val line = bufferedReader.readLine() ?: break
-                        Log.i("easyss", line)
+                    BufferedReader(InputStreamReader(process.inputStream)).use { bufferedReader ->
+                        while (isActive) {
+                            val line = bufferedReader.readLine() ?: break
+                            Log.i("easyss", line)
+                        }
                     }
 
                 } catch (e: IOException) {
@@ -367,30 +315,30 @@ class TProxyService : VpnService() {
         }
 
 
-        val socksPortForTProxy = pref.prefs.getString("socks_port", "2080")
+        val socksPortForTProxy = pref.prefs.getString(Pref.SOCKS_PORT_KEY, Pref.DEFAULT_SOCKS_PORT)
         Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPortForTProxy")
         /* TProxy */
-        val proxyFile = File(cacheDir, "tproxy.conf")
+        val proxyFile = File(cacheDir, Pref.TPROXY_FILE)
         try {
             proxyFile.createNewFile()
-            val fos = FileOutputStream(proxyFile, false)
-            var tproxy_conf = """misc:
+            val tproxyConf = """misc:
   tcp-read-write-timeout: 300000
   udp-read-write-timeout: 15000
 
-"""
-            tproxy_conf += """socks5:
-  port: ${pref.prefs.getString("socks_port", "2080")?.toInt()}
+socks5:
+  port: ${pref.prefs.getString(Pref.SOCKS_PORT_KEY, Pref.DEFAULT_SOCKS_PORT)?.toInt()}
   address: '127.0.0.1'
   udp: 'udp'
 """
-            fos.write(tproxy_conf.toByteArray())
-            fos.close()
+            FileOutputStream(proxyFile, false).use { fos ->
+                fos.write(tproxyConf.toByteArray())
+            }
         } catch (e: IOException) {
+            Log.e(TAG, "Error writing tproxy.conf", e)
             return
         }
-        Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${tunFd?.fd}.")
-        TProxyStartService(proxyFile.absolutePath, tunFd!!.fd)
+        Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${newTunFd.fd}.")
+        TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
         pref.prefs.edit { apply { putBoolean("enable", true) } }
         val channelName = "easysstun"
         initNotificationChannel(channelName)

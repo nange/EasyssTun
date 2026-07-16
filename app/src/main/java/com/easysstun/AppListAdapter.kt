@@ -15,6 +15,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -25,6 +26,7 @@ class AppListAdapter(
     private var appList: List<PackageInfo> = emptyList()
     private var allApps: List<PackageInfo> = emptyList()
     private var filterJob: kotlinx.coroutines.Job? = null
+    private var saveJob: kotlinx.coroutines.Job? = null
 
     private val selectedApps = mutableListOf<String>()
     private val sharedPreferences: SharedPreferences by lazy {
@@ -32,7 +34,7 @@ class AppListAdapter(
     }
 
     init {
-        val savedApps = sharedPreferences.getStringSet("selected_apps", emptySet())
+        val savedApps = sharedPreferences.getStringSet(Pref.SELECTED_APPS, emptySet())
         selectedApps.addAll(savedApps ?: emptySet())
     }
 
@@ -78,13 +80,17 @@ class AppListAdapter(
     }
 
     private fun saveSelectedApps() {
-        sharedPreferences.edit().putStringSet("selected_apps", selectedApps.toSet()).apply()
+        saveJob?.cancel()
+        saveJob = lifecycleScope.launch {
+            delay(300)
+            sharedPreferences.edit().putStringSet(Pref.SELECTED_APPS, selectedApps.toSet()).apply()
 
-        val intent = Intent("prefs_updated").apply {
-            // Ensure the broadcast targets only this app's non-exported receiver
-            setPackage(context.packageName)
+            val intent = Intent(Pref.PREFS_UPDATED).apply {
+                // Ensure the broadcast targets only this app's non-exported receiver
+                setPackage(context.packageName)
+            }
+            context.sendBroadcast(intent)
         }
-        context.sendBroadcast(intent)
     }
 
     inner class AppViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

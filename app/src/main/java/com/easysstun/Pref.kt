@@ -10,7 +10,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.UUID
 
 @OptIn(ExperimentalSerializationApi::class)
 class Pref(private val ctx: Context) {
@@ -19,70 +18,18 @@ class Pref(private val ctx: Context) {
         const val VERSION = "version"
         const val SERVER_PROFILES = "server_profiles"
         const val ACTIVE_SERVER_ID = "active_server_id"
+        const val SELECTED_APPS = "selected_apps"
+        const val SOCKS_PORT_KEY = "socks_port"
+        const val DEFAULT_SOCKS_PORT = "2080"
+        const val PREFS_UPDATED = "prefs_updated"
+        const val CUSTOM_CA_FILE = "easyss_custom_ca.conf"
+        const val DIRECT_FILE = "easyss_direct.conf"
+        const val PROXY_FILE = "easyss_proxy.conf"
+        const val TPROXY_FILE = "tproxy.conf"
     }
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
-
-    init {
-        migrateOldConfig()
-    }
-
-    private fun migrateOldConfig() {
-        val oldServer = prefs.getString("easyss_server", null)
-        // Check if migration has already happened by looking for the old key
-        // or if there are already profiles.
-        if (prefs.contains("easyss_server") && !oldServer.isNullOrBlank() && getServerProfiles().isEmpty()) {
-            val id = UUID.randomUUID().toString()
-            // Use old server address as name, or a default if blank (though oldServer check should prevent this)
-            val name = if (oldServer.isNotBlank()) oldServer else "Default Server"
-            val server = oldServer // Already checked for null/blank
-            val serverPort = prefs.getString("easyss_serverport", "") ?: ""
-            val password = prefs.getString("easyss_password", "") ?: ""
-            val encryption = prefs.getString("easyss_encryption", "chacha20-poly1305") ?: "chacha20-poly1305"
-            val proxyRule = prefs.getString("easyss_proxyrule", "auto") ?: "auto"
-            val outbound = prefs.getString("easyss_outbound", "native") ?: "native"
-            val logLevel = prefs.getString("easyss_loglevel", "info") ?: "info"
-            val enableQuic = prefs.getString("easyss_enable_quic", "false") ?: "false"
-            val ipv6Rule = prefs.getString("easyss_ipv6_rule", "auto") ?: "auto"
-            val serverNameIndication = prefs.getString("easyss_sn", "") ?: ""
-            val customCa = prefs.getString("easyss_custom_ca", "") ?: ""
-
-            val migratedProfile = ServerProfile(
-                id = id,
-                name = name,
-                server = server,
-                serverPort = serverPort,
-                password = password,
-                encryption = encryption,
-                proxyRule = proxyRule,
-                outbound = outbound,
-                logLevel = logLevel,
-                enableQuic = enableQuic,
-                ipv6Rule = ipv6Rule,
-                serverNameIndication = serverNameIndication,
-                customCa = customCa
-            )
-            addServerProfile(migratedProfile)
-            setActiveServer(id)
-
-            // Remove old keys after migration
-            prefs.edit {
-                remove("easyss_server")
-                remove("easyss_serverport")
-                remove("easyss_password")
-                remove("easyss_encryption")
-                remove("easyss_proxyrule")
-                remove("easyss_outbound")
-                remove("easyss_loglevel")
-                remove("easyss_enable_quic")
-                remove("easyss_ipv6_rule")
-                remove("easyss_sn")
-                remove("easyss_custom_ca")
-                apply() // Ensure changes are persisted
-            }
-        }
-    }
 
     var version: String
         get() {
@@ -100,7 +47,7 @@ class Pref(private val ctx: Context) {
         }
 
     fun getApps(): Set<String> {
-        return prefs.getStringSet("selected_apps", emptySet()) ?: emptySet()
+        return prefs.getStringSet(SELECTED_APPS, emptySet()) ?: emptySet()
     }
 
     fun getServerProfiles(): List<ServerProfile> {
@@ -177,67 +124,8 @@ class Pref(private val ctx: Context) {
         easyssInfo.valid = true
         easyssInfo.info = "${activeProfile.server}:${activeProfile.serverPort}"
 
-        var sn = activeProfile.serverNameIndication
-        if (sn.isBlank()) {
-            sn = activeProfile.server
-        }
-
-        val localSocksPort = prefs.getString("socks_port", "2080") ?: "2080"
-        val cmdList = mutableListOf(
-            "-s", activeProfile.server,
-            "-p", activeProfile.serverPort,
-            "-k", activeProfile.password,
-            "-m", activeProfile.encryption,
-            "-proxy-rule", activeProfile.proxyRule,
-            "-outbound-proto", activeProfile.outbound,
-            "-l", localSocksPort, // Use the variable here
-            "-t", "60", // This seems to be a fixed timeout, kept as is.
-            "-log-level", activeProfile.logLevel,
-            "-enable-quic=${activeProfile.enableQuic}",
-            "-ipv6-rule", activeProfile.ipv6Rule,
-            "-sn", sn,
-            "-enable-tun2socks=false",
-            "-daemon=false"
-        )
-
-        if (activeProfile.customCa.isNotBlank()) {
-            val customCaFile = File(ctx.cacheDir, "easyss_custom_ca.conf")
-            try {
-                customCaFile.createNewFile()
-                FileOutputStream(customCaFile, false).use { fos ->
-                    fos.write(activeProfile.customCa.toByteArray())
-                }
-                cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
-            } catch (e: IOException) {
-                // Log error or handle, for now, it will proceed without custom CA if file ops fail
-            }
-        }
-
-        if (activeProfile.directFile.isNotBlank()) {
-            val directFile = File(ctx.cacheDir, "easyss_direct.conf")
-            try {
-                directFile.createNewFile()
-                FileOutputStream(directFile, false).use { fos ->
-                    fos.write(activeProfile.directFile.toByteArray())
-                }
-                cmdList.addAll(listOf("-direct-file", directFile.absolutePath))
-            } catch (e: IOException) {
-            }
-        }
-
-        if (activeProfile.proxyFile.isNotBlank()) {
-            val proxyFile = File(ctx.cacheDir, "easyss_proxy.conf")
-            try {
-                proxyFile.createNewFile()
-                FileOutputStream(proxyFile, false).use { fos ->
-                    fos.write(activeProfile.proxyFile.toByteArray())
-                }
-                cmdList.addAll(listOf("-proxy-file", proxyFile.absolutePath))
-            } catch (e: IOException) {
-            }
-        }
-
-        easyssInfo.cmdList = cmdList
+        val localSocksPort = prefs.getString(SOCKS_PORT_KEY, DEFAULT_SOCKS_PORT) ?: DEFAULT_SOCKS_PORT
+        easyssInfo.cmdList = activeProfile.buildCmdList(ctx.cacheDir, localSocksPort)
         return easyssInfo
     }
 

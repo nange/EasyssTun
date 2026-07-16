@@ -42,6 +42,10 @@ import kotlinx.serialization.json.Json
 import org.json.JSONObject
 
 class MainFragment : Fragment() {
+    companion object {
+        private const val TAG = "MainFragment"
+    }
+
     private lateinit var mContext: Context
     private lateinit var pref: Pref
     private lateinit var easyssInfo: easyssInfo
@@ -55,56 +59,56 @@ class MainFragment : Fragment() {
             object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     Log.d(
-                            "MainFragmentReceiver",
+                            TAG,
                             "serviceStoppedReceiver - Entry. Action: ${intent?.action}"
                     )
                     if (intent?.action == TProxyService.ACTION_SERVICE_STOPPED) {
                         Log.d(
-                                "MainFragmentReceiver",
+                                TAG,
                                 "ACTION_SERVICE_STOPPED received. Pending server ID: $pendingServerProfileId, isSwitchingServer: $isSwitchingServer"
                         )
                         if (pendingServerProfileId != null) {
                             Log.d(
-                                    "MainFragmentReceiver",
+                                    TAG,
                                     "pendingServerProfileId is NOT null. Attempting to switch."
                             )
-                            pref.setActiveServer(pendingServerProfileId!!)
+                            pendingServerProfileId?.let { pref.setActiveServer(it) }
                             Log.d(
-                                    "MainFragmentReceiver",
+                                    TAG,
                                     "pref.setActiveServer called with ID: $pendingServerProfileId"
                             )
                             easyssInfo = pref.getEasyssInfo()
                             Log.d(
-                                    "MainFragmentReceiver",
+                                    TAG,
                                     "pref.getEasyssInfo called. easyssInfo.valid=${easyssInfo.valid}"
                             )
 
                             Log.i(
-                                    "MainFragmentReceiver",
+                                    TAG,
                                     "Calling startVPNService for server switch. ID: $pendingServerProfileId"
                             )
                             startVPNService(isCalledFromReceiver = true)
-                            Log.d("MainFragmentReceiver", "Returned from startVPNService call.")
+                            Log.d(TAG, "Returned from startVPNService call.")
 
                             pendingServerProfileId = null
-                            Log.d("MainFragmentReceiver", "pendingServerProfileId reset to null.")
+                            Log.d(TAG, "pendingServerProfileId reset to null.")
                             isSwitchingServer = false
-                            Log.d("MainFragmentReceiver", "isSwitchingServer reset to false.")
+                            Log.d(TAG, "isSwitchingServer reset to false.")
 
                             view?.let {
                                 Log.d(
-                                        "MainFragmentReceiver",
+                                        TAG,
                                         "Calling updateServiceStatu (after switch)."
                                 )
                                 updateServiceStatu(it)
                                 Log.d(
-                                        "MainFragmentReceiver",
+                                        TAG,
                                         "Returned from updateServiceStatu (after switch)."
                                 )
                             }
                         } else {
                             Log.d(
-                                    "MainFragmentReceiver",
+                                    TAG,
                                     "pendingServerProfileId IS null. Service stopped for other reasons or switch already processed/failed."
                             )
                             // Service stopped for other reasons (e.g. user clicked main stop
@@ -112,19 +116,19 @@ class MainFragment : Fragment() {
                             if (isSwitchingServer
                             ) { // If it's still true, something went wrong, reset it.
                                 Log.w(
-                                        "MainFragmentReceiver",
+                                        TAG,
                                         "isSwitchingServer was true but pendingServerProfileId is null. Resetting isSwitchingServer."
                                 )
                                 isSwitchingServer = false
                             }
                             view?.let {
                                 Log.d(
-                                        "MainFragmentReceiver",
+                                        TAG,
                                         "Calling updateServiceStatu (no pendingId)."
                                 )
                                 updateServiceStatu(it)
                                 Log.d(
-                                        "MainFragmentReceiver",
+                                        TAG,
                                         "Returned from updateServiceStatu (no pendingId)."
                                 )
                             }
@@ -132,12 +136,12 @@ class MainFragment : Fragment() {
                         val spinner = view?.findViewById<Spinner>(R.id.server_spinner)
                         spinner?.isEnabled = true
                         Log.d(
-                                "MainFragmentReceiver",
+                                TAG,
                                 "Spinner explicitly re-enabled. Current state: ${spinner?.isEnabled}"
                         )
                     } else {
                         Log.d(
-                                "MainFragmentReceiver",
+                                TAG,
                                 "Received some other action or null action: ${intent?.action}"
                         )
                     }
@@ -187,12 +191,12 @@ class MainFragment : Fragment() {
                 intentFilter,
                 ContextCompat.RECEIVER_NOT_EXPORTED
         )
-        Log.d("MainFragment", "serviceStoppedReceiver registered.")
+        Log.d(TAG, "serviceStoppedReceiver registered.")
     }
 
     override fun onDestroy() {
         requireActivity().unregisterReceiver(serviceStoppedReceiver)
-        Log.d("MainFragment", "serviceStoppedReceiver unregistered.")
+        Log.d(TAG, "serviceStoppedReceiver unregistered.")
         super.onDestroy()
     }
 
@@ -259,7 +263,7 @@ class MainFragment : Fragment() {
                                         !isSwitchingServer
                         ) {
                             Log.d(
-                                    "MainFragment",
+                                    TAG,
                                     "Spinner selected current active server. No change."
                             )
                             this@MainFragment.view?.let { updateServiceStatu(it) }
@@ -267,14 +271,14 @@ class MainFragment : Fragment() {
                         }
 
                         Log.d(
-                                "MainFragment",
+                                TAG,
                                 "Server selected: ${selectedProfile.name}. Current isServiceEnabled: ${pref.isServiceEnabled}"
                         )
 
                         if (pref.isServiceEnabled) {
                             if (isSwitchingServer) {
                                 Log.i(
-                                        "MainFragment",
+                                        TAG,
                                         "Server switch already in progress. Updating pending server to: ${selectedProfile.id}"
                                 )
                                 pendingServerProfileId = selectedProfile.id
@@ -282,7 +286,7 @@ class MainFragment : Fragment() {
                             }
 
                             Log.i(
-                                    "MainFragment",
+                                    TAG,
                                     "Initiating server switch. Setting pending server to: ${selectedProfile.id}"
                             )
                             pendingServerProfileId = selectedProfile.id
@@ -291,7 +295,7 @@ class MainFragment : Fragment() {
                             stopVPNService()
                         } else {
                             Log.i(
-                                    "MainFragment",
+                                    TAG,
                                     "VPN not running. Setting active server to: ${selectedProfile.id}"
                             )
                             pref.setActiveServer(selectedProfile.id)
@@ -435,19 +439,21 @@ class MainFragment : Fragment() {
 
         return try {
             val process = processBuilder.start()
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            var gitTag = "Easyss"
-            while (true) {
-                val currentLine = reader.readLine() ?: break
-                if (currentLine.startsWith("Git tag:")) {
-                    gitTag += ": " + currentLine.substringAfter(":").trim()
-                    break
+            val gitTag = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                var tag = "Easyss"
+                while (true) {
+                    val currentLine = reader.readLine() ?: break
+                    if (currentLine.startsWith("Git tag:")) {
+                        tag += ": " + currentLine.substringAfter(":").trim()
+                        break
+                    }
                 }
+                tag
             }
             process.waitFor()
             gitTag
         } catch (e: Exception) {
-            Log.e("MainFragment", "Error fetching Git tag", e)
+            Log.e(TAG, "Error fetching Git tag", e)
             "Easyss"
         }
     }
@@ -463,13 +469,13 @@ class MainFragment : Fragment() {
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun startVPNService(isCalledFromReceiver: Boolean = false) {
         Log.d(
-                "MainFragmentSVC",
+                TAG,
                 "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver"
         )
         val intent = VpnService.prepare(mContext)
         if (intent != null) {
             Log.d(
-                    "MainFragmentSVC",
+                    TAG,
                     "VpnService.prepare needs permissions. Calling startActivityForResult."
             )
             startActivityForResult(intent, 0)
@@ -478,14 +484,14 @@ class MainFragment : Fragment() {
             return
         }
         Log.d(
-                "MainFragmentSVC",
+                TAG,
                 "VpnService.prepare returned null (permissions granted). Proceeding to try block."
         )
 
         // Permission already granted, proceed to start the service.
         try {
             Log.d(
-                    "MainFragmentSVC",
+                    TAG,
                     "startVPNService - Inside try block, attempting to get active profile."
             )
             val activeProfile = pref.getActiveServerProfile() // Get the full profile object
@@ -503,7 +509,7 @@ class MainFragment : Fragment() {
                             profileJson
                     )
                 } catch (e: kotlinx.serialization.SerializationException) {
-                    Log.e("MainFragment", "Error serializing active profile", e)
+                    Log.e(TAG, "Error serializing active profile", e)
                     // If called from receiver, we must not crash it.
                     if (isCalledFromReceiver) {
                         // Log and allow receiver to clean up UI. Service won't start with this
@@ -523,7 +529,7 @@ class MainFragment : Fragment() {
                     return
                 }
             } else {
-                Log.w("MainFragment", "No active server profile found to start TProxyService.")
+                Log.w(TAG, "No active server profile found to start TProxyService.")
                 if (isCalledFromReceiver) {
                     Toast.makeText(
                                     mContext,
@@ -539,7 +545,7 @@ class MainFragment : Fragment() {
 
             mContext.startService(intent2.setAction(TProxyService.ACTION_CONNECT))
         } catch (e: Exception) {
-            Log.e("MainFragment", "Error starting TProxyService", e)
+            Log.e(TAG, "Error starting TProxyService", e)
             if (isCalledFromReceiver) {
                 // IMPORTANT: Do NOT throw RuntimeException if called from serviceStoppedReceiver,
                 // as it would crash the receiver and leave the UI in a stuck state.
@@ -574,7 +580,7 @@ class MainFragment : Fragment() {
 
         if (isSwitchingServer) {
             Log.d(
-                    "MainFragment",
+                    TAG,
                     "updateServiceStatu: Server switch in progress, UI set to switching state."
             )
             service_button.text = "Switching..."
@@ -589,7 +595,7 @@ class MainFragment : Fragment() {
             // fine-tune this
             service_button.isEnabled = true
             Log.d(
-                    "MainFragment",
+                    TAG,
                     "updateServiceStatu: Not switching server, proceeding with normal UI update."
             )
         }
@@ -609,11 +615,7 @@ class MainFragment : Fragment() {
             }
         }
 
-        // References to UI elements already obtained if isSwitchingServer is false,
-        // or obtained at the start of this else block for the first time.
-        // No, they are obtained at the top of updateServiceStatu now.
-        // var service_button = view.findViewById<MaterialButton>(R.id.service_button)
-        // var service_title = view.findViewById<TextView>(R.id.service_title)
+        // References to UI elements
         var service_icon = view.findViewById<ImageView>(R.id.service_icon)
         var service_card = view.findViewById<MaterialCardView>(R.id.service_card)
 
@@ -629,7 +631,7 @@ class MainFragment : Fragment() {
                 ) { // Should not happen if checks in click listener are effective
                     // And if startVPNService() is robust. But good to have a safeguard.
                     Log.w(
-                            "MainFragment",
+                            TAG,
                             "updateServiceStatu: Service enabled but easyssInfo is invalid! Disabling service."
                     )
                     Toast.makeText(
@@ -679,13 +681,13 @@ class MainFragment : Fragment() {
                     service_button.isEnabled = false
                     // Optionally, provide more visual feedback e.g. change button color
                     Log.d(
-                            "MainFragment",
+                            TAG,
                             "updateServiceStatu: Config invalid and service stopped, service_button disabled."
                     )
                 } else {
                     service_button.isEnabled = true
                     Log.d(
-                            "MainFragment",
+                            TAG,
                             "updateServiceStatu: Config valid and service stopped, service_button enabled."
                     )
                 }
@@ -718,28 +720,30 @@ class MainFragment : Fragment() {
     }
 
     private suspend fun fetchAndUpdateStats() {
+        var conn: HttpURLConnection? = null
         try {
             val url = URL("http://127.0.0.1:3080/stats")
-            val conn = url.openConnection() as HttpURLConnection
+            conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 2000
             conn.readTimeout = 2000
             conn.requestMethod = "GET"
 
             val status = conn.responseCode
             if (status != 200) {
-                Log.w("MainFragment", "Stats endpoint returned HTTP $status")
+                Log.w(TAG, "Stats endpoint returned HTTP $status")
                 withContext(Dispatchers.Main) { updateStatsUnavailable() }
                 return
             }
 
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
 
             val json = JSONObject(body)
             withContext(Dispatchers.Main) { updateStatsDisplay(json) }
         } catch (e: Exception) {
-            Log.w("MainFragment", "Failed to fetch stats: ${e.message}")
+            Log.w(TAG, "Failed to fetch stats: ${e.message}")
             withContext(Dispatchers.Main) { updateStatsUnavailable() }
+        } finally {
+            conn?.disconnect()
         }
     }
 
@@ -785,40 +789,5 @@ class MainFragment : Fragment() {
                 "${getString(R.string.stats_uptime)}: ${formatDuration(uptime)}"
         v.findViewById<TextView>(R.id.stats_active_streams)?.text =
                 "${getString(R.string.stats_active_streams)}: $active"
-    }
-
-    private fun formatBytes(bytes: Long): String = com.easysstun.formatBytes(bytes)
-
-    private fun formatDuration(seconds: Double): String = com.easysstun.formatDuration(seconds)
-}
-
-/**
- * Formats a byte count into a human-readable string.
- * Package-internal for testability.
- */
-internal fun formatBytes(bytes: Long): String {
-    return when {
-        bytes >= 1_000_000_000 -> String.format("%.2f GB", bytes / 1_000_000_000.0)
-        bytes >= 1_000_000 -> String.format("%.2f MB", bytes / 1_000_000.0)
-        bytes >= 1_000 -> String.format("%.2f KB", bytes / 1_000.0)
-        else -> "$bytes B"
-    }
-}
-
-/**
- * Formats a duration in seconds into a human-readable string.
- * Package-internal for testability.
- */
-internal fun formatDuration(seconds: Double): String {
-    val totalSecs = seconds.toLong()
-    val d = totalSecs / 86400
-    val h = (totalSecs % 86400) / 3600
-    val m = (totalSecs % 3600) / 60
-    val s = totalSecs % 60
-    return buildString {
-        if (d > 0) append("${d}d ")
-        if (h > 0) append("${h}h ")
-        if (m > 0) append("${m}m ")
-        append("${s}s")
     }
 }

@@ -12,7 +12,6 @@ import androidx.recyclerview.widget.RecyclerView
 import android.Manifest
 import android.content.pm.PackageInfo
 import android.text.Editable
-import android.text.TextWatcher
 import android.widget.EditText
 import android.widget.ProgressBar
 import androidx.lifecycle.lifecycleScope
@@ -39,7 +38,7 @@ class AppListFragment : Fragment() {
         recyclerView.adapter = adapter
 
         val searchEditText = view.findViewById<EditText>(R.id.searchEditText)
-        searchEditText.addTextChangedListener(object : TextWatcher {
+        searchEditText.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 adapter.filter(s.toString())

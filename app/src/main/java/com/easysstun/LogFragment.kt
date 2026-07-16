@@ -1,6 +1,7 @@
 package com.easysstun
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.regex.Pattern
@@ -32,6 +34,11 @@ class LogFragment : Fragment() {
 
     private var isAtBottom = true
     private var changingState = false
+
+    companion object {
+        private val LOG_PATTERN =
+            Pattern.compile("\\s(\\d{2}:\\d{2}:\\d{2})\\.\\d{3}.*source=(.*) msg=(.*)")
+    }
 
 
     override fun onCreateView(
@@ -113,9 +120,7 @@ class LogFragment : Fragment() {
                 while (isActive) {
                     val line: String? = bufferedReader.readLine()
                     if (line != null) {
-                        val pattern =
-                            Pattern.compile("\\s(\\d{2}:\\d{2}:\\d{2})\\.\\d{3}.*source=(.*) msg=(.*)")
-                        val matcher = pattern.matcher(line)
+                        val matcher = LOG_PATTERN.matcher(line)
                         if (matcher.find()) {
                             val timestampString = matcher.group(1)
                             val source = matcher.group(2)
@@ -125,8 +130,8 @@ class LogFragment : Fragment() {
                         }
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (e: IOException) {
+                Log.e("LogFragment", "Error reading logs", e)
             } finally {
                 inputStream?.close()
                 bufferedReader?.close()
@@ -181,9 +186,16 @@ class LogViewModel : ViewModel() {
     private val _logItems = MutableLiveData<List<LogItem>>()
     val logItems: LiveData<List<LogItem>> get() = _logItems
 
+    companion object {
+        private const val MAX_LOG_SIZE = 1000
+    }
+
     fun addLog(logItem: LogItem) {
         val currentList = _logItems.value.orEmpty().toMutableList()
         currentList.add(logItem)
+        if (currentList.size > MAX_LOG_SIZE) {
+            currentList.subList(0, currentList.size - MAX_LOG_SIZE).clear()
+        }
         _logItems.postValue(currentList)
     }
 

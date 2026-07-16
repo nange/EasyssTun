@@ -17,11 +17,15 @@ class ServiceReceiver : BroadcastReceiver() {
                 if (i != null) {
                     i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     context.startActivity(i)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(i!!.setAction(TProxyService.ACTION_CONNECT))
                 } else {
-                    context.startService(i!!.setAction(TProxyService.ACTION_CONNECT))
+                    // Permission already granted, start service directly
+                    val serviceIntent = Intent(context, TProxyService::class.java)
+                        .setAction(TProxyService.ACTION_CONNECT)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
+                    }
                 }
             }
         }
