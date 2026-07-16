@@ -1,5 +1,7 @@
 # EasyssTun
 
+> **Note:** 此仓库 fork 自 [bingooo/EasyssTun](https://github.com/bingooo/EasyssTun)。
+
 A simple and lightweight VPN over [easyss](https://github.com/nange/easyss) proxy for Android. It is based on a high-performance and low-overhead [tun2socks](https://github.com/heiher/hev-socks5-tunnel).
 
 
