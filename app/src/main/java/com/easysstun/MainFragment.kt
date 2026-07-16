@@ -20,8 +20,10 @@ import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getDrawable
+import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -149,13 +151,20 @@ class MainFragment : Fragment() {
                 }
             }
 
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (pref.isServiceEnabled) {
+            startVPNService()
+        }
+    }
+
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_main, container, false)
-        setHasOptionsMenu(true)
         // easyssInfo will be initialized in onViewCreated after view is created
         return view
     }
@@ -164,6 +173,20 @@ class MainFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         easyssInfo = pref.getEasyssInfo()
         setup(view) // Spinner setup is now in setup()
+        requireActivity().addMenuProvider(object : MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.menu_main, menu)
+            }
+            override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                return when (menuItem.itemId) {
+                    R.id.action_tips -> {
+                        findNavController().navigate(R.id.action_main_to_log)
+                        true
+                    }
+                    else -> false
+                }
+            }
+        })
         updateServiceStatu(view)
         updateVersionInfo(view)
 
@@ -199,20 +222,6 @@ class MainFragment : Fragment() {
         requireActivity().unregisterReceiver(serviceStoppedReceiver)
         Log.d(TAG, "serviceStoppedReceiver unregistered.")
         super.onDestroy()
-    }
-
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        inflater.inflate(R.menu.menu_main, menu)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_tips -> {
-                findNavController().navigate(R.id.action_main_to_log)
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
     }
 
     override fun onAttach(context: Context) {
@@ -459,14 +468,6 @@ class MainFragment : Fragment() {
         }
     }
 
-    @Suppress("DEPRECATION")
-    override fun onActivityResult(request: Int, result: Int, data: Intent?) {
-        if (pref.isServiceEnabled) {
-            startVPNService()
-        }
-    }
-
-    @Suppress("DEPRECATION")
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun startVPNService(isCalledFromReceiver: Boolean = false) {
         Log.d(
@@ -477,9 +478,9 @@ class MainFragment : Fragment() {
         if (intent != null) {
             Log.d(
                     TAG,
-                    "VpnService.prepare needs permissions. Calling startActivityForResult."
+                    "VpnService.prepare needs permissions. Calling vpnPermissionLauncher."
             )
-            startActivityForResult(intent, 0)
+            vpnPermissionLauncher.launch(intent)
             // If permission is needed, do not proceed to start the service here.
             // onActivityResult will call startVPNService() again.
             return

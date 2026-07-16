@@ -355,7 +355,7 @@ socks5:
             return
         }
         Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}") // Keep Log.i - User-driven or high-level state change
-        stopForeground(true)
+        stopForeground(STOP_FOREGROUND_REMOVE)
 
         serviceScope.launch { 
             try {

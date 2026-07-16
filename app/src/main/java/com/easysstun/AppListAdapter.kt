@@ -144,7 +144,7 @@ class AppListAdapter(
 
             override fun areContentsTheSame(oldItem: PackageInfo, newItem: PackageInfo): Boolean {
                 return oldItem.packageName == newItem.packageName &&
-                        oldItem.versionCode == newItem.versionCode &&
+                        oldItem.longVersionCode == newItem.longVersionCode &&
                         oldItem.lastUpdateTime == newItem.lastUpdateTime
             }
         }

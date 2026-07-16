@@ -10,6 +10,6 @@ clean:
 	./gradlew clean
 
 build:
-	./gradlew assembleDebug
+	./gradlew assembleDebug --warning-mode all
 
 check: lint test

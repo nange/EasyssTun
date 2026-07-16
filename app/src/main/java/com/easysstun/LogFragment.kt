@@ -126,7 +126,7 @@ class LogFragment : Fragment() {
                             val timestampString = matcher.group(1)
                             val source = matcher.group(2)
                             val msg = matcher.group(3)
-                            val logItem = LogItem(msg, timestampString, source)
+                            val logItem = LogItem(msg ?: "", timestampString ?: "", source ?: "")
                             logViewModel.addLog(logItem)
                         }
                     }
