@@ -18,7 +18,8 @@
         <ImageView
             android:id="@+id/server_icon"
             style="@style/CardIcon"
-            android:src="@drawable/public_24px" />
+            android:src="@drawable/public_24px"
+            android:contentDescription="@null" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -49,7 +50,7 @@
             android:src="@drawable/verified_user_24px"
             app:tint="?attr/colorPrimary"
             android:visibility="gone"
-            android:contentDescription="Active" />
+            android:contentDescription="@string/active_badge" />
 
         <ImageView
             android:layout_width="24dp"
@@ -57,6 +58,7 @@
             android:layout_marginStart="4dp"
             android:src="@drawable/expand_more_24px"
             android:rotation="-90"
+            android:contentDescription="@null"
             app:tint="?android:textColorTertiary"
             android:alpha="0.6" />
 

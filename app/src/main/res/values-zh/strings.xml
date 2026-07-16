@@ -1,49 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EasyssTun</string>
-    <string name="easyss_server">Easyss 服务器地址</string>
-    <string name="easyss_serverport">Easyss 服务器端口</string>
-    <string name="easyss_password">Easyss 客户端密码</string>
     <string name="service_enable">开启</string>
     <string name="service_disable">停止</string>
+    <string name="service_switching">切换中…</string>
     <string name="service_running">EasyssTun 服务运行中</string>
     <string name="service_stopped">EasyssTun 已停止</string>
     <string name="skipped_app_list">已配置跳过 %s 个应用</string>
-    <string name="delay_test_result">延迟测试: %s</string>
-    <string name="delay_test_fail">失败，请检查配置</string>
+    <string name="skipped_apps_title">已跳过的应用</string>
     <string name="choose_app_to_bypass">点按配置跳过的应用</string>
     <string name="easyss_configure">配置</string>
-    <string name="speedtest_placeholder">延迟测试</string>
-    <string name="speedtest_summary">点按进行延迟测试</string>
 
     <!-- 统计卡片 -->
     <string name="stats_title">统计信息</string>
     <string name="stats_loading">正在加载统计信息…</string>
     <string name="stats_updating">更新中…</string>
     <string name="stats_unavailable">统计信息不可用</string>
-    <string name="stats_avg_rtt_ms">请求延迟</string>
-    <string name="stats_conns">TCP连接数</string>
-    <string name="stats_streams_opened">已建立流</string>
-    <string name="stats_streams_closed">已关闭流</string>
-    <string name="stats_bytes_sent">发送流量</string>
-    <string name="stats_bytes_recv">接收流量</string>
-    <string name="stats_uptime">运行时长</string>
-    <string name="stats_active_streams">活跃数据流</string>
+    <string name="stats_avg_rtt_ms_fmt">请求延迟: %s</string>
+    <string name="stats_conns_fmt">TCP连接数: %s</string>
+    <string name="stats_streams_opened_fmt">已建立流: %s</string>
+    <string name="stats_streams_closed_fmt">已关闭流: %s</string>
+    <string name="stats_bytes_sent_fmt">发送流量: %s</string>
+    <string name="stats_bytes_recv_fmt">接收流量: %s</string>
+    <string name="stats_uptime_fmt">运行时长: %s</string>
+    <string name="stats_active_streams_fmt">活跃数据流: %s</string>
     <string name="applist_title">选择跳过的应用</string>
     <string name="log_title">Easyss 日志</string>
     <string name="easyss_configure_title">Easyss 配置</string>
     <string name="route_desc">默认情况下，EasysTun 将会跳过局域网地址以及本应用的流量。 同时以上选中的应用也会跳过。\n\n除以上情况外的流量将由 Easyss 接管。</string>
     <string name="app_name_placeholder">应用名</string>
     <string name="easyss_need_config">Easyss 服务未配置</string>
-    <string name="easyss_encryption">Easyss 加密方式</string>
-    <string name="easyss_proxyrule">Easyss 代理方式</string>
-    <string name="easyss_outbound">Easyss 出口协议</string>
-    <string name="easyss_loglevel">Easyss 日志级别</string>
-    <string name="easyss_enable_quic">Easyss 启用QUIC</string>
-    <string name="easyss_ipv6_rule">Easyss IPv6规则</string>
-    <string name="easyss_sn">Easyss Server Name</string>
-    <string name="easyss_custom_ca">Easyss 自定义证书</string>
-    <string name="easyss_direct_file">直连域名/IP（每行一个）</string>
-    <string name="easyss_proxy_file">代理域名/IP（每行一个）</string>
-    <string name="not_set">未配置</string>
+
+    <!-- 版本信息 -->
+    <string name="version_info">%1$s | EasyssTun: v%2$s</string>
+
+    <!-- 服务器配置表单 -->
+    <string name="section_basic">基本</string>
+    <string name="section_protocol_settings">协议设置</string>
+    <string name="section_advanced">高级</string>
+    <string name="section_routing_rules">路由规则</string>
+    <string name="section_options">选项</string>
+
+    <string name="hint_name">名称</string>
+    <string name="hint_server_host">服务器地址</string>
+    <string name="hint_server_port">服务器端口</string>
+    <string name="hint_password">密码</string>
+    <string name="hint_sni">服务器名称指示 (SNI)</string>
+    <string name="hint_custom_ca">自定义 CA（PEM 格式）</string>
+    <string name="hint_direct_domains">直连域名/IP（每行一个）</string>
+    <string name="hint_proxy_domains">代理域名/IP（每行一个）</string>
+
+    <string name="label_encryption_method">加密方式</string>
+    <string name="label_proxy_rule">代理规则</string>
+    <string name="label_outbound_protocol">出口协议</string>
+    <string name="label_log_level">日志级别</string>
+    <string name="label_enable_quic">启用 QUIC</string>
+    <string name="label_ipv6_rule">IPv6 规则</string>
+
+    <string name="button_save">保存</string>
+    <string name="button_delete">删除</string>
+
+    <!-- 其他 -->
+    <string name="search_hint">搜索</string>
+    <string name="add_new_server">添加新服务器</string>
+    <string name="active_badge">当前使用</string>
+    <string name="log_menu_title">日志</string>
+    <string name="fab_scroll_to_bottom">滚动到底部</string>
 </resources>

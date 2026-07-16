@@ -6,7 +6,7 @@
     <item
         android:id="@+id/action_tips"
         android:icon="@drawable/ic_terminal_24"
-        android:title="Log"
+        android:title="@string/log_menu_title"
         app:showAsAction="ifRoom"/>
 
 <!--    <item-->

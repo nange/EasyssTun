@@ -1,51 +1,70 @@
 <resources>
     <string name="app_name">EasyssTun</string>
-    <string name="easyss_server">Easyss Server Address</string>
-    <string name="easyss_serverport">Easyss Server Port</string>
-    <string name="easyss_password">Easyss Password</string>
     <string name="service_enable">Start</string>
     <string name="service_disable">Stop</string>
+    <string name="service_switching">Switching…</string>
 
     <string name="service_running">EasyssTun is Running</string>
     <string name="service_stopped">EasyssTun is Stopped</string>
-    <string name="skipped_app_list">Skipped %s Applications </string>
-    <string name="delay_test_result">Test Result: %s</string>
+    <string name="skipped_app_list">Skipped %s Applications</string>
+    <string name="skipped_apps_title">Skipped Apps</string>
 
-    <string name="delay_test_fail">Fail, Check Configure</string>
-
-    <string name="choose_app_to_bypass">Tap to selected SKIP applications.</string>
+    <string name="choose_app_to_bypass">Tap to select SKIP applications.</string>
     <string name="easyss_configure">Configure</string>
-    <string name="speedtest_placeholder">Test Speed</string>
-    <string name="speedtest_summary">Tap to Test Connection Speed of EasyssTun.</string>
 
     <!-- Stats Card -->
     <string name="stats_title">Statistics</string>
     <string name="stats_loading">Loading statistics…</string>
     <string name="stats_updating">Updating…</string>
     <string name="stats_unavailable">Statistics not available</string>
-    <string name="stats_avg_rtt_ms">RTT</string>
-    <string name="stats_conns">Conns</string>
-    <string name="stats_streams_opened">Streams Opened</string>
-    <string name="stats_streams_closed">Streams Closed</string>
-    <string name="stats_bytes_sent">Sent</string>
-    <string name="stats_bytes_recv">Received</string>
-    <string name="stats_uptime">Uptime</string>
-    <string name="stats_active_streams">Active</string>
+    <string name="stats_avg_rtt_ms_fmt">RTT: %s</string>
+    <string name="stats_conns_fmt">Conns: %s</string>
+    <string name="stats_streams_opened_fmt">Streams Opened: %s</string>
+    <string name="stats_streams_closed_fmt">Streams Closed: %s</string>
+    <string name="stats_bytes_sent_fmt">Sent: %s</string>
+    <string name="stats_bytes_recv_fmt">Received: %s</string>
+    <string name="stats_uptime_fmt">Uptime: %s</string>
+    <string name="stats_active_streams_fmt">Active: %s</string>
     <string name="applist_title">Choose Skip APPs</string>
     <string name="log_title">Easyss Log</string>
     <string name="easyss_configure_title">Easyss Configure</string>
     <string name="route_desc">By default, EasysTun will skip LAN addresses and traffic for this application. At the same time, the applications selected above will also be skipped. \n\nTraffic other than the above situations will be taken over by Easyss.</string>
     <string name="app_name_placeholder">PackageName</string>
     <string name="easyss_need_config">Easyss Server Not Configured</string>
-    <string name="easyss_encryption">Easyss encryption method</string>
-    <string name="easyss_proxyrule">Easyss Proxy Rule</string>
-    <string name="easyss_outbound">Easyss Outbound Proto</string>
-    <string name="easyss_loglevel">Easyss Log Level</string>
-    <string name="easyss_enable_quic">Easyss Enable QUIC</string>
-    <string name="easyss_ipv6_rule">Easyss IPv6 Rule</string>
-    <string name="easyss_sn">Easyss Server Name</string>
-    <string name="easyss_custom_ca">Easyss Custom CA</string>
-    <string name="easyss_direct_file">Direct Domains/IPs (one per line)</string>
-    <string name="easyss_proxy_file">Proxy Domains/IPs (one per line)</string>
-    <string name="not_set">Not Set</string>
+
+    <!-- Version info -->
+    <string name="version_info">%1$s | EasyssTun: v%2$s</string>
+
+    <!-- Server profile form -->
+    <string name="section_basic">Basic</string>
+    <string name="section_protocol_settings">Protocol Settings</string>
+    <string name="section_advanced">Advanced</string>
+    <string name="section_routing_rules">Routing Rules</string>
+    <string name="section_options">Options</string>
+
+    <string name="hint_name">Name</string>
+    <string name="hint_server_host">Server Host</string>
+    <string name="hint_server_port">Server Port</string>
+    <string name="hint_password">Password</string>
+    <string name="hint_sni">Server Name Indication (SNI)</string>
+    <string name="hint_custom_ca">Custom CA (PEM format)</string>
+    <string name="hint_direct_domains">Direct Domains/IPs (one per line)</string>
+    <string name="hint_proxy_domains">Proxy Domains/IPs (one per line)</string>
+
+    <string name="label_encryption_method">Encryption Method</string>
+    <string name="label_proxy_rule">Proxy Rule</string>
+    <string name="label_outbound_protocol">Outbound Protocol</string>
+    <string name="label_log_level">Log Level</string>
+    <string name="label_enable_quic">Enable QUIC</string>
+    <string name="label_ipv6_rule">IPv6 Rule</string>
+
+    <string name="button_save">Save</string>
+    <string name="button_delete">Delete</string>
+
+    <!-- Misc -->
+    <string name="search_hint">Search</string>
+    <string name="add_new_server">Add New Server</string>
+    <string name="active_badge">Active</string>
+    <string name="log_menu_title">Log</string>
+    <string name="fab_scroll_to_bottom">Scroll to bottom</string>
 </resources>

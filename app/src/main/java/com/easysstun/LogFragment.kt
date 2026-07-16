@@ -1,6 +1,7 @@
 package com.easysstun
 
 import android.os.Bundle
+import android.annotation.SuppressLint
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -145,6 +146,7 @@ class LogFragment : Fragment() {
 class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
     private var logItems: List<LogItem> = emptyList()
 
+    @SuppressLint("NotifyDataSetChanged")
     fun submitList(newList: List<LogItem>) {
         logItems = newList
         notifyDataSetChanged()

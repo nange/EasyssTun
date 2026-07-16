@@ -190,9 +190,7 @@ class TProxyService : VpnService() {
         var session = String()
         val builder = Builder()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
-        }
+        builder.setMetered(false)
         builder.setBlocking(false)
         builder.setMtu(8500)
 
@@ -476,14 +474,12 @@ socks5:
 
     //     create NotificationChannel
     private fun initNotificationChannel(channelName: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            val name: CharSequence = getString(R.string.app_name)
-            val channel =
-                NotificationChannel(channelName, name, NotificationManager.IMPORTANCE_LOW)
-            notificationManager.createNotificationChannel(channel)
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val name: CharSequence = getString(R.string.app_name)
+        val channel =
+            NotificationChannel(channelName, name, NotificationManager.IMPORTANCE_LOW)
+        notificationManager.createNotificationChannel(channel)
 
-        }
     }
 
 

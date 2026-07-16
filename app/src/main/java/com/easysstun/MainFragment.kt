@@ -31,6 +31,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -427,7 +428,7 @@ class MainFragment : Fragment() {
             val gitTag = withContext(Dispatchers.IO) { fetchGitTag(requireContext()) }
             val versionPlaceholder = view.findViewById<TextView>(R.id.version_placeholder)
             val appVersion = BuildConfig.VERSION_NAME
-            versionPlaceholder.text = "$gitTag | EasyssTun: v$appVersion"
+            versionPlaceholder.text = getString(R.string.version_info, gitTag, appVersion)
         }
     }
 
@@ -583,10 +584,10 @@ class MainFragment : Fragment() {
                     TAG,
                     "updateServiceStatu: Server switch in progress, UI set to switching state."
             )
-            service_button.text = "Switching..."
+            service_button.text = getString(R.string.service_switching)
             service_button.isEnabled = false
             // Optionally set title or other UI elements
-            service_title.text = "Switching..."
+            service_title.text = getString(R.string.service_switching)
             // It might be good to also change the card color or icon here to reflect "switching"
             // For now, just text and button state as per primary requirement.
             return
@@ -774,20 +775,20 @@ class MainFragment : Fragment() {
         val active = json.optInt("active_streams", 0)
 
         v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text =
-                "${getString(R.string.stats_avg_rtt_ms)}: ${String.format("%.1f ms", avgRttMs)}"
+                getString(R.string.stats_avg_rtt_ms_fmt, String.format(Locale.ROOT, "%.1f ms", avgRttMs))
         v.findViewById<TextView>(R.id.stats_conns)?.text =
-                "${getString(R.string.stats_conns)}: $conns"
+                getString(R.string.stats_conns_fmt, conns.toString())
         v.findViewById<TextView>(R.id.stats_bytes_sent)?.text =
-                "${getString(R.string.stats_bytes_sent)}: ${formatBytes(sent)}"
+                getString(R.string.stats_bytes_sent_fmt, formatBytes(sent))
         v.findViewById<TextView>(R.id.stats_bytes_recv)?.text =
-                "${getString(R.string.stats_bytes_recv)}: ${formatBytes(recv)}"
+                getString(R.string.stats_bytes_recv_fmt, formatBytes(recv))
         v.findViewById<TextView>(R.id.stats_streams_opened)?.text =
-                "${getString(R.string.stats_streams_opened)}: $opened"
+                getString(R.string.stats_streams_opened_fmt, opened.toString())
         v.findViewById<TextView>(R.id.stats_streams_closed)?.text =
-                "${getString(R.string.stats_streams_closed)}: $closed"
+                getString(R.string.stats_streams_closed_fmt, closed.toString())
         v.findViewById<TextView>(R.id.stats_uptime)?.text =
-                "${getString(R.string.stats_uptime)}: ${formatDuration(uptime)}"
+                getString(R.string.stats_uptime_fmt, formatDuration(uptime))
         v.findViewById<TextView>(R.id.stats_active_streams)?.text =
-                "${getString(R.string.stats_active_streams)}: $active"
+                getString(R.string.stats_active_streams_fmt, active.toString())
     }
 }

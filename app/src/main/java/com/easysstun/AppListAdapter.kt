@@ -12,6 +12,9 @@ import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.edit
+import androidx.recyclerview.widget.AsyncListDiffer
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,10 +26,11 @@ class AppListAdapter(
     private val context: Context,
     private val lifecycleScope: CoroutineScope
 ) : RecyclerView.Adapter<AppListAdapter.AppViewHolder>() {
-    private var appList: List<PackageInfo> = emptyList()
     private var allApps: List<PackageInfo> = emptyList()
     private var filterJob: kotlinx.coroutines.Job? = null
     private var saveJob: kotlinx.coroutines.Job? = null
+
+    private val differ = AsyncListDiffer(this, DIFF_CALLBACK)
 
     private val selectedApps = mutableListOf<String>()
     private val sharedPreferences: SharedPreferences by lazy {
@@ -40,8 +44,7 @@ class AppListAdapter(
 
     fun setAppList(list: List<PackageInfo>) {
         allApps = list
-        appList = list
-        notifyDataSetChanged()
+        differ.submitList(list)
     }
 
     fun filter(query: String) {
@@ -56,8 +59,7 @@ class AppListAdapter(
                 }
             }
             withContext(Dispatchers.Main) {
-                appList = filtered
-                notifyDataSetChanged()
+                differ.submitList(filtered)
             }
         }
     }
@@ -69,21 +71,21 @@ class AppListAdapter(
     }
 
     override fun onBindViewHolder(holder: AppViewHolder, position: Int) {
-        val appInfo = appList[position]
+        val appInfo = differ.currentList[position]
         holder.bind(appInfo)
 
 
     }
 
     override fun getItemCount(): Int {
-        return appList.size
+        return differ.currentList.size
     }
 
     private fun saveSelectedApps() {
         saveJob?.cancel()
         saveJob = lifecycleScope.launch {
             delay(300)
-            sharedPreferences.edit().putStringSet(Pref.SELECTED_APPS, selectedApps.toSet()).apply()
+            sharedPreferences.edit { putStringSet(Pref.SELECTED_APPS, selectedApps.toSet()) }
 
             val intent = Intent(Pref.PREFS_UPDATED).apply {
                 // Ensure the broadcast targets only this app's non-exported receiver
@@ -130,6 +132,20 @@ class AppListAdapter(
                     selectedApps.remove(appInfo.packageName)
                 }
                 saveSelectedApps()
+            }
+        }
+    }
+
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<PackageInfo>() {
+            override fun areItemsTheSame(oldItem: PackageInfo, newItem: PackageInfo): Boolean {
+                return oldItem.packageName == newItem.packageName
+            }
+
+            override fun areContentsTheSame(oldItem: PackageInfo, newItem: PackageInfo): Boolean {
+                return oldItem.packageName == newItem.packageName &&
+                        oldItem.versionCode == newItem.versionCode &&
+                        oldItem.lastUpdateTime == newItem.lastUpdateTime
             }
         }
     }

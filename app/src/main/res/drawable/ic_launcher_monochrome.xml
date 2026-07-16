@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Monochrome launcher icon: uses foreground filled with white -->
+    <group
+        android:translateX="27"
+        android:translateY="27"
+        android:scaleX="0.5"
+        android:scaleY="0.5">
+        <!-- Simplified monochrome shape: a filled circle representing the app -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,27C39.09,27 27,39.09 27,54s12.09,27 27,27 27,-12.09 27,-27S68.91,27 54,27zM54,73c-10.49,0 -19,-8.51 -19,-19s8.51,-19 19,-19 19,8.51 19,19S64.49,73 54,73z" />
+    </group>
+</vector>

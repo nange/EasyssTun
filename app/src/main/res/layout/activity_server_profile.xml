@@ -21,13 +21,13 @@
 
                 <TextView
                     style="@style/CardTitle"
-                    android:text="Basic" />
+                    android:text="@string/section_basic" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:hint="Name">
+                    android:hint="@string/hint_name">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/profile_name"
@@ -39,7 +39,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:hint="Server Host">
+                    android:hint="@string/hint_server_host">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/profile_server"
@@ -51,13 +51,14 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
+                    android:baselineAligned="false"
                     android:orientation="horizontal">
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="Server Port">
+                        android:hint="@string/hint_server_port">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/profile_server_port"
@@ -71,7 +72,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:hint="Password"
+                        android:hint="@string/hint_password"
                         app:passwordToggleEnabled="true">
 
                         <com.google.android.material.textfield.TextInputEditText
@@ -94,12 +95,12 @@
 
                 <TextView
                     style="@style/CardTitle"
-                    android:text="Protocol Settings" />
+                    android:text="@string/section_protocol_settings" />
 
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="Encryption Method" />
+                    android:text="@string/label_encryption_method" />
                 <Spinner
                     android:id="@+id/profile_encryption"
                     android:layout_width="match_parent"
@@ -110,7 +111,7 @@
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="Proxy Rule" />
+                    android:text="@string/label_proxy_rule" />
                 <Spinner
                     android:id="@+id/profile_proxy_rule"
                     android:layout_width="match_parent"
@@ -122,7 +123,7 @@
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="Outbound Protocol" />
+                    android:text="@string/label_outbound_protocol" />
                 <Spinner
                     android:id="@+id/profile_outbound"
                     android:layout_width="match_parent"
@@ -143,13 +144,13 @@
 
                 <TextView
                     style="@style/CardTitle"
-                    android:text="Advanced" />
+                    android:text="@string/section_advanced" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:hint="Server Name Indication (SNI)">
+                    android:hint="@string/hint_sni">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/profile_server_name_indication"
@@ -161,7 +162,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:hint="Custom CA (PEM format)">
+                    android:hint="@string/hint_custom_ca">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/profile_custom_ca"
@@ -184,13 +185,13 @@
 
                 <TextView
                     style="@style/CardTitle"
-                    android:text="Routing Rules" />
+                    android:text="@string/section_routing_rules" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:hint="Direct Domains/IPs (one per line)">
+                    android:hint="@string/hint_direct_domains">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/profile_direct_file"
@@ -205,7 +206,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:hint="Proxy Domains/IPs (one per line)">
+                    android:hint="@string/hint_proxy_domains">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/profile_proxy_file"
@@ -228,12 +229,12 @@
 
                 <TextView
                     style="@style/CardTitle"
-                    android:text="Options" />
+                    android:text="@string/section_options" />
 
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="Log Level" />
+                    android:text="@string/label_log_level" />
                 <Spinner
                     android:id="@+id/profile_log_level"
                     android:layout_width="match_parent"
@@ -245,7 +246,7 @@
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="Enable QUIC" />
+                    android:text="@string/label_enable_quic" />
                 <Spinner
                     android:id="@+id/profile_enable_quic"
                     android:layout_width="match_parent"
@@ -257,7 +258,7 @@
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="IPv6 Rule" />
+                    android:text="@string/label_ipv6_rule" />
                 <Spinner
                     android:id="@+id/profile_ipv6_rule"
                     android:layout_width="match_parent"
@@ -276,7 +277,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Save"
+            android:text="@string/button_save"
             android:textSize="15sp"
             app:cornerRadius="16dp" />
 
@@ -286,7 +287,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Delete"
+            android:text="@string/button_delete"
             android:textSize="15sp"
             android:visibility="gone"
             app:cornerRadius="16dp"

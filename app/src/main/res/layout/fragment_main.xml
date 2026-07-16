@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_margin="14dp"
@@ -21,7 +22,8 @@
                 <ImageView
                     android:id="@+id/service_icon"
                     style="@style/CardIcon"
-                    android:src="@drawable/ic_launcher_foreground_big" />
+                    android:src="@drawable/ic_launcher_foreground_big"
+                    android:contentDescription="@null" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -95,7 +97,8 @@
                 <ImageView
                     android:id="@android:id/icon"
                     style="@style/CardIcon"
-                    android:src="@drawable/playlist_remove_24px" />
+                    android:src="@drawable/playlist_remove_24px"
+                    android:contentDescription="@null" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -107,7 +110,7 @@
                     <TextView
                         android:id="@+id/text1"
                         style="@style/CardTitle"
-                        android:text="已经跳过的应用" />
+                        android:text="@string/skipped_apps_title" />
 
                     <TextView
                         android:id="@android:id/text2"
@@ -142,11 +145,13 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                tools:ignore="UseCompoundDrawables">
 
                 <ImageView
                     style="@style/CardIcon"
-                    android:src="@drawable/ic_outline_info_24" />
+                    android:src="@drawable/ic_outline_info_24"
+                    android:contentDescription="@null" />
 
                 <TextView
                     android:layout_width="match_parent"
