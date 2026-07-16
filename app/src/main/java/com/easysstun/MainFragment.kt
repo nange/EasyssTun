@@ -1,4 +1,4 @@
-package com.musan.easysstun
+package com.easysstun
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -499,7 +499,7 @@ class MainFragment : Fragment() {
                 try {
                     val profileJson = json.encodeToString(activeProfile)
                     intent2.putExtra(
-                            "com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA",
+                            "com.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA",
                             profileJson
                     )
                 } catch (e: kotlinx.serialization.SerializationException) {

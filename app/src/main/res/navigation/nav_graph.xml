@@ -5,7 +5,7 @@
 
     <fragment
         android:id="@+id/SettingsFragment"
-        android:name="com.musan.easysstun.SettingsFragment"
+        android:name="com.easysstun.SettingsFragment"
         android:label="@string/easyss_configure_title">
         <action
             android:id="@+id/action_nav_setting_to_applist"
@@ -14,19 +14,19 @@
 
     <fragment
         android:id="@+id/AppListFragment"
-        android:name="com.musan.easysstun.AppListFragment"
+        android:name="com.easysstun.AppListFragment"
         android:label="@string/applist_title">
     </fragment>
 
     <fragment
         android:id="@+id/LogFragment"
-        android:name="com.musan.easysstun.LogFragment"
+        android:name="com.easysstun.LogFragment"
         android:label="@string/log_title">
     </fragment>
 
     <fragment
         android:id="@+id/MainFragment"
-        android:name="com.musan.easysstun.MainFragment"
+        android:name="com.easysstun.MainFragment"
         android:label="@string/app_name">
         <action
             android:id="@+id/action_main_to_setting"

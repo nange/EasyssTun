@@ -1,4 +1,4 @@
-package com.musan.easysstun
+package com.easysstun
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -53,7 +53,7 @@ class TProxyService : VpnService() {
         }
 
         if (intent != null && intent.action == ACTION_CONNECT) { // Assuming ACTION_CONNECT is the trigger
-            receivedProfileJson = intent.getStringExtra("com.musan.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA")
+            receivedProfileJson = intent.getStringExtra("com.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA")
             Log.i(TAG, "onStartCommand: Received profile JSON (length: ${receivedProfileJson?.length ?: "null"}) via Intent.") // Keep Log.i - User-driven action
         } else {
             // If intent is null or action isn't connect (and not disconnect), clear receivedProfileJson
@@ -549,7 +549,7 @@ class TProxyService : VpnService() {
 
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
-        const val ACTION_SERVICE_STOPPED = "com.musan.easysstun.SERVICE_FULLY_STOPPED"
+        const val ACTION_SERVICE_STOPPED = "com.easysstun.SERVICE_FULLY_STOPPED"
         private const val TAG = "TProxyServiceDiag"
 
         init {

@@ -1,4 +1,4 @@
-package com.musan.easysstun
+package com.easysstun
 
 import android.Manifest
 import android.os.Bundle
@@ -10,7 +10,7 @@ import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
-import com.musan.easysstun.databinding.ActivityMainBinding
+import com.easysstun.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 

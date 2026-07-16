@@ -16,3 +16,5 @@ native
 wrapper
 kotlin-profile
 .vscode
+.kotlin
+.zcode

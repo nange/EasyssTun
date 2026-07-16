@@ -1,4 +1,4 @@
-package com.musan.easysstun
+package com.easysstun
 
 import android.app.Application
 
