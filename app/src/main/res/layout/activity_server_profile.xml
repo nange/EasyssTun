@@ -4,214 +4,295 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fillViewport="true"
     tools:context=".ServerProfileActivity">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="14dp">
 
-        <com.google.android.material.textfield.TextInputLayout
+        <!-- Section: Basic -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/mCard">
+
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="Basic" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Name">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_name"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Server Host">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_server"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Server Port">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/profile_server_port"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:hint="Password"
+                        app:passwordToggleEnabled="true">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/profile_password"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPassword" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Section: Protocol Settings -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/mCard"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="Protocol Settings" />
+
+                <TextView
+                    style="@style/SectionLabel"
+                    android:layout_marginTop="12dp"
+                    android:text="Encryption Method" />
+                <Spinner
+                    android:id="@+id/profile_encryption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:entries="@array/easyss_encryption_list" />
+
+                <TextView
+                    style="@style/SectionLabel"
+                    android:layout_marginTop="12dp"
+                    android:text="Proxy Rule" />
+                <Spinner
+                    android:id="@+id/profile_proxy_rule"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:entries="@array/easyss_proxyrule_list"
+                    android:entryValues="@array/easyss_proxyrule_list_value" />
+
+                <TextView
+                    style="@style/SectionLabel"
+                    android:layout_marginTop="12dp"
+                    android:text="Outbound Protocol" />
+                <Spinner
+                    android:id="@+id/profile_outbound"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:entries="@array/easyss_outbound_list"
+                    android:entryValues="@array/easyss_outbound_list_value" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Section: Advanced -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/mCard"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="Advanced" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Server Name Indication (SNI)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_server_name_indication"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Custom CA (PEM format)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_custom_ca"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="top"
+                        android:inputType="textMultiLine"
+                        android:minLines="3" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Section: Routing Rules -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/mCard"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="Routing Rules" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Direct Domains/IPs (one per line)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_direct_file"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="top"
+                        android:inputType="textMultiLine"
+                        android:minLines="3" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Proxy Domains/IPs (one per line)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_proxy_file"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="top"
+                        android:inputType="textMultiLine"
+                        android:minLines="3" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Section: Options -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/mCard"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="Options" />
+
+                <TextView
+                    style="@style/SectionLabel"
+                    android:layout_marginTop="12dp"
+                    android:text="Log Level" />
+                <Spinner
+                    android:id="@+id/profile_log_level"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:entries="@array/easyss_loglevel_list"
+                    android:entryValues="@array/easyss_loglevel_list_value" />
+
+                <TextView
+                    style="@style/SectionLabel"
+                    android:layout_marginTop="12dp"
+                    android:text="Enable QUIC" />
+                <Spinner
+                    android:id="@+id/profile_enable_quic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:entries="@array/easyss_enable_quic_list"
+                    android:entryValues="@array/easyss_enable_quic_list_value" />
+
+                <TextView
+                    style="@style/SectionLabel"
+                    android:layout_marginTop="12dp"
+                    android:text="IPv6 Rule" />
+                <Spinner
+                    android:id="@+id/profile_ipv6_rule"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:entries="@array/easyss_ipv6_rule_list"
+                    android:entryValues="@array/easyss_ipv6_rule_value" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Action Buttons -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/save_profile_button"
+            style="@style/Widget.Material3.Button"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Name">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_name"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Server Host">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_server"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Server Port">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_server_port"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="number" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:passwordToggleEnabled="true"
-            android:hint="Password">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_password"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <TextView
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Encryption Method" />
-        <Spinner
-            android:id="@+id/profile_encryption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/easyss_encryption_list" />
+            android:text="Save"
+            android:textSize="15sp"
+            app:cornerRadius="16dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Proxy Rule" />
-        <Spinner
-            android:id="@+id/profile_proxy_rule"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/easyss_proxyrule_list"
-            android:entryValues="@array/easyss_proxyrule_list_value" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Outbound Protocol" />
-        <Spinner
-            android:id="@+id/profile_outbound"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/easyss_outbound_list"
-            android:entryValues="@array/easyss_outbound_list_value" />
-        
-        <com.google.android.material.textfield.TextInputLayout
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/delete_profile_button"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="Server Name Indication (SNI)">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_server_name_indication"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Custom CA (PEM format)">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_custom_ca"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="top"
-                android:inputType="textMultiLine"
-                android:minLines="3" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Direct Domains/IPs (one per line)">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_direct_file"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="top"
-                android:inputType="textMultiLine"
-                android:minLines="3" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Proxy Domains/IPs (one per line)">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/profile_proxy_file"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="top"
-                android:inputType="textMultiLine"
-                android:minLines="3" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Log Level" />
-        <Spinner
-            android:id="@+id/profile_log_level"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/easyss_loglevel_list"
-            android:entryValues="@array/easyss_loglevel_list_value" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Enable QUIC" />
-        <Spinner
-            android:id="@+id/profile_enable_quic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/easyss_enable_quic_list"
-            android:entryValues="@array/easyss_enable_quic_list_value" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="IPv6 Rule" />
-        <Spinner
-            android:id="@+id/profile_ipv6_rule"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/easyss_ipv6_rule_list"
-            android:entryValues="@array/easyss_ipv6_rule_value" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="24dp">
-
-            <Button
-                android:id="@+id/save_profile_button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Save" />
-
-            <Button
-                android:id="@+id/delete_profile_button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="Delete"
-                android:visibility="gone" />
-        </LinearLayout>
+            android:text="Delete"
+            android:textSize="15sp"
+            android:visibility="gone"
+            app:cornerRadius="16dp"
+            app:strokeColor="?attr/colorError"
+            android:textColor="?attr/colorError"
+            tools:visibility="visible" />
 
     </LinearLayout>
 </ScrollView>

@@ -62,7 +62,8 @@
         <activity
             android:name=".ServerProfileActivity"
             android:label="Server Profile"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".MainActivity" />

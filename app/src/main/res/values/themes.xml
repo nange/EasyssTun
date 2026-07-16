@@ -73,5 +73,12 @@
         <item name="android:backgroundTintMode">src_in</item>
     </style>
 
+    <style name="SectionLabel">
+        <item name="android:textAppearance">?textAppearanceLabelMedium</item>
+        <item name="android:textColor">?android:textColorSecondary</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+    </style>
+
 
 </resources>

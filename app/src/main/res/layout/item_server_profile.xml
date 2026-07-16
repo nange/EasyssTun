@@ -47,7 +47,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:src="@drawable/verified_user_24px"
-            android:tint="?attr/colorPrimary"
+            app:tint="?attr/colorPrimary"
             android:visibility="gone"
             android:contentDescription="Active" />
 
@@ -57,7 +57,7 @@
             android:layout_marginStart="4dp"
             android:src="@drawable/expand_more_24px"
             android:rotation="-90"
-            android:tint="?android:textColorTertiary"
+            app:tint="?android:textColorTertiary"
             android:alpha="0.6" />
 
     </LinearLayout>
