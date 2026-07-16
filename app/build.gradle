@@ -36,6 +36,11 @@ android {
         }
     }
 
+    lint {
+        checkDependencies = true
+        textReport = true
+    }
+
     buildTypes {
         debug {
             resValue "string", "app_name", "EasyssTun (Debug)"
