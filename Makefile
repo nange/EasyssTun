@@ -1,7 +1,7 @@
 .PHONY: lint test clean build check
 
 lint:
-	./gradlew lint
+	./gradlew lintDebug
 
 test:
 	./gradlew test
