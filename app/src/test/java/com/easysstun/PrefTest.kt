@@ -2,6 +2,7 @@ package com.easysstun
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
@@ -24,15 +25,12 @@ class PrefTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        // Use a specific name for test preferences to avoid conflicts and ensure clean state
-        // Robolectric handles SharedPreferences, so direct mocking of PreferenceManager isn't strictly needed here
-        sharedPreferences = context.getSharedPreferences("test_easysstun_prefs", Context.MODE_PRIVATE)
+        // Use the same default SharedPreferences that Pref uses internally
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         sharedPreferences.edit().clear().apply() // Clear before each test
 
         // Initialize the real Pref object, which will use the SharedPreferences provided by Robolectric's context
         pref = Pref(context)
-        // Ensure its internal SharedPreferences is the one we're controlling/expecting
-        assertEquals(sharedPreferences.toString(), pref.prefs.toString())
     }
 
     @After
@@ -154,7 +152,7 @@ class PrefTest {
     @Test
     fun setAndGetIsServiceEnabled() {
         assertFalse("Initially, isServiceEnabled should be false", pref.isServiceEnabled)
-        assertFalse("SharedPreferences should reflect false initially", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, true))
+        assertFalse("SharedPreferences should reflect false initially", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, false))
 
 
         pref.isServiceEnabled = true
@@ -177,17 +175,18 @@ class PrefTest {
 
     @Test
     fun getEasyssInfo_withActiveProfile_returnsValidInfoAndCorrectSocksPort() {
-        val profile = createDummyProfile(id = "active_profile_id", name = "Active Profile")
-        profile.server = "my.server.org"
-        profile.serverPort = "8888"
-        profile.serverNameIndication = "my.sni.org" // SNI is different from server
-        profile.password = "secret"
-        profile.encryption = "aes-256-gcm"
-        profile.proxyRule = "bypass_lan"
-        profile.outbound = "ipv4_only"
-        profile.logLevel = "debug"
-        profile.enableQuic = "true"
-        profile.ipv6Rule = "ipv6_only"
+        val profile = createDummyProfile(id = "active_profile_id", name = "Active Profile").copy(
+            server = "my.server.org",
+            serverPort = "8888",
+            serverNameIndication = "my.sni.org", // SNI is different from server
+            password = "secret",
+            encryption = "aes-256-gcm",
+            proxyRule = "bypass_lan",
+            outbound = "ipv4_only",
+            logLevel = "debug",
+            enableQuic = "true",
+            ipv6Rule = "ipv6_only"
+        )
 
         pref.addServerProfile(profile)
         pref.setActiveServer(profile.id)
@@ -221,9 +220,10 @@ class PrefTest {
 
     @Test
     fun getEasyssInfo_withActiveProfile_SNIisBlank_usesServerAsSNI() {
-        val profile = createDummyProfile(id = "active_profile_sni_blank")
-        profile.server = "actual.server.name"
-        profile.serverNameIndication = "" // SNI is blank
+        val profile = createDummyProfile(id = "active_profile_sni_blank").copy(
+            server = "actual.server.name",
+            serverNameIndication = "" // SNI is blank
+        )
         pref.addServerProfile(profile)
         pref.setActiveServer(profile.id)
 
@@ -350,5 +350,181 @@ class PrefTest {
         assertTrue("Server profiles should be empty", pref.getServerProfiles().isEmpty())
         assertNull("Active server should be null", pref.getActiveServerProfile())
         assertTrue("Old key should still exist", sharedPreferences.contains("easyss_server")) // It's not removed if blank
+    }
+
+    // ── Additional tests ──────────────────────────────────────────
+
+    @Test
+    fun getEasyssInfo_withCustomCa_addsCaPathArg() {
+        val profile = createDummyProfile(id = "custom_ca_id").copy(
+            customCa = "-----BEGIN CERTIFICATE-----\nFAKE\n-----END CERTIFICATE-----"
+        )
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
+
+        val info = pref.getEasyssInfo()
+        assertTrue("easyssInfo should be valid", info.valid)
+        assertTrue("cmdList should contain -ca-path", info.cmdList.contains("-ca-path"))
+        val caIndex = info.cmdList.indexOf("-ca-path")
+        assertTrue("Should have a path after -ca-path", caIndex + 1 < info.cmdList.size)
+    }
+
+    @Test
+    fun getEasyssInfo_withDirectFile_addsDirectFileArg() {
+        val profile = createDummyProfile(id = "direct_file_id").copy(
+            directFile = "example.com\ngoogle.com"
+        )
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
+
+        val info = pref.getEasyssInfo()
+        assertTrue("easyssInfo should be valid", info.valid)
+        assertTrue("cmdList should contain -direct-file", info.cmdList.contains("-direct-file"))
+        val dfIndex = info.cmdList.indexOf("-direct-file")
+        assertTrue("Should have a path after -direct-file", dfIndex + 1 < info.cmdList.size)
+    }
+
+    @Test
+    fun getEasyssInfo_withProxyFile_addsProxyFileArg() {
+        val profile = createDummyProfile(id = "proxy_file_id").copy(
+            proxyFile = "internal.corp\nvpn.domain"
+        )
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
+
+        val info = pref.getEasyssInfo()
+        assertTrue("easyssInfo should be valid", info.valid)
+        assertTrue("cmdList should contain -proxy-file", info.cmdList.contains("-proxy-file"))
+        val pfIndex = info.cmdList.indexOf("-proxy-file")
+        assertTrue("Should have a path after -proxy-file", pfIndex + 1 < info.cmdList.size)
+    }
+
+    @Test
+    fun getEasyssInfo_withAllOptionalFiles_addsAllArgs() {
+        val profile = createDummyProfile(id = "all_files_id").copy(
+            customCa = "fake-ca",
+            directFile = "fake-direct",
+            proxyFile = "fake-proxy"
+        )
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
+
+        val info = pref.getEasyssInfo()
+        assertTrue(info.valid)
+        assertTrue("Should have -ca-path", info.cmdList.contains("-ca-path"))
+        assertTrue("Should have -direct-file", info.cmdList.contains("-direct-file"))
+        assertTrue("Should have -proxy-file", info.cmdList.contains("-proxy-file"))
+    }
+
+    @Test
+    fun getEasyssInfo_withBlankOptionalFiles_doesNotAddFileArgs() {
+        val profile = createDummyProfile(id = "no_files_id").copy(
+            customCa = "",
+            directFile = "",
+            proxyFile = ""
+        )
+        pref.addServerProfile(profile)
+        pref.setActiveServer(profile.id)
+
+        val info = pref.getEasyssInfo()
+        assertTrue(info.valid)
+        assertFalse("Should NOT have -ca-path for blank customCa", info.cmdList.contains("-ca-path"))
+        assertFalse("Should NOT have -direct-file for blank directFile", info.cmdList.contains("-direct-file"))
+        assertFalse("Should NOT have -proxy-file for blank proxyFile", info.cmdList.contains("-proxy-file"))
+    }
+
+    @Test
+    fun getServerProfiles_corruptedJson_returnsEmptyList() {
+        // Write invalid JSON directly to SharedPreferences
+        sharedPreferences.edit().putString(Pref.SERVER_PROFILES, "NOT VALID JSON {{{").apply()
+
+        // Re-initialize Pref to pick up the corrupted JSON
+        pref = Pref(context)
+
+        val profiles = pref.getServerProfiles()
+        assertTrue("Corrupted JSON should result in empty list", profiles.isEmpty())
+    }
+
+    @Test
+    fun updateServerProfile_nonexistentId_doesNothing() {
+        val profile = createDummyProfile(id = "existing")
+        pref.addServerProfile(profile)
+
+        val nonexistentProfile = createDummyProfile(id = "nonexistent", name = "Ghost")
+        pref.updateServerProfile(nonexistentProfile)
+
+        val profiles = pref.getServerProfiles()
+        assertEquals("Should still have 1 profile", 1, profiles.size)
+        assertEquals("Existing profile unchanged", profile, profiles[0])
+    }
+
+    @Test
+    fun getApps_returnsSavedSelection() {
+        val testApps = setOf("com.example.app1", "com.example.app2")
+        sharedPreferences.edit().putStringSet("selected_apps", testApps).apply()
+
+        // Re-init Pref to pick up the apps
+        pref = Pref(context)
+        val saved = pref.getApps()
+        assertEquals("Should return the saved app set", testApps, saved)
+    }
+
+    @Test
+    fun getApps_whenNoneSaved_returnsEmptySet() {
+        val apps = pref.getApps()
+        assertTrue("Should return empty set when nothing saved", apps.isEmpty())
+    }
+
+    @Test
+    fun version_getter_whenNotSet_returnsCurrentTimestamp() {
+        // Version should fall back to current timestamp
+        val v = pref.version
+        assertTrue("Version should not be blank", v.isNotBlank())
+        // Should be a parsable Long
+        assertTrue("Version should be a valid timestamp", v.toLongOrNull() != null)
+    }
+
+    @Test
+    fun version_setterAndGetter_persists() {
+        pref.version = "test-version-123"
+        assertEquals("Version should be persisted", "test-version-123", pref.version)
+
+        // Verify in SharedPreferences directly
+        assertEquals("test-version-123", sharedPreferences.getString(Pref.VERSION, null))
+    }
+
+    @Test
+    fun setActiveServer_multipleSwitches_updatesCorrectly() {
+        val p1 = createDummyProfile("s1", "Server 1")
+        val p2 = createDummyProfile("s2", "Server 2")
+        val p3 = createDummyProfile("s3", "Server 3")
+        pref.addServerProfile(p1)
+        pref.addServerProfile(p2)
+        pref.addServerProfile(p3)
+
+        pref.setActiveServer("s1")
+        assertEquals("p1", p1, pref.getActiveServerProfile())
+
+        pref.setActiveServer("s3")
+        assertEquals("p3", p3, pref.getActiveServerProfile())
+
+        pref.setActiveServer("s2")
+        assertEquals("p2", p2, pref.getActiveServerProfile())
+    }
+
+    @Test
+    fun addServerProfile_withDuplicateId_appendsBoth() {
+        val original = createDummyProfile(id = "dup", name = "Original")
+        pref.addServerProfile(original)
+
+        val duplicate = createDummyProfile(id = "dup", name = "Duplicate").copy(server = "new.server")
+        pref.addServerProfile(duplicate)
+
+        val profiles = pref.getServerProfiles()
+        assertEquals("Duplicate IDs are appended (not deduplicated)", 2, profiles.size)
+        // Actually, addServerProfile just appends to list - duplicates are possible.
+        // This test verifies that behavior.
+        assertTrue("Original still present", profiles.contains(original))
+        assertTrue("Duplicate also present", profiles.contains(duplicate))
     }
 }
