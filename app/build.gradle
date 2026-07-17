@@ -30,7 +30,7 @@ android {
             release {
                 storeFile useLocalKeystore
                     ? file(keystoreProperties['storeFile'])
-                    : file(System.getenv("KEYSTORE_FILE") ?: "ci-keystore.jks")
+                    : rootProject.file(System.getenv("KEYSTORE_FILE") ?: "ci-keystore.jks")
                 storePassword useLocalKeystore
                     ? keystoreProperties['storePassword']
                     : System.getenv("KEYSTORE_PASSWORD")
