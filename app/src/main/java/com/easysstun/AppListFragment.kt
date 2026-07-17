@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import android.Manifest
 import android.content.pm.PackageInfo
 import android.text.Editable
-import android.widget.EditText
+import com.google.android.material.textfield.TextInputEditText
 import android.widget.ProgressBar
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +37,7 @@ class AppListFragment : Fragment() {
         recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = adapter
 
-        val searchEditText = view.findViewById<EditText>(R.id.searchEditText)
+        val searchEditText = view.findViewById<TextInputEditText>(R.id.searchEditText)
         searchEditText.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {

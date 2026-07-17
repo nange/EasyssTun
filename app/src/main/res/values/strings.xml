@@ -28,7 +28,7 @@
     <string name="applist_title">Choose Skip APPs</string>
     <string name="log_title">Easyss Log</string>
     <string name="easyss_configure_title">Easyss Configure</string>
-    <string name="route_desc">By default, EasysTun will skip LAN addresses and traffic for this application. At the same time, the applications selected above will also be skipped. \n\nTraffic other than the above situations will be taken over by Easyss.</string>
+    <string name="route_desc">EasyssTun will skip LAN traffic, and the apps selected above will also be skipped.\n\nOther traffic will be taken over by Easyss.</string>
     <string name="app_name_placeholder">PackageName</string>
     <string name="easyss_need_config">Easyss Server Not Configured</string>
 

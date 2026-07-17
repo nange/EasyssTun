@@ -27,7 +27,7 @@
     <string name="applist_title">选择跳过的应用</string>
     <string name="log_title">Easyss 日志</string>
     <string name="easyss_configure_title">Easyss 配置</string>
-    <string name="route_desc">默认情况下，EasysTun 将会跳过局域网地址以及本应用的流量。 同时以上选中的应用也会跳过。\n\n除以上情况外的流量将由 Easyss 接管。</string>
+    <string name="route_desc">EasyssTun会跳过局域网流量，同时以上选中的应用也会跳过。\n\n除以上情况外的流量将由Easyss接管。</string>
     <string name="app_name_placeholder">应用名</string>
     <string name="easyss_need_config">Easyss 服务未配置</string>
 
