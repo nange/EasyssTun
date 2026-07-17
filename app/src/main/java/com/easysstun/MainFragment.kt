@@ -186,7 +186,7 @@ class MainFragment : Fragment() {
                     else -> false
                 }
             }
-        })
+        }, viewLifecycleOwner)
         updateServiceStatu(view)
         updateVersionInfo(view)
 
