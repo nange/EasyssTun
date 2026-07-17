@@ -348,7 +348,7 @@ socks5:
             Log.d(TAG, "stopService: called but appears already stopped or not fully started.")
             // It's possible actualFinalizeStop() was not called if a previous stop was interrupted.
             // Check pref state and call actualFinalizeStop if needed, or just return.
-            if(pref.isServiceEnabled || tunFd != null) { // If state indicates it might still be "on"
+            if(::pref.isInitialized && pref.isServiceEnabled || tunFd != null) { // If state indicates it might still be "on"
                  Log.w(TAG, "stopService: State indicates service might be partially running despite checks. Forcing finalization.")
                  actualFinalizeStop() // Ensure it's fully stopped.
             }
