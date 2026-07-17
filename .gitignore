@@ -18,3 +18,8 @@ kotlin-profile
 .vscode
 .kotlin
 .zcode
+
+# signing
+keystore.properties
+*.jks
+*.keystore
