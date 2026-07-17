@@ -15,6 +15,11 @@ if (useLocalKeystore) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+// 版本号（手动维护 version.properties）
+def versionPropsFile = rootProject.file("version.properties")
+def versionProps = new Properties()
+versionProps.load(new FileInputStream(versionPropsFile))
+
 android {
     namespace = 'com.easysstun'
     compileSdk = 37
@@ -43,8 +48,8 @@ android {
         applicationId = "com.easysstun"
         minSdk = 33
         targetSdk 37
-        versionCode = 144
-        versionName = "3.0.0-rc7"
+        versionCode = versionProps['versionCode'].toInteger()
+        versionName = versionProps['versionName']
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
