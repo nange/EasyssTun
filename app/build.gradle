@@ -42,7 +42,7 @@ android {
         applicationId = "com.easysstun"
         minSdk = 33
         targetSdk 37
-        versionCode = 143
+        versionCode = 144
         versionName = "3.0.0-rc7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
