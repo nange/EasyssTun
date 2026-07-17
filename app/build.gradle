@@ -9,6 +9,7 @@ plugins {
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 def useLocalKeystore = keystorePropertiesFile.exists()
+def useCiKeystore = System.getenv("KEYSTORE_PASSWORD") != null
 
 if (useLocalKeystore) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
@@ -19,7 +20,7 @@ android {
     compileSdk = 37
 
     // 签名配置（本地 keystore.properties 或 CI 环境变量）
-    if (useLocalKeystore || System.getenv("KEYSTORE_BASE64") != null) {
+    if (useLocalKeystore || useCiKeystore) {
         signingConfigs {
             release {
                 storeFile useLocalKeystore
@@ -77,8 +78,7 @@ android {
         }
         release {
             resValue "string", "app_name", "EasyssTun"
-            // 有签名配置时才应用
-            if (signingConfigs.hasProperty("release")) {
+            if (useLocalKeystore || useCiKeystore) {
                 signingConfig = signingConfigs.release
             }
         }
