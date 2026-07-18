@@ -705,10 +705,10 @@ class MainFragment : Fragment() {
         statsPollingJob =
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                     // Fetch immediately on service start for quick display
-                    delay(1_000) // brief wait for stats endpoint to be ready
+                    delay(2_000) // brief wait for stats endpoint to be ready
                     fetchAndUpdateStats()
                     while (isActive) {
-                        delay(60_000) // poll every 1 minute
+                        delay(15_000) // poll every 15 seconds
                         fetchAndUpdateStats()
                     }
                 }
