@@ -24,7 +24,7 @@ class LogViewModelTest {
     @Test
     fun addLog_singleItem_appendsToList() {
         val viewModel = LogViewModel()
-        val logItem = LogItem("Test message", "12:00:00", "source1")
+        val logItem = LogItem("Test message", "12:00:00", "source1", "INFO")
 
         viewModel.addLog(logItem)
 
@@ -33,14 +33,15 @@ class LogViewModelTest {
         assertEquals("Message should match", "Test message", items?.get(0)?.message)
         assertEquals("Time should match", "12:00:00", items?.get(0)?.time)
         assertEquals("Source should match", "source1", items?.get(0)?.source)
+        assertEquals("Level should match", "INFO", items?.get(0)?.level)
     }
 
     @Test
     fun addLog_multipleItems_preservesOrder() {
         val viewModel = LogViewModel()
-        val item1 = LogItem("First", "12:00:00", "src-a")
-        val item2 = LogItem("Second", "12:00:01", "src-b")
-        val item3 = LogItem("Third", "12:00:02", "src-c")
+        val item1 = LogItem("First", "12:00:00", "src-a", "INFO")
+        val item2 = LogItem("Second", "12:00:01", "src-b", "WARN")
+        val item3 = LogItem("Third", "12:00:02", "src-c", "DEBUG")
 
         viewModel.addLog(item1)
         viewModel.addLog(item2)
@@ -56,8 +57,8 @@ class LogViewModelTest {
     @Test
     fun clearLogs_removesAllItems() {
         val viewModel = LogViewModel()
-        viewModel.addLog(LogItem("msg1", "12:00", "src1"))
-        viewModel.addLog(LogItem("msg2", "12:01", "src2"))
+        viewModel.addLog(LogItem("msg1", "12:00", "src1", "INFO"))
+        viewModel.addLog(LogItem("msg2", "12:01", "src2", "WARN"))
 
         assertEquals("Should have 2 items before clear", 2, viewModel.logItems.value?.size)
 
@@ -71,9 +72,9 @@ class LogViewModelTest {
     @Test
     fun addLog_afterClear_startsWithFreshList() {
         val viewModel = LogViewModel()
-        viewModel.addLog(LogItem("old", "12:00", "src"))
+        viewModel.addLog(LogItem("old", "12:00", "src", "INFO"))
         viewModel.clearLogs()
-        viewModel.addLog(LogItem("new", "12:01", "src2"))
+        viewModel.addLog(LogItem("new", "12:01", "src2", "ERROR"))
 
         val items = viewModel.logItems.value
         assertEquals("Should have 1 item after clear + add", 1, items?.size)
@@ -82,10 +83,11 @@ class LogViewModelTest {
 
     @Test
     fun logItem_dataClass_holdsValues() {
-        val item = LogItem("test msg", "13:45:00", "test-source")
+        val item = LogItem("test msg", "13:45:00", "test-source", "INFO")
 
         assertEquals("test msg", item.message)
         assertEquals("13:45:00", item.time)
         assertEquals("test-source", item.source)
+        assertEquals("INFO", item.level)
     }
 }

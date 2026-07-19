@@ -37,8 +37,39 @@ class LogFragment : Fragment() {
     private var changingState = false
 
     companion object {
-        private val LOG_PATTERN =
-            Pattern.compile("\\s(\\d{2}:\\d{2}:\\d{2})\\.\\d{3}.*source=(.*) msg=(.*)")
+        // Pattern A: Go slog format within the logcat message payload
+        // Matches: time=... level=... source=... msg=...
+        private val LOG_PATTERN_SLOG =
+            Pattern.compile("time=([^ ]+) level=([^ ]+) source=([^ ]+) msg=(.*)")
+
+        // Pattern B: Fallback for TProxyService direct log lines
+        // Captures logcat wrapper: date, time, level char, and msg=... content
+        private val LOG_PATTERN_FALLBACK =
+            Pattern.compile("^(\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+easyss\\s+:\\s+msg=(.*)$")
+
+        /**
+         * Convert ISO 8601 timestamp to display format: "MM-DD HH:MM:SS.mmm"
+         * Input:  "2026-07-19T19:08:48.135+08:00"
+         * Output: "07-19 19:08:48.135"
+         */
+        fun formatTime(isoTime: String): String {
+            val t = isoTime.indexOf('T')
+            if (t < 0) return isoTime
+            val datePart = isoTime.substring(5, 10)  // "07-19"
+            val timePart = isoTime.substring(t + 1).takeWhile { c -> c != '+' && c != '-' && c != 'Z' }
+            return "$datePart $timePart"
+        }
+
+        /** Map logcat level character to readable level string. */
+        fun mapLevelChar(c: String): String = when (c) {
+            "V" -> "VERBOSE"
+            "D" -> "DEBUG"
+            "I" -> "INFO"
+            "W" -> "WARN"
+            "E" -> "ERROR"
+            "F" -> "FATAL"
+            else -> c
+        }
     }
 
 
@@ -121,13 +152,29 @@ class LogFragment : Fragment() {
                 while (isActive) {
                     val line: String? = bufferedReader.readLine()
                     if (line != null) {
-                        val matcher = LOG_PATTERN.matcher(line)
+                        // Try Go slog pattern first
+                        var matcher = LOG_PATTERN_SLOG.matcher(line)
                         if (matcher.find()) {
-                            val timestampString = matcher.group(1)
-                            val source = matcher.group(2)
-                            val msg = matcher.group(3)
-                            val logItem = LogItem(msg ?: "", timestampString ?: "", source ?: "")
+                            val isoTime = matcher.group(1) ?: ""
+                            val level = matcher.group(2) ?: ""
+                            val source = matcher.group(3) ?: ""
+                            val msg = matcher.group(4) ?: ""
+                            val displayTime = formatTime(isoTime)
+                            val logItem = LogItem(msg, displayTime, source, level)
                             logViewModel.addLog(logItem)
+                        } else {
+                            // Try fallback pattern for TProxyService lines
+                            matcher = LOG_PATTERN_FALLBACK.matcher(line)
+                            if (matcher.find()) {
+                                val logDate = matcher.group(1) ?: ""
+                                val logTime = matcher.group(2) ?: ""
+                                val levelChar = matcher.group(3) ?: ""
+                                val msg = matcher.group(4) ?: ""
+                                val displayTime = "$logDate $logTime"
+                                val level = mapLevelChar(levelChar)
+                                val logItem = LogItem(msg, displayTime, "", level)
+                                logViewModel.addLog(logItem)
+                            }
                         }
                     }
                 }
@@ -168,21 +215,26 @@ class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
     }
 
     class LogViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val logTextView: TextView = itemView.findViewById(R.id.logTextView)
         private val logTimestampTextView: TextView =
             itemView.findViewById(R.id.logTimestampTextView)
-        private val logSourceTextView: TextView = itemView.findViewById(R.id.logSourceTextView)
+        private val logLevelTextView: TextView =
+            itemView.findViewById(R.id.logLevelTextView)
+        private val logSourceTextView: TextView =
+            itemView.findViewById(R.id.logSourceTextView)
+        private val logMessageTextView: TextView =
+            itemView.findViewById(R.id.logMessageTextView)
 
         fun bind(logItem: LogItem) {
-            logTextView.text = logItem.message
             logTimestampTextView.text = logItem.time
+            logLevelTextView.text = logItem.level
             logSourceTextView.text = logItem.source
+            logMessageTextView.text = logItem.message
         }
     }
 }
 
 
-data class LogItem(val message: String, var time: String, var source: String)
+data class LogItem(val message: String, var time: String, var source: String, var level: String)
 
 class LogViewModel : ViewModel() {
     private val _logItems = MutableLiveData<List<LogItem>>()
