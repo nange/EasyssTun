@@ -2,18 +2,18 @@
 
 > **Note:** 此仓库 fork 自 [bingooo/EasyssTun](https://github.com/bingooo/EasyssTun)。
 
-A simple and lightweight VPN over [easyss](https://github.com/nange/easyss) proxy for Android. It is based on a high-performance and low-overhead [tun2socks](https://github.com/heiher/hev-socks5-tunnel).
+基于 [easyss](https://github.com/nange/easyss) 代理的轻量级 Android VPN，底层使用高性能、低开销的 [tun2socks](https://github.com/heiher/hev-socks5-tunnel) 实现。
 
 
-## How to Build
+## 构建方式
 
 ```bash
-git clone --recursive git@github.com:nange/EasyssTun.git
+git clone --recursive https://github.com/nange/EasyssTun.git
 cd EasyssTun
-gradle assembleDebug
+make build
 ```
 
-## Update Submodule 
+## 更新子模块 
 
 ```bash
 git submodule update --init --recursive
@@ -25,7 +25,7 @@ git submodule update | git pull --recurse-submodules
 
 ---------------
 git add path/to/submodule
-git commit -m "Updated submodule to <version>"
+git commit -m "更新子模块至 <version>"
 
 git push origin <path>
 ```
