@@ -54,6 +54,7 @@ class MainFragment : Fragment() {
     private lateinit var easyssInfo: easyssInfo
 
     private var statsPollingJob: Job? = null
+    private var statsHadSuccessfulFetch: Boolean = false
 
     private var pendingServerProfileId: String? = null
     private var isSwitchingServer: Boolean = false
@@ -667,6 +668,7 @@ class MainFragment : Fragment() {
             else -> { // Service is OFF (pref.isServiceEnabled == false)
                 stopVPNService() // Ensure service is actually stopped
                 stopStatsPolling()
+                statsHadSuccessfulFetch = false
                 service_button.text = getString(R.string.service_enable)
                 service_card.setCardBackgroundColor(
                         mContext.getColor(R.color.home_card_background_color)
@@ -704,8 +706,10 @@ class MainFragment : Fragment() {
         view?.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.VISIBLE
         statsPollingJob =
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                    // Fetch immediately on service start for quick display
-                    delay(2_000) // brief wait for stats endpoint to be ready
+                    // Only delay on initial service start; skip delay when returning to this screen
+                    if (!statsHadSuccessfulFetch) {
+                        delay(2_000) // brief wait for stats endpoint to be ready
+                    }
                     fetchAndUpdateStats()
                     while (isActive) {
                         delay(15_000) // poll every 15 seconds
@@ -740,6 +744,7 @@ class MainFragment : Fragment() {
             val body = conn.inputStream.bufferedReader().use { it.readText() }
 
             val json = JSONObject(body)
+            statsHadSuccessfulFetch = true
             withContext(Dispatchers.Main) { updateStatsDisplay(json) }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch stats: ${e.message}")
