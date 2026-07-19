@@ -7,9 +7,9 @@
 ## APP截图
 
 <div align="center">
-  <img src="assets/app1.jpg" width="45%" alt="App Screenshot 1" />
+  <img src="assets/app1.jpg" width="30%" alt="App Screenshot 1" />
   &nbsp;&nbsp;
-  <img src="assets/app2.jpg" width="45%" alt="App Screenshot 2" />
+  <img src="assets/app2.jpg" width="30%" alt="App Screenshot 2" />
 </div>
 
 ## 构建方式
@@ -19,6 +19,8 @@ git clone --recursive https://github.com/nange/EasyssTun.git
 cd EasyssTun
 make build
 ```
+
+也可直接在Release页面下载编译好的APK文件。
 
 ## 更新子模块 
 
