@@ -153,3 +153,95 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }
 
+// ---------------------------------------------------------------------------
+// Auto-download libeasyss.so from nange/easyss latest GitHub release
+// if it doesn't exist locally (e.g., in CI / fresh checkout).
+// ---------------------------------------------------------------------------
+task downloadLibeasyssSo {
+    def targetDir = file("src/main/jniLibs/arm64-v8a")
+    def targetFile = file("${targetDir}/libeasyss.so")
+
+    onlyIf {
+        !targetFile.exists()
+    }
+
+    doLast {
+        logger.lifecycle("libeasyss.so not found locally, downloading from latest release...")
+
+        targetDir.mkdirs()
+
+        // 1. Fetch latest release info from GitHub API
+        def apiUrl = "https://api.github.com/repos/nange/easyss/releases/latest"
+        def connection = new URL(apiUrl).openConnection()
+        connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+
+        // Use GITHUB_TOKEN for authenticated requests (avoids rate limiting)
+        def githubToken = System.getenv("GITHUB_TOKEN")
+        if (githubToken) {
+            connection.setRequestProperty("Authorization", "Bearer ${githubToken}")
+        }
+
+        def responseText = connection.content.text
+        def json = new groovy.json.JsonSlurper().parseText(responseText)
+
+        // 2. Find the asset "libeasyss-arm64.so.zip"
+        def asset = json.assets.find { it.name == "libeasyss-arm64.so.zip" }
+        if (!asset) {
+            throw new GradleException(
+                "Asset 'libeasyss-arm64.so.zip' not found in latest release (${json.tag_name}). " +
+                "Available assets: ${json.assets.collect { it.name }}"
+            )
+        }
+
+        def downloadUrl = asset.browser_download_url
+        logger.lifecycle("Found asset in release ${json.tag_name}, downloading from ${downloadUrl}")
+
+        // 3. Download the zip to a temp file
+        def zipFile = File.createTempFile("libeasyss-arm64", ".so.zip")
+        try {
+            new URL(downloadUrl).openStream().withStream { input ->
+                zipFile.withOutputStream { output ->
+                    output << input
+                }
+            }
+
+            // 4. Extract libeasyss.so from the zip
+            def zipStream = new java.util.zip.ZipInputStream(new FileInputStream(zipFile))
+            try {
+                def found = false
+                def entry
+                while ((entry = zipStream.nextEntry) != null) {
+                    if (entry.name == "libeasyss-arm64.so") {
+                        targetFile.withOutputStream { out ->
+                            def buffer = new byte[8192]
+                            int len
+                            while ((len = zipStream.read(buffer)) > 0) {
+                                out.write(buffer, 0, len)
+                            }
+                        }
+                        found = true
+                        break
+                    }
+                    zipStream.closeEntry()
+                }
+
+                if (!found) {
+                    throw new GradleException("libeasyss-arm64.so not found inside the downloaded zip file")
+                }
+            } finally {
+                zipStream.close()
+            }
+
+            logger.lifecycle("Successfully downloaded libeasyss.so (release: ${json.tag_name})")
+        } finally {
+            zipFile.delete()
+        }
+    }
+}
+
+// Only trigger download for actual debug/release builds (not lint/test)
+afterEvaluate {
+    tasks.named('mergeDebugJniLibFolders').configure { dependsOn downloadLibeasyssSo }
+    tasks.named('mergeReleaseJniLibFolders').configure { dependsOn downloadLibeasyssSo }
+}
+

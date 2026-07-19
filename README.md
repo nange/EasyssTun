@@ -4,6 +4,13 @@
 
 基于 [easyss](https://github.com/nange/easyss) 代理的轻量级 Android VPN，底层使用高性能、低开销的 [tun2socks](https://github.com/heiher/hev-socks5-tunnel) 实现。
 
+## APP截图
+
+<div align="center">
+  <img src="assets/app1.jpg" width="45%" alt="App Screenshot 1" />
+  &nbsp;&nbsp;
+  <img src="assets/app2.jpg" width="45%" alt="App Screenshot 2" />
+</div>
 
 ## 构建方式
 
