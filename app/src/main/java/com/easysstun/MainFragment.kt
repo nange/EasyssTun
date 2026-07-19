@@ -756,8 +756,10 @@ class MainFragment : Fragment() {
         v.findViewById<TextView>(R.id.stats_conns)?.text = ""
         v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = ""
         v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = ""
-        v.findViewById<TextView>(R.id.stats_streams_opened)?.text = ""
-        v.findViewById<TextView>(R.id.stats_streams_closed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_priority_conns)?.text = ""
+        v.findViewById<TextView>(R.id.stats_bulk_conns)?.text = ""
+        v.findViewById<TextView>(R.id.stats_priority_active_streams)?.text = ""
+        v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text = ""
         v.findViewById<TextView>(R.id.stats_uptime)?.text = ""
         v.findViewById<TextView>(R.id.stats_active_streams)?.text = ""
     }
@@ -770,8 +772,10 @@ class MainFragment : Fragment() {
         val conns = json.optInt("conns", 0)
         val sent = json.optLong("bytes_sent", 0)
         val recv = json.optLong("bytes_recv", 0)
-        val opened = json.optLong("total_streams_opened", 0)
-        val closed = json.optLong("total_streams_closed", 0)
+        val priorityConns = json.optInt("priority_conns", 0)
+        val bulkConns = json.optInt("bulk_conns", 0)
+        val priorityActive = json.optInt("priority_active_streams", 0)
+        val bulkActive = json.optInt("bulk_active_streams", 0)
         val uptime = json.optDouble("uptime_seconds", 0.0)
         val active = json.optInt("active_streams", 0)
 
@@ -783,10 +787,14 @@ class MainFragment : Fragment() {
                 getString(R.string.stats_bytes_sent_fmt, formatBytes(sent))
         v.findViewById<TextView>(R.id.stats_bytes_recv)?.text =
                 getString(R.string.stats_bytes_recv_fmt, formatBytes(recv))
-        v.findViewById<TextView>(R.id.stats_streams_opened)?.text =
-                getString(R.string.stats_streams_opened_fmt, opened.toString())
-        v.findViewById<TextView>(R.id.stats_streams_closed)?.text =
-                getString(R.string.stats_streams_closed_fmt, closed.toString())
+        v.findViewById<TextView>(R.id.stats_priority_conns)?.text =
+                getString(R.string.stats_priority_conns_fmt, priorityConns.toString())
+        v.findViewById<TextView>(R.id.stats_bulk_conns)?.text =
+                getString(R.string.stats_bulk_conns_fmt, bulkConns.toString())
+        v.findViewById<TextView>(R.id.stats_priority_active_streams)?.text =
+                getString(R.string.stats_priority_active_streams_fmt, priorityActive.toString())
+        v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text =
+                getString(R.string.stats_bulk_active_streams_fmt, bulkActive.toString())
         v.findViewById<TextView>(R.id.stats_uptime)?.text =
                 getString(R.string.stats_uptime_fmt, formatDuration(uptime))
         v.findViewById<TextView>(R.id.stats_active_streams)?.text =

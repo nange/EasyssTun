@@ -18,8 +18,10 @@
     <string name="stats_unavailable">统计信息不可用</string>
     <string name="stats_avg_rtt_ms_fmt">请求延迟: %s</string>
     <string name="stats_conns_fmt">TCP连接数: %s</string>
-    <string name="stats_streams_opened_fmt">已建立流: %s</string>
-    <string name="stats_streams_closed_fmt">已关闭流: %s</string>
+    <string name="stats_priority_conns_fmt">优先连接数: %s</string>
+    <string name="stats_bulk_conns_fmt">普通连接数: %s</string>
+    <string name="stats_priority_active_streams_fmt">优先活跃流: %s</string>
+    <string name="stats_bulk_active_streams_fmt">普通活跃流: %s</string>
     <string name="stats_bytes_sent_fmt">发送流量: %s</string>
     <string name="stats_bytes_recv_fmt">接收流量: %s</string>
     <string name="stats_uptime_fmt">运行时长: %s</string>

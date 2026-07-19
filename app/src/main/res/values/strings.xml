@@ -19,8 +19,10 @@
     <string name="stats_unavailable">Statistics not available</string>
     <string name="stats_avg_rtt_ms_fmt">RTT: %s</string>
     <string name="stats_conns_fmt">Conns: %s</string>
-    <string name="stats_streams_opened_fmt">Streams Opened: %s</string>
-    <string name="stats_streams_closed_fmt">Streams Closed: %s</string>
+    <string name="stats_priority_conns_fmt">Priority Conns: %s</string>
+    <string name="stats_bulk_conns_fmt">Bulk Conns: %s</string>
+    <string name="stats_priority_active_streams_fmt">Priority Active: %s</string>
+    <string name="stats_bulk_active_streams_fmt">Bulk Active: %s</string>
     <string name="stats_bytes_sent_fmt">Sent: %s</string>
     <string name="stats_bytes_recv_fmt">Received: %s</string>
     <string name="stats_uptime_fmt">Uptime: %s</string>
