@@ -29,6 +29,7 @@ class AppListAdapter(
     private var allApps: List<PackageInfo> = emptyList()
     private var filterJob: kotlinx.coroutines.Job? = null
     private var saveJob: kotlinx.coroutines.Job? = null
+    private var proxyMode: String = Pref.PROXY_MODE_BYPASS
 
     private val differ = AsyncListDiffer(this, DIFF_CALLBACK)
 
@@ -38,7 +39,24 @@ class AppListAdapter(
     }
 
     init {
-        val savedApps = sharedPreferences.getStringSet(Pref.SELECTED_APPS, emptySet())
+        loadSelectedApps()
+    }
+
+    fun setProxyMode(mode: String) {
+        if (proxyMode != mode) {
+            proxyMode = mode
+            loadSelectedApps()
+            notifyItemRangeChanged(0, differ.currentList.size)
+        }
+    }
+
+    private fun getSelectedAppsKey(): String {
+        return if (proxyMode == Pref.PROXY_MODE_PROXY_ONLY) Pref.SELECTED_APPS_PROXY_ONLY else Pref.SELECTED_APPS_BYPASS
+    }
+
+    private fun loadSelectedApps() {
+        selectedApps.clear()
+        val savedApps = sharedPreferences.getStringSet(getSelectedAppsKey(), emptySet())
         selectedApps.addAll(savedApps ?: emptySet())
     }
 
@@ -82,17 +100,26 @@ class AppListAdapter(
     }
 
     private fun saveSelectedApps() {
+        // Use commit() for synchronous disk write to avoid race conditions
+        val key = getSelectedAppsKey()
+        val apps = selectedApps.toSet()
+        Log.i("AppListAdapter", "Saving $apps to key=$key (commit)")
+        sharedPreferences.edit(commit = true) { putStringSet(key, apps) }
+        // Debounce only the broadcast to avoid rapid VPN restarts
         saveJob?.cancel()
         saveJob = lifecycleScope.launch {
             delay(300)
-            sharedPreferences.edit { putStringSet(Pref.SELECTED_APPS, selectedApps.toSet()) }
-
             val intent = Intent(Pref.PREFS_UPDATED).apply {
-                // Ensure the broadcast targets only this app's non-exported receiver
                 setPackage(context.packageName)
             }
             context.sendBroadcast(intent)
         }
+    }
+
+    fun clearAllSelected() {
+        selectedApps.clear()
+        saveSelectedApps()
+        notifyItemRangeChanged(0, differ.currentList.size)
     }
 
     inner class AppViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

@@ -26,8 +26,18 @@
     <string name="stats_bytes_recv_fmt">接收流量: %s</string>
     <string name="stats_uptime_fmt">运行时长: %s</string>
     <string name="stats_active_streams_fmt">活跃数据流: %s</string>
-    <string name="applist_title">选择跳过的应用</string>
+    <string name="applist_title">应用代理设置</string>
     <string name="log_title">Easyss 日志</string>
+
+    <!-- 应用代理模式 -->
+    <string name="mode_bypass_selected">绕过已选</string>
+    <string name="mode_proxy_only_selected">仅代理已选</string>
+    <string name="mode_bypass_desc">勾选的应用将绕过代理，其他应用走代理。</string>
+    <string name="mode_proxy_only_desc">仅勾选的应用走代理，其他应用绕过代理。</string>
+    <string name="proxied_app_list">已配置代理 %s 个应用</string>
+    <string name="choose_app_to_proxy">点按配置代理的应用</string>
+    <string name="route_desc_proxy_only">仅以上选中的应用会通过 Easyss 代理。\n\n其他应用将直连。</string>
+    <string name="clear_all_selected">清空已选</string>
     <string name="easyss_configure_title">Easyss 配置</string>
     <string name="route_desc">EasyssTun会跳过局域网流量，同时以上选中的应用也会跳过。\n\n除以上情况外的流量将由Easyss接管。</string>
     <string name="app_name_placeholder">应用名</string>

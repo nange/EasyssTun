@@ -237,6 +237,7 @@ class MainFragment : Fragment() {
         view?.let {
             updateServerSpinner(it)
             it.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = !isSwitchingServer
+            updateAppListCard(it)
         }
     }
 
@@ -403,9 +404,32 @@ class MainFragment : Fragment() {
         // For now, assuming it's only used for the listener which is now part of
         // updateServerSpinner.
 
-        val selected_apps = pref.getApps()
+        val selected_apps = pref.getAppsForMode(pref.getProxyMode())
+        val proxyMode = pref.getProxyMode()
+        val isProxyOnly = proxyMode == Pref.PROXY_MODE_PROXY_ONLY
+
         view.findViewById<TextView>(R.id.text1).let {
-            it.text = getString(R.string.skipped_app_list, selected_apps.size.toString())
+            it.text = if (isProxyOnly) {
+                getString(R.string.proxied_app_list, selected_apps.size.toString())
+            } else {
+                getString(R.string.skipped_app_list, selected_apps.size.toString())
+            }
+        }
+
+        view.findViewById<TextView>(android.R.id.text2).let {
+            it.text = if (isProxyOnly) {
+                getString(R.string.choose_app_to_proxy)
+            } else {
+                getString(R.string.choose_app_to_bypass)
+            }
+        }
+
+        view.findViewById<TextView>(R.id.route_desc).let {
+            it.text = if (isProxyOnly) {
+                getString(R.string.route_desc_proxy_only)
+            } else {
+                getString(R.string.route_desc)
+            }
         }
 
         if (easyssInfo.valid) {
@@ -429,6 +453,36 @@ class MainFragment : Fragment() {
                 val updatingText = getString(R.string.stats_updating)
                 view.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = updatingText
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) { fetchAndUpdateStats() }
+            }
+        }
+    }
+
+    private fun updateAppListCard(view: View) {
+        val proxyMode = pref.getProxyMode()
+        val selectedApps = pref.getAppsForMode(proxyMode)
+        val isProxyOnly = proxyMode == Pref.PROXY_MODE_PROXY_ONLY
+
+        view.findViewById<TextView>(R.id.text1)?.let {
+            it.text = if (isProxyOnly) {
+                getString(R.string.proxied_app_list, selectedApps.size.toString())
+            } else {
+                getString(R.string.skipped_app_list, selectedApps.size.toString())
+            }
+        }
+
+        view.findViewById<TextView>(android.R.id.text2)?.let {
+            it.text = if (isProxyOnly) {
+                getString(R.string.choose_app_to_proxy)
+            } else {
+                getString(R.string.choose_app_to_bypass)
+            }
+        }
+
+        view.findViewById<TextView>(R.id.route_desc)?.let {
+            it.text = if (isProxyOnly) {
+                getString(R.string.route_desc_proxy_only)
+            } else {
+                getString(R.string.route_desc)
             }
         }
     }
@@ -545,6 +599,13 @@ class MainFragment : Fragment() {
                 // For non-receiver calls, if no profile, probably shouldn't start.
                 return
             }
+
+            // Pass proxy mode and selected apps via Intent to avoid multi-process SharedPreferences issues
+            val proxyMode = pref.getProxyMode()
+            val selectedApps = ArrayList(pref.getAppsForMode(proxyMode))
+            intent2.putExtra(TProxyService.EXTRA_PROXY_MODE, proxyMode)
+            intent2.putStringArrayListExtra(TProxyService.EXTRA_SELECTED_APPS, selectedApps)
+            Log.d(TAG, "startVPNService: proxyMode=$proxyMode, selectedApps=$selectedApps")
 
             mContext.startService(intent2.setAction(TProxyService.ACTION_CONNECT))
         } catch (e: Exception) {

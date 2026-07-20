@@ -27,8 +27,18 @@
     <string name="stats_bytes_recv_fmt">Received: %s</string>
     <string name="stats_uptime_fmt">Uptime: %s</string>
     <string name="stats_active_streams_fmt">Active: %s</string>
-    <string name="applist_title">Choose Skip APPs</string>
+    <string name="applist_title">App Proxy Settings</string>
     <string name="log_title">Easyss Log</string>
+
+    <!-- App proxy mode -->
+    <string name="mode_bypass_selected">Bypass Selected</string>
+    <string name="mode_proxy_only_selected">Proxy Only Selected</string>
+    <string name="mode_bypass_desc">Checked apps will bypass the proxy. All other apps go through the proxy.</string>
+    <string name="mode_proxy_only_desc">Only checked apps will go through the proxy. All other apps bypass.</string>
+    <string name="proxied_app_list">Proxy %s Applications</string>
+    <string name="choose_app_to_proxy">Tap to select PROXY applications.</string>
+    <string name="route_desc_proxy_only">Only the apps selected above will go through Easyss proxy.\n\nAll other apps will connect directly.</string>
+    <string name="clear_all_selected">Clear All</string>
     <string name="easyss_configure_title">Easyss Configure</string>
     <string name="route_desc">EasyssTun will skip LAN traffic, and the apps selected above will also be skipped.\n\nOther traffic will be taken over by Easyss.</string>
     <string name="app_name_placeholder">PackageName</string>

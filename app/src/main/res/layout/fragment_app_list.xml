@@ -4,6 +4,56 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/proxyModeToggleGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        app:singleSelection="true"
+        app:selectionRequired="true"
+        app:checkedButton="@id/btnBypassMode">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBypassMode"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_bypass_selected" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnProxyOnlyMode"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_proxy_only_selected" />
+
+    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    <TextView
+        android:id="@+id/modeDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="4dp"
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray"
+        android:text="@string/mode_bypass_desc" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnClearAll"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginEnd="8dp"
+        android:text="@string/clear_all_selected" />
+
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchInputLayout"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"

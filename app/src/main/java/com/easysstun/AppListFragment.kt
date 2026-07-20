@@ -1,6 +1,5 @@
 package com.easysstun
 
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -12,8 +11,11 @@ import androidx.recyclerview.widget.RecyclerView
 import android.Manifest
 import android.content.pm.PackageInfo
 import android.text.Editable
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,7 +34,10 @@ class AppListFragment : Fragment() {
         recyclerView = view.findViewById(R.id.recyclerView)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
+        val pref = Pref(requireContext())
+
         adapter = AppListAdapter(requireContext(), lifecycleScope)
+        adapter.setProxyMode(pref.getProxyMode())
         // Avoid overly large recycled view pool for a simple item layout
         recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = adapter
@@ -45,6 +50,44 @@ class AppListFragment : Fragment() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+
+        val toggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.proxyModeToggleGroup)
+        val modeDescription = view.findViewById<TextView>(R.id.modeDescription)
+
+        // Initialize toggle state WITHOUT triggering the listener
+        val currentMode = pref.getProxyMode()
+        toggleGroup.clearOnButtonCheckedListeners()
+        if (currentMode == Pref.PROXY_MODE_PROXY_ONLY) {
+            toggleGroup.check(R.id.btnProxyOnlyMode)
+            modeDescription.text = getString(R.string.mode_proxy_only_desc)
+        } else {
+            toggleGroup.check(R.id.btnBypassMode)
+            modeDescription.text = getString(R.string.mode_bypass_desc)
+        }
+        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                when (checkedId) {
+                    R.id.btnBypassMode -> {
+                        pref.setProxyMode(Pref.PROXY_MODE_BYPASS)
+                        modeDescription.text = getString(R.string.mode_bypass_desc)
+                    }
+                    R.id.btnProxyOnlyMode -> {
+                        pref.setProxyMode(Pref.PROXY_MODE_PROXY_ONLY)
+                        modeDescription.text = getString(R.string.mode_proxy_only_desc)
+                    }
+                }
+                // Reload the app list with the new mode's selections
+                adapter.setProxyMode(pref.getProxyMode())
+                lifecycleScope.launch {
+                    val appList = withContext(Dispatchers.IO) { getInstalledApps() }
+                    adapter.setAppList(appList)
+                }
+            }
+        }
+
+        view.findViewById<MaterialButton>(R.id.btnClearAll).setOnClickListener {
+            adapter.clearAllSelected()
+        }
 
         lifecycleScope.launch {
             val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
@@ -73,15 +116,14 @@ class AppListFragment : Fragment() {
 
         var appList = packages
             .filter { packageInfo ->
-                (packageInfo.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM)) == 0 &&
-                        packageInfo.requestedPermissions?.contains(Manifest.permission.INTERNET) == true &&
+                packageInfo.requestedPermissions?.contains(Manifest.permission.INTERNET) == true &&
                         packageInfo.packageName != requireActivity().applicationContext.packageName
             }
 
         appList = appList.sortedWith(
             compareBy<PackageInfo>{
                 selectedApps.contains(it.packageName) != true }
-                .thenBy { it.packageName }
+                .thenBy { it.applicationInfo?.loadLabel(pm)?.toString()?.lowercase() ?: it.packageName }
         )
 
         return appList

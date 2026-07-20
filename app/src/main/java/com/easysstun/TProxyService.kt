@@ -35,6 +35,8 @@ import kotlin.time.Duration.Companion.milliseconds
 class TProxyService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
     private var receivedProfileJson: String? = null
+    private var receivedProxyMode: String? = null
+    private var receivedSelectedApps: ArrayList<String>? = null
 
     private lateinit var pref: Pref
     private val easyJob = Job() // Job for the easyss process coroutine
@@ -53,7 +55,9 @@ class TProxyService : VpnService() {
 
         if (intent != null && intent.action == ACTION_CONNECT) { // Assuming ACTION_CONNECT is the trigger
             receivedProfileJson = intent.getStringExtra("com.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA")
-            Log.i(TAG, "onStartCommand: Received profile JSON (length: ${receivedProfileJson?.length ?: "null"}) via Intent.") // Keep Log.i - User-driven action
+            receivedProxyMode = intent.getStringExtra(EXTRA_PROXY_MODE)
+            receivedSelectedApps = intent.getStringArrayListExtra(EXTRA_SELECTED_APPS)
+            Log.i(TAG, "onStartCommand: Received proxyMode=$receivedProxyMode, selectedApps=$receivedSelectedApps via Intent.")
         } else {
             // If intent is null or action isn't connect (and not disconnect), clear receivedProfileJson
             // to ensure fallback or default behavior if service is restarted by system.
@@ -206,21 +210,38 @@ class TProxyService : VpnService() {
 
         builder.addAddress("2001:0db8:0:f101::1", 64)
 
-        for (appName in pref.getApps()) {
-            try {
-                builder.addDisallowedApplication(appName)
-            } catch (e: PackageManager.NameNotFoundException) {
-                Log.w(TAG, "App not found for VPN bypass: $appName", e)
+        val proxyMode = receivedProxyMode ?: Pref.PROXY_MODE_BYPASS
+        val apps = receivedSelectedApps?.toSet() ?: emptySet()
+        Log.i(TAG, "Per-app routing: mode=$proxyMode (from Intent), selectedApps=$apps")
+        if (proxyMode == Pref.PROXY_MODE_PROXY_ONLY) {
+            // Only allowed apps go through VPN
+            for (appName in apps) {
+                try {
+                    builder.addAllowedApplication(appName)
+                    Log.i(TAG, "addAllowedApplication: $appName")
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.w(TAG, "App not found for VPN allow: $appName", e)
+                }
             }
-        }
-        session += "/per-App"
+            session += "/per-App(allow)"
+        } else {
+            // Bypass selected apps (default)
+            for (appName in apps) {
+                try {
+                    builder.addDisallowedApplication(appName)
+                    Log.i(TAG, "addDisallowedApplication: $appName")
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.w(TAG, "App not found for VPN bypass: $appName", e)
+                }
+            }
+            session += "/per-App"
 
-
-        val selfName = applicationContext.packageName
-        try {
-            builder.addDisallowedApplication(selfName)
-        } catch (e: PackageManager.NameNotFoundException) {
-            Log.w(TAG, "Self app not found for VPN bypass: $selfName", e)
+            val selfName = applicationContext.packageName
+            try {
+                builder.addDisallowedApplication(selfName)
+            } catch (e: PackageManager.NameNotFoundException) {
+                Log.w(TAG, "Self app not found for VPN bypass: $selfName", e)
+            }
         }
 
         
@@ -494,6 +515,8 @@ socks5:
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
         const val ACTION_SERVICE_STOPPED = "com.easysstun.SERVICE_FULLY_STOPPED"
+        const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"
+        const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
         private const val TAG = "TProxyServiceDiag"
 
         init {
