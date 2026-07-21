@@ -20,6 +20,9 @@ def versionPropsFile = rootProject.file("version.properties")
 def versionProps = new Properties()
 versionProps.load(new FileInputStream(versionPropsFile))
 
+// libeasyss 版本锁定（可选）：配置后跳过 API 调用，直接从指定版本下载
+def libeasyssVersion = versionProps.getProperty('libeasyssVersion')?.trim()
+
 android {
     namespace = 'com.easysstun'
     compileSdk = 37
@@ -166,37 +169,47 @@ task downloadLibeasyssSo {
     }
 
     doLast {
-        logger.lifecycle("libeasyss.so not found locally, downloading from latest release...")
-
         targetDir.mkdirs()
 
-        // 1. Fetch latest release info from GitHub API
-        def apiUrl = "https://api.github.com/repos/nange/easyss/releases/latest"
-        def connection = new URL(apiUrl).openConnection()
-        connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+        def downloadUrl
+        def releaseTag
 
-        // Use GITHUB_TOKEN for authenticated requests (avoids rate limiting)
-        def githubToken = System.getenv("GITHUB_TOKEN")
-        if (githubToken) {
-            connection.setRequestProperty("Authorization", "Bearer ${githubToken}")
+        if (libeasyssVersion) {
+            // Version pinned: use direct URL, skip GitHub API call
+            releaseTag = libeasyssVersion
+            downloadUrl = "https://github.com/nange/easyss/releases/download/${releaseTag}/libeasyss-arm64.so.zip"
+            logger.lifecycle("libeasyss.so not found locally, downloading version ${releaseTag}...")
+        } else {
+            // No version pinned: fetch latest release via GitHub API
+            logger.lifecycle("libeasyss.so not found locally, downloading from latest release...")
+
+            def apiUrl = "https://api.github.com/repos/nange/easyss/releases/latest"
+            def connection = new URL(apiUrl).openConnection()
+            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+
+            // Use GITHUB_TOKEN for authenticated requests (avoids rate limiting)
+            def githubToken = System.getenv("GITHUB_TOKEN")
+            if (githubToken) {
+                connection.setRequestProperty("Authorization", "Bearer ${githubToken}")
+            }
+
+            def responseText = connection.content.text
+            def json = new groovy.json.JsonSlurper().parseText(responseText)
+
+            def asset = json.assets.find { it.name == "libeasyss-arm64.so.zip" }
+            if (!asset) {
+                throw new GradleException(
+                    "Asset 'libeasyss-arm64.so.zip' not found in latest release (${json.tag_name}). " +
+                    "Available assets: ${json.assets.collect { it.name }}"
+                )
+            }
+
+            releaseTag = json.tag_name
+            downloadUrl = asset.browser_download_url
+            logger.lifecycle("Found asset in release ${releaseTag}, downloading from ${downloadUrl}")
         }
 
-        def responseText = connection.content.text
-        def json = new groovy.json.JsonSlurper().parseText(responseText)
-
-        // 2. Find the asset "libeasyss-arm64.so.zip"
-        def asset = json.assets.find { it.name == "libeasyss-arm64.so.zip" }
-        if (!asset) {
-            throw new GradleException(
-                "Asset 'libeasyss-arm64.so.zip' not found in latest release (${json.tag_name}). " +
-                "Available assets: ${json.assets.collect { it.name }}"
-            )
-        }
-
-        def downloadUrl = asset.browser_download_url
-        logger.lifecycle("Found asset in release ${json.tag_name}, downloading from ${downloadUrl}")
-
-        // 3. Download the zip to a temp file
+        // Download the zip to a temp file
         def zipFile = File.createTempFile("libeasyss-arm64", ".so.zip")
         try {
             new URL(downloadUrl).openStream().withStream { input ->
@@ -232,7 +245,7 @@ task downloadLibeasyssSo {
                 zipStream.close()
             }
 
-            logger.lifecycle("Successfully downloaded libeasyss.so (release: ${json.tag_name})")
+            logger.lifecycle("Successfully downloaded libeasyss.so (release: ${releaseTag})")
         } finally {
             zipFile.delete()
         }
