@@ -68,13 +68,21 @@ class AppListAdapter(
     fun filter(query: String) {
         filterJob?.cancel()
         filterJob = lifecycleScope.launch(Dispatchers.IO) {
-            val filtered = if (query.isEmpty()) {
+            val trimmedQuery = query.trim()
+            val filtered = if (trimmedQuery.isEmpty()) {
                 allApps
             } else {
-                allApps.filter {
-                    val label = it.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: ""
-                    label.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true)
-                }
+                allApps
+                    .filter {
+                        val label = it.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: it.packageName
+                        label.contains(trimmedQuery, ignoreCase = true) || it.packageName.contains(trimmedQuery, ignoreCase = true)
+                    }
+                    .sortedWith(
+                        compareByDescending<PackageInfo> {
+                            val label = it.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: it.packageName
+                            label.contains(trimmedQuery, ignoreCase = true)
+                        }
+                    )
             }
             withContext(Dispatchers.Main) {
                 differ.submitList(filtered)
@@ -137,7 +145,7 @@ class AppListAdapter(
 
             lifecycleScope.launch {
                 val label = withContext(Dispatchers.IO) {
-                    appInfo.applicationInfo?.loadLabel(context.packageManager).toString()
+                    appInfo.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: appInfo.packageName
                 }
                 val icon = withContext(Dispatchers.IO) {
                     appInfo.applicationInfo?.loadIcon(context.packageManager)
