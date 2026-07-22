@@ -227,8 +227,7 @@ class TProxyService : VpnService() {
         }
 
         // Build SimpleConfig and start Mobile proxy via AAR
-        val socksPort = pref.prefs.getString(Pref.SOCKS_PORT_KEY, Pref.DEFAULT_SOCKS_PORT) ?: Pref.DEFAULT_SOCKS_PORT
-        val config = loadedProfile!!.buildSimpleConfig(cacheDir, socksPort)
+        val config = loadedProfile!!.buildSimpleConfig(cacheDir)
         Log.i(TAG, "startService: Starting Mobile proxy - server=${config.getServer()}:${config.getServerPort()}, localPort=${config.getLocalPort()}")
 
         mobileJob = easyScope.launch {
@@ -243,8 +242,7 @@ class TProxyService : VpnService() {
         }
 
         /* TProxy */
-        val socksPortForTProxy = pref.prefs.getString(Pref.SOCKS_PORT_KEY, Pref.DEFAULT_SOCKS_PORT)
-        Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPortForTProxy")
+        Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: 2080")
         val proxyFile = File(cacheDir, Pref.TPROXY_FILE)
         try {
             proxyFile.createNewFile()
@@ -253,7 +251,7 @@ class TProxyService : VpnService() {
   udp-read-write-timeout: 15000
 
 socks5:
-  port: ${pref.prefs.getString(Pref.SOCKS_PORT_KEY, Pref.DEFAULT_SOCKS_PORT)?.toInt()}
+  port: 2080
   address: '127.0.0.1'
   udp: 'udp'
 """

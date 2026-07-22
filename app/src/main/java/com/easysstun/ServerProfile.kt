@@ -29,7 +29,7 @@ data class ServerProfile(
 /**
  * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
  */
-fun ServerProfile.buildSimpleConfig(cacheDir: File, socksPort: String): SimpleConfig {
+fun ServerProfile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     val config = SimpleConfig()
 
     config.setServer(server)
@@ -48,8 +48,7 @@ fun ServerProfile.buildSimpleConfig(cacheDir: File, socksPort: String): SimpleCo
     }
     config.setSN(sni)
 
-    config.setLocalPort(socksPort.toLongOrNull() ?: 2080L)
-    config.setTimeout(60L)
+    config.setLocalPort(2080L)
 
     if (customCa.isNotBlank()) {
         val customCaFile = File(cacheDir, Pref.CUSTOM_CA_FILE)

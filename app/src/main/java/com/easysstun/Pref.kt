@@ -24,8 +24,6 @@ class Pref(private val ctx: Context) {
         const val PROXY_MODE_KEY = "proxy_mode"
         const val PROXY_MODE_BYPASS = "bypass"
         const val PROXY_MODE_PROXY_ONLY = "proxy_only"
-        const val SOCKS_PORT_KEY = "socks_port"
-        const val DEFAULT_SOCKS_PORT = "2080"
         const val PREFS_UPDATED = "prefs_updated"
         const val CUSTOM_CA_FILE = "easyss_custom_ca.conf"
         const val DIRECT_FILE = "easyss_direct.conf"
