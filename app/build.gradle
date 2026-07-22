@@ -224,9 +224,8 @@ task downloadLibeasyssAar {
     }
 }
 
-// Only trigger download for actual debug/release builds (not lint/test)
+// Trigger download before any build variant (needed for lint, test, and actual builds)
 afterEvaluate {
-    tasks.named('mergeDebugJniLibFolders').configure { dependsOn downloadLibeasyssAar }
-    tasks.named('mergeReleaseJniLibFolders').configure { dependsOn downloadLibeasyssAar }
+    tasks.named('preBuild').configure { dependsOn downloadLibeasyssAar }
 }
 
