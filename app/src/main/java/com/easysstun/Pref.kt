@@ -171,9 +171,6 @@ class Pref(private val ctx: Context) {
 
         easyssInfo.valid = true
         easyssInfo.info = "${activeProfile.server}:${activeProfile.serverPort}"
-
-        val localSocksPort = prefs.getString(SOCKS_PORT_KEY, DEFAULT_SOCKS_PORT) ?: DEFAULT_SOCKS_PORT
-        easyssInfo.cmdList = activeProfile.buildCmdList(ctx.cacheDir, localSocksPort)
         return easyssInfo
     }
 
@@ -182,5 +179,4 @@ class Pref(private val ctx: Context) {
 data class easyssInfo(
     var valid: Boolean = false,
     var info: String = "",
-    var cmdList: List<String> = listOf(),
 )

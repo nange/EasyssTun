@@ -146,7 +146,7 @@ class LogFragment : Fragment() {
             try {
                 val cleanprocess = Runtime.getRuntime().exec("logcat -c")
                 cleanprocess.waitFor()
-                process = Runtime.getRuntime().exec("logcat -s easyss")
+                process = Runtime.getRuntime().exec("logcat -s GoLog")
                 inputStream = process.inputStream
                 bufferedReader = BufferedReader(InputStreamReader(inputStream))
                 while (isActive) {
