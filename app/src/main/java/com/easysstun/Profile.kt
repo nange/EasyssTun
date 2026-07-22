@@ -8,7 +8,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 @Serializable
-data class ServerProfile(
+data class Profile(
     val id: String,
     val name: String,
     val server: String,
@@ -23,13 +23,14 @@ data class ServerProfile(
     val serverNameIndication: String = "",
     val customCa: String = "",
     val directFile: String = "",
-    val proxyFile: String = ""
+    val proxyFile: String = "",
+    val socksPort: String = "2080"
 )
 
 /**
  * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
  */
-fun ServerProfile.buildSimpleConfig(cacheDir: File): SimpleConfig {
+fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     val config = SimpleConfig()
 
     config.setServer(server)
@@ -48,7 +49,7 @@ fun ServerProfile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     }
     config.setSN(sni)
 
-    config.setLocalPort(2080L)
+    config.setLocalPort(socksPort.toLongOrNull() ?: 2080L)
 
     if (customCa.isNotBlank()) {
         val customCaFile = File(cacheDir, Pref.CUSTOM_CA_FILE)
@@ -59,7 +60,7 @@ fun ServerProfile.buildSimpleConfig(cacheDir: File): SimpleConfig {
             }
             config.setCAPath(customCaFile.absolutePath)
         } catch (e: IOException) {
-            Log.e("ServerProfile", "Error writing custom CA file", e)
+            Log.e("Profile", "Error writing custom CA file", e)
         }
     }
 
@@ -72,7 +73,7 @@ fun ServerProfile.buildSimpleConfig(cacheDir: File): SimpleConfig {
             }
             config.setDirectFile(directConfFile.absolutePath)
         } catch (e: IOException) {
-            Log.e("ServerProfile", "Error writing direct file", e)
+            Log.e("Profile", "Error writing direct file", e)
         }
     }
 
@@ -85,7 +86,7 @@ fun ServerProfile.buildSimpleConfig(cacheDir: File): SimpleConfig {
             }
             config.setProxyFile(proxyConfFile.absolutePath)
         } catch (e: IOException) {
-            Log.e("ServerProfile", "Error writing proxy file", e)
+            Log.e("Profile", "Error writing proxy file", e)
         }
     }
 

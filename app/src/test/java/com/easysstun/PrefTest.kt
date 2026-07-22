@@ -39,8 +39,8 @@ class PrefTest {
         sharedPreferences.edit().clear().apply()
     }
 
-    private fun createDummyProfile(id: String = UUID.randomUUID().toString(), name: String = "Test Profile"): ServerProfile {
-        return ServerProfile(
+    private fun createDummyProfile(id: String = UUID.randomUUID().toString(), name: String = "Test Profile"): Profile {
+        return Profile(
             id = id,
             name = name,
             server = "test.server.com",
@@ -62,30 +62,30 @@ class PrefTest {
         val profile1 = createDummyProfile(id = "id1", name = "Profile 1")
         val profile2 = createDummyProfile(id = "id2", name = "Profile 2")
 
-        assertTrue("Initially, profiles should be empty", pref.getServerProfiles().isEmpty())
+        assertTrue("Initially, profiles should be empty", pref.getProfiles().isEmpty())
 
-        pref.addServerProfile(profile1)
-        var profiles = pref.getServerProfiles()
+        pref.addProfile(profile1)
+        var profiles = pref.getProfiles()
         assertEquals("After adding one profile, size should be 1", 1, profiles.size)
         assertEquals("The retrieved profile should match the added one", profile1, profiles[0])
 
-        pref.addServerProfile(profile2)
-        profiles = pref.getServerProfiles()
+        pref.addProfile(profile2)
+        profiles = pref.getProfiles()
         assertEquals("After adding a second profile, size should be 2", 2, profiles.size)
         assertTrue("Profiles list should contain profile1", profiles.contains(profile1))
         assertTrue("Profiles list should contain profile2", profiles.contains(profile2))
     }
 
     @Test
-    fun updateServerProfile() {
+    fun updateProfile() {
         val profileId = "id_to_update"
         val originalProfile = createDummyProfile(id = profileId, name = "Original Name")
-        pref.addServerProfile(originalProfile)
+        pref.addProfile(originalProfile)
 
         val updatedProfile = originalProfile.copy(name = "Updated Name", server = "new.server.com")
-        pref.updateServerProfile(updatedProfile)
+        pref.updateProfile(updatedProfile)
 
-        val profiles = pref.getServerProfiles()
+        val profiles = pref.getProfiles()
         assertEquals("Profile list size should remain 1", 1, profiles.size)
         assertEquals("The updated profile should be retrieved", updatedProfile, profiles[0])
         assertEquals("Profile name should be updated", "Updated Name", profiles[0].name)
@@ -93,60 +93,60 @@ class PrefTest {
     }
 
     @Test
-    fun deleteServerProfile() {
+    fun deleteProfile() {
         val profile1 = createDummyProfile("id1")
         val profile2 = createDummyProfile("id2")
-        pref.addServerProfile(profile1)
-        pref.addServerProfile(profile2)
+        pref.addProfile(profile1)
+        pref.addProfile(profile2)
 
-        pref.deleteServerProfile("id1")
-        var profiles = pref.getServerProfiles()
+        pref.deleteProfile("id1")
+        var profiles = pref.getProfiles()
         assertEquals("After deleting one profile, size should be 1", 1, profiles.size)
         assertEquals("The remaining profile should be profile2", profile2, profiles[0])
 
-        pref.deleteServerProfile("id2")
-        profiles = pref.getServerProfiles()
+        pref.deleteProfile("id2")
+        profiles = pref.getProfiles()
         assertTrue("After deleting all profiles, list should be empty", profiles.isEmpty())
     }
 
     @Test
     fun deleteActiveServerProfile_clearsActiveId() {
         val activeProfile = createDummyProfile("active_id")
-        pref.addServerProfile(activeProfile)
+        pref.addProfile(activeProfile)
         pref.setActiveServer(activeProfile.id)
         assertEquals("Active server ID should be set in SharedPreferences", activeProfile.id, sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
 
-        pref.deleteServerProfile(activeProfile.id)
+        pref.deleteProfile(activeProfile.id)
         assertNull("Active server ID should be cleared from SharedPreferences after deletion", sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
-        assertTrue("Server profiles list should be empty", pref.getServerProfiles().isEmpty())
+        assertTrue("Server profiles list should be empty", pref.getProfiles().isEmpty())
     }
     
     @Test
     fun setActiveAndGetActiveServerProfile() {
-        assertNull("Initially, active profile should be null", pref.getActiveServerProfile())
+        assertNull("Initially, active profile should be null", pref.getActiveProfile())
 
         val profile1 = createDummyProfile("id1")
         val profile2 = createDummyProfile("id2")
-        pref.addServerProfile(profile1)
-        pref.addServerProfile(profile2)
+        pref.addProfile(profile1)
+        pref.addProfile(profile2)
 
         pref.setActiveServer("id1")
-        var active = pref.getActiveServerProfile()
+        var active = pref.getActiveProfile()
         assertNotNull("Active profile should not be null after setting", active)
         assertEquals("Active profile should be profile1", profile1, active)
 
         pref.setActiveServer("id2")
-        active = pref.getActiveServerProfile()
+        active = pref.getActiveProfile()
         assertNotNull("Active profile should not be null after setting to profile2", active)
         assertEquals("Active profile should be profile2", profile2, active)
     }
 
     @Test
-    fun getActiveServerProfile_whenNoneSet_returnsNull() {
+    fun getActiveProfile_whenNoneSet_returnsNull() {
         val profile1 = createDummyProfile("id1")
-        pref.addServerProfile(profile1)
+        pref.addProfile(profile1)
         // No active server set yet
-        assertNull("Active profile should be null when none is explicitly set", pref.getActiveServerProfile())
+        assertNull("Active profile should be null when none is explicitly set", pref.getActiveProfile())
     }
 
     @Test
@@ -166,26 +166,26 @@ class PrefTest {
     }
 
     @Test
-    fun getServerProfiles_corruptedJson_returnsEmptyList() {
+    fun getProfiles_corruptedJson_returnsEmptyList() {
         // Write invalid JSON directly to SharedPreferences
         sharedPreferences.edit().putString(Pref.SERVER_PROFILES, "NOT VALID JSON {{{").apply()
 
         // Re-initialize Pref to pick up the corrupted JSON
         pref = Pref(context)
 
-        val profiles = pref.getServerProfiles()
+        val profiles = pref.getProfiles()
         assertTrue("Corrupted JSON should result in empty list", profiles.isEmpty())
     }
 
     @Test
-    fun updateServerProfile_nonexistentId_doesNothing() {
+    fun updateProfile_nonexistentId_doesNothing() {
         val profile = createDummyProfile(id = "existing")
-        pref.addServerProfile(profile)
+        pref.addProfile(profile)
 
         val nonexistentProfile = createDummyProfile(id = "nonexistent", name = "Ghost")
-        pref.updateServerProfile(nonexistentProfile)
+        pref.updateProfile(nonexistentProfile)
 
-        val profiles = pref.getServerProfiles()
+        val profiles = pref.getProfiles()
         assertEquals("Should still have 1 profile", 1, profiles.size)
         assertEquals("Existing profile unchanged", profile, profiles[0])
     }
@@ -230,31 +230,31 @@ class PrefTest {
         val p1 = createDummyProfile("s1", "Server 1")
         val p2 = createDummyProfile("s2", "Server 2")
         val p3 = createDummyProfile("s3", "Server 3")
-        pref.addServerProfile(p1)
-        pref.addServerProfile(p2)
-        pref.addServerProfile(p3)
+        pref.addProfile(p1)
+        pref.addProfile(p2)
+        pref.addProfile(p3)
 
         pref.setActiveServer("s1")
-        assertEquals("p1", p1, pref.getActiveServerProfile())
+        assertEquals("p1", p1, pref.getActiveProfile())
 
         pref.setActiveServer("s3")
-        assertEquals("p3", p3, pref.getActiveServerProfile())
+        assertEquals("p3", p3, pref.getActiveProfile())
 
         pref.setActiveServer("s2")
-        assertEquals("p2", p2, pref.getActiveServerProfile())
+        assertEquals("p2", p2, pref.getActiveProfile())
     }
 
     @Test
-    fun addServerProfile_withDuplicateId_appendsBoth() {
+    fun addProfile_withDuplicateId_appendsBoth() {
         val original = createDummyProfile(id = "dup", name = "Original")
-        pref.addServerProfile(original)
+        pref.addProfile(original)
 
         val duplicate = createDummyProfile(id = "dup", name = "Duplicate").copy(server = "new.server")
-        pref.addServerProfile(duplicate)
+        pref.addProfile(duplicate)
 
-        val profiles = pref.getServerProfiles()
+        val profiles = pref.getProfiles()
         assertEquals("Duplicate IDs are appended (not deduplicated)", 2, profiles.size)
-        // Actually, addServerProfile just appends to list - duplicates are possible.
+        // Actually, addProfile just appends to list - duplicates are possible.
         // This test verifies that behavior.
         assertTrue("Original still present", profiles.contains(original))
         assertTrue("Duplicate also present", profiles.contains(duplicate))

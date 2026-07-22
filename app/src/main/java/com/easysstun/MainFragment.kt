@@ -242,7 +242,7 @@ class MainFragment : Fragment() {
 
     private fun updateServerSpinner(view: View) {
         val serverSpinner = view.findViewById<Spinner>(R.id.server_spinner)
-        val serverProfiles = pref.getServerProfiles()
+        val serverProfiles = pref.getProfiles()
         val serverNames = serverProfiles.map { it.name } // Or it.name if that's the display string
         val adapter = ArrayAdapter(mContext, android.R.layout.simple_spinner_item, serverNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -270,7 +270,7 @@ class MainFragment : Fragment() {
                         val selectedProfile =
                                 serverProfiles[position] // serverProfiles must be in scope
 
-                        if (pref.getActiveServerProfile()?.id == selectedProfile.id &&
+                        if (pref.getActiveProfile()?.id == selectedProfile.id &&
                                         !isSwitchingServer
                         ) {
                             Log.d(
@@ -348,7 +348,7 @@ class MainFragment : Fragment() {
                 if (isSwitchingServer && pendingServerProfileId != null) {
                     pendingServerProfileId
                 } else {
-                    pref.getActiveServerProfile()?.id
+                    pref.getActiveProfile()?.id
                 }
 
         if (activeServerIdToDisplay != null) {
@@ -537,7 +537,7 @@ class MainFragment : Fragment() {
                     TAG,
                     "startVPNService - Inside try block, attempting to get active profile."
             )
-            val activeProfile = pref.getActiveServerProfile() // Get the full profile object
+            val activeProfile = pref.getActiveProfile() // Get the full profile object
             val intent2 = Intent(mContext, TProxyService::class.java)
 
             if (activeProfile != null) {

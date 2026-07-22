@@ -104,7 +104,7 @@ class TProxyService : VpnService() {
 
         pref = Pref(this)
 
-        var loadedProfile: ServerProfile? = null
+        var loadedProfile: Profile? = null
         var profileSource = "Unknown"
 
         val profileJson = receivedProfileJson
@@ -112,7 +112,7 @@ class TProxyService : VpnService() {
             Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
             val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
             try {
-                loadedProfile = json.decodeFromString<ServerProfile>(profileJson)
+                loadedProfile = json.decodeFromString<Profile>(profileJson)
                 profileSource = "Intent JSON"
                 loadedProfile.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
             } catch (e: kotlinx.serialization.SerializationException) {
@@ -129,7 +129,7 @@ class TProxyService : VpnService() {
             val activeIdFromPrefs = pref.prefs.getString(Pref.ACTIVE_SERVER_ID, null)
             Log.d(TAG, "Fallback: Active Server ID from SharedPreferences: '$activeIdFromPrefs'")
             if (activeIdFromPrefs != null) {
-                loadedProfile = pref.getServerProfiles().find { it.id == activeIdFromPrefs }
+                loadedProfile = pref.getProfiles().find { it.id == activeIdFromPrefs }
                 if (loadedProfile != null) {
                     loadedProfile.let { Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${it.id}") }
                     if (profileSource.startsWith("Intent JSON Deserialization Error")) {
@@ -144,9 +144,9 @@ class TProxyService : VpnService() {
         }
 
         if (loadedProfile == null) {
-            Log.w(TAG, "最终: Loaded ServerProfile is null (Source evaluation: $profileSource).")
+            Log.w(TAG, "最终: Loaded Profile is null (Source evaluation: $profileSource).")
         } else {
-            Log.d(TAG, "最终: Loaded ServerProfile (Source: $profileSource) - ID: ${loadedProfile.id}, Name: '${loadedProfile.name}', Server: '${loadedProfile.server}', Port: '${loadedProfile.serverPort}'")
+            Log.d(TAG, "最终: Loaded Profile (Source: $profileSource) - ID: ${loadedProfile.id}, Name: '${loadedProfile.name}', Server: '${loadedProfile.server}', Port: '${loadedProfile.serverPort}'")
         }
 
         val easyssInfo = easyssInfo()
@@ -242,7 +242,8 @@ class TProxyService : VpnService() {
         }
 
         /* TProxy */
-        Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: 2080")
+        val socksPort = loadedProfile.socksPort
+        Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPort")
         val proxyFile = File(cacheDir, Pref.TPROXY_FILE)
         try {
             proxyFile.createNewFile()
@@ -251,7 +252,7 @@ class TProxyService : VpnService() {
   udp-read-write-timeout: 15000
 
 socks5:
-  port: 2080
+  port: $socksPort
   address: '127.0.0.1'
   udp: 'udp'
 """
