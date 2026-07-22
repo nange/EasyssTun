@@ -5,13 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * Tests for the ServerProfile data class, including serialization, defaults, and equality.
+ * Tests for the Profile data class, including serialization, defaults, and equality.
  */
-class ServerProfileTest {
+class ProfileTest {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    private fun createFullProfile() = ServerProfile(
+    private fun createFullProfile() = Profile(
         id = "test-id-001",
         name = "My Server",
         server = "example.com",
@@ -32,8 +32,8 @@ class ServerProfileTest {
     @Test
     fun serializeThenDeserialize_producesEqualProfile() {
         val original = createFullProfile()
-        val encoded = json.encodeToString(ServerProfile.serializer(), original)
-        val decoded = json.decodeFromString(ServerProfile.serializer(), encoded)
+        val encoded = json.encodeToString(Profile.serializer(), original)
+        val decoded = json.decodeFromString(Profile.serializer(), encoded)
 
         assertEquals("Deserialized profile should equal original", original, decoded)
         assertEquals("ID should survive round-trip", original.id, decoded.id)
@@ -44,7 +44,7 @@ class ServerProfileTest {
     @Test
     fun serializeThenDeserialize_minimalProfile_preservesDefaults() {
         // Only set required fields (all fields have defaults except constructor params without defaults)
-        val minimal = ServerProfile(
+        val minimal = Profile(
             id = "min-1",
             name = "Min Server",
             server = "min.example.com",
@@ -52,8 +52,8 @@ class ServerProfileTest {
             password = "pw",
             // All other fields use defaults
         )
-        val encoded = json.encodeToString(ServerProfile.serializer(), minimal)
-        val decoded = json.decodeFromString(ServerProfile.serializer(), encoded)
+        val encoded = json.encodeToString(Profile.serializer(), minimal)
+        val decoded = json.decodeFromString(Profile.serializer(), encoded)
 
         assertEquals("ID should be preserved", "min-1", decoded.id)
         assertEquals("Default encryption should be chacha20-poly1305", "chacha20-poly1305", decoded.encryption)
@@ -116,7 +116,7 @@ class ServerProfileTest {
             }
         """.trimIndent()
 
-        val profile = json.decodeFromString(ServerProfile.serializer(), jsonWithExtra)
+        val profile = json.decodeFromString(Profile.serializer(), jsonWithExtra)
         assertEquals("extra-keys-test", profile.id)
         assertEquals("Test", profile.name)
         assertEquals("s.example.com", profile.server)
@@ -125,7 +125,7 @@ class ServerProfileTest {
     @Test
     fun allFieldsSerialized_producesValidJson() {
         val profile = createFullProfile()
-        val encoded = json.encodeToString(ServerProfile.serializer(), profile)
+        val encoded = json.encodeToString(Profile.serializer(), profile)
 
         assertTrue("JSON should contain id", encoded.contains("\"id\":\"test-id-001\""))
         assertTrue("JSON should contain encryption", encoded.contains("\"encryption\":\"aes-256-gcm\""))

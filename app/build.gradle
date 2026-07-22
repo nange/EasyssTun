@@ -138,6 +138,7 @@ androidComponents {
 }
 
 dependencies {
+    implementation(files("libs/libeasyss.aar"))
     implementation 'androidx.core:core-ktx:1.18.0'
     implementation 'com.google.android.material:material:1.14.0'
     implementation 'androidx.navigation:navigation-fragment-ktx:2.9.8'
@@ -157,12 +158,12 @@ dependencies {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-download libeasyss.so from nange/easyss latest GitHub release
+// Auto-download libeasyss.aar from nange/easyss latest GitHub release
 // if it doesn't exist locally (e.g., in CI / fresh checkout).
 // ---------------------------------------------------------------------------
-task downloadLibeasyssSo {
-    def targetDir = file("src/main/jniLibs/arm64-v8a")
-    def targetFile = file("${targetDir}/libeasyss.so")
+task downloadLibeasyssAar {
+    def targetDir = file("libs")
+    def targetFile = file("${targetDir}/libeasyss.aar")
 
     onlyIf {
         !targetFile.exists()
@@ -177,11 +178,11 @@ task downloadLibeasyssSo {
         if (libeasyssVersion) {
             // Version pinned: use direct URL, skip GitHub API call
             releaseTag = libeasyssVersion
-            downloadUrl = "https://github.com/nange/easyss/releases/download/${releaseTag}/libeasyss-arm64.so.zip"
-            logger.lifecycle("libeasyss.so not found locally, downloading version ${releaseTag}...")
+            downloadUrl = "https://github.com/nange/easyss/releases/download/${releaseTag}/libeasyss.aar"
+            logger.lifecycle("libeasyss.aar not found locally, downloading version ${releaseTag}...")
         } else {
             // No version pinned: fetch latest release via GitHub API
-            logger.lifecycle("libeasyss.so not found locally, downloading from latest release...")
+            logger.lifecycle("libeasyss.aar not found locally, downloading from latest release...")
 
             def apiUrl = "https://api.github.com/repos/nange/easyss/releases/latest"
             def connection = new URL(apiUrl).openConnection()
@@ -196,10 +197,10 @@ task downloadLibeasyssSo {
             def responseText = connection.content.text
             def json = new groovy.json.JsonSlurper().parseText(responseText)
 
-            def asset = json.assets.find { it.name == "libeasyss-arm64.so.zip" }
+            def asset = json.assets.find { it.name == "libeasyss.aar" }
             if (!asset) {
                 throw new GradleException(
-                    "Asset 'libeasyss-arm64.so.zip' not found in latest release (${json.tag_name}). " +
+                    "Asset 'libeasyss.aar' not found in latest release (${json.tag_name}). " +
                     "Available assets: ${json.assets.collect { it.name }}"
                 )
             }
@@ -209,52 +210,22 @@ task downloadLibeasyssSo {
             logger.lifecycle("Found asset in release ${releaseTag}, downloading from ${downloadUrl}")
         }
 
-        // Download the zip to a temp file
-        def zipFile = File.createTempFile("libeasyss-arm64", ".so.zip")
+        // Download the AAR directly
         try {
             new URL(downloadUrl).openStream().withStream { input ->
-                zipFile.withOutputStream { output ->
+                targetFile.withOutputStream { output ->
                     output << input
                 }
             }
-
-            // 4. Extract libeasyss.so from the zip
-            def zipStream = new java.util.zip.ZipInputStream(new FileInputStream(zipFile))
-            try {
-                def found = false
-                def entry
-                while ((entry = zipStream.nextEntry) != null) {
-                    if (entry.name == "libeasyss-arm64.so") {
-                        targetFile.withOutputStream { out ->
-                            def buffer = new byte[8192]
-                            int len
-                            while ((len = zipStream.read(buffer)) > 0) {
-                                out.write(buffer, 0, len)
-                            }
-                        }
-                        found = true
-                        break
-                    }
-                    zipStream.closeEntry()
-                }
-
-                if (!found) {
-                    throw new GradleException("libeasyss-arm64.so not found inside the downloaded zip file")
-                }
-            } finally {
-                zipStream.close()
-            }
-
-            logger.lifecycle("Successfully downloaded libeasyss.so (release: ${releaseTag})")
-        } finally {
-            zipFile.delete()
+            logger.lifecycle("Successfully downloaded libeasyss.aar (release: ${releaseTag})")
+        } catch (Exception e) {
+            throw new GradleException("Failed to download libeasyss.aar: ${e.message}", e)
         }
     }
 }
 
-// Only trigger download for actual debug/release builds (not lint/test)
+// Trigger download before any build variant (needed for lint, test, and actual builds)
 afterEvaluate {
-    tasks.named('mergeDebugJniLibFolders').configure { dependsOn downloadLibeasyssSo }
-    tasks.named('mergeReleaseJniLibFolders').configure { dependsOn downloadLibeasyssSo }
+    tasks.named('preBuild').configure { dependsOn downloadLibeasyssAar }
 }
 

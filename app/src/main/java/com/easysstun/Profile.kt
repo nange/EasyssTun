@@ -1,13 +1,14 @@
 package com.easysstun
 
 import android.util.Log
+import io.github.nange.easyss.config.SimpleConfig
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 
 @Serializable
-data class ServerProfile(
+data class Profile(
     val id: String,
     val name: String,
     val server: String,
@@ -22,34 +23,33 @@ data class ServerProfile(
     val serverNameIndication: String = "",
     val customCa: String = "",
     val directFile: String = "",
-    val proxyFile: String = ""
+    val proxyFile: String = "",
+    val socksPort: String = "2080"
 )
 
 /**
- * Builds the command-line argument list for the native easyss proxy from this profile.
+ * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
  */
-fun ServerProfile.buildCmdList(cacheDir: File, socksPort: String): List<String> {
-    var sn = serverNameIndication
-    if (sn.isBlank()) {
-        sn = server
-    }
+fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
+    val config = SimpleConfig()
 
-    val cmdList = mutableListOf(
-        "-s", server,
-        "-p", serverPort,
-        "-k", password,
-        "-m", encryption,
-        "-proxy-rule", proxyRule,
-        "-outbound-proto", outbound,
-        "-l", socksPort,
-        "-t", "60",
-        "-log-level", logLevel,
-        "-enable-quic=$enableQuic",
-        "-ipv6-rule", ipv6Rule,
-        "-sn", sn,
-        "-enable-tun2socks=false",
-        "-daemon=false"
-    )
+    config.setServer(server)
+    config.setServerPort(serverPort.toLongOrNull() ?: 443L)
+    config.setPassword(password)
+    config.setMethod(encryption)
+    config.setProxyRule(proxyRule)
+    config.setOutboundProto(outbound)
+    config.setLogLevel(logLevel)
+    config.setEnableQUIC(enableQuic.equals("true", ignoreCase = true))
+    config.setIPV6Rule(ipv6Rule)
+
+    var sni = serverNameIndication
+    if (sni.isBlank()) {
+        sni = server
+    }
+    config.setSN(sni)
+
+    config.setLocalPort(socksPort.toLongOrNull() ?: 2080L)
 
     if (customCa.isNotBlank()) {
         val customCaFile = File(cacheDir, Pref.CUSTOM_CA_FILE)
@@ -58,9 +58,9 @@ fun ServerProfile.buildCmdList(cacheDir: File, socksPort: String): List<String> 
             FileOutputStream(customCaFile, false).use { fos ->
                 fos.write(customCa.toByteArray())
             }
-            cmdList.addAll(listOf("-ca-path", customCaFile.absolutePath))
+            config.setCAPath(customCaFile.absolutePath)
         } catch (e: IOException) {
-            Log.e("ServerProfile", "Error writing custom CA file", e)
+            Log.e("Profile", "Error writing custom CA file", e)
         }
     }
 
@@ -71,9 +71,9 @@ fun ServerProfile.buildCmdList(cacheDir: File, socksPort: String): List<String> 
             FileOutputStream(directConfFile, false).use { fos ->
                 fos.write(directFile.toByteArray())
             }
-            cmdList.addAll(listOf("-direct-file", directConfFile.absolutePath))
+            config.setDirectFile(directConfFile.absolutePath)
         } catch (e: IOException) {
-            Log.e("ServerProfile", "Error writing direct file", e)
+            Log.e("Profile", "Error writing direct file", e)
         }
     }
 
@@ -84,11 +84,11 @@ fun ServerProfile.buildCmdList(cacheDir: File, socksPort: String): List<String> 
             FileOutputStream(proxyConfFile, false).use { fos ->
                 fos.write(proxyFile.toByteArray())
             }
-            cmdList.addAll(listOf("-proxy-file", proxyConfFile.absolutePath))
+            config.setProxyFile(proxyConfFile.absolutePath)
         } catch (e: IOException) {
-            Log.e("ServerProfile", "Error writing proxy file", e)
+            Log.e("Profile", "Error writing proxy file", e)
         }
     }
 
-    return cmdList
+    return config
 }

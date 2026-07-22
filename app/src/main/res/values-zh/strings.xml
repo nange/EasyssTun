@@ -57,6 +57,7 @@
     <string name="hint_server_host">服务器地址</string>
     <string name="hint_server_port">服务器端口</string>
     <string name="hint_password">密码</string>
+    <string name="hint_socks_port">本地 SOCKS 端口</string>
     <string name="hint_sni">服务器名称指示 (SNI)</string>
     <string name="hint_custom_ca">自定义 CA（PEM 格式）</string>
     <string name="hint_direct_domains">直连域名/IP（每行一个）</string>

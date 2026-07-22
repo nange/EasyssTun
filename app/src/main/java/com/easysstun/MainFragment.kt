@@ -29,8 +29,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import io.github.nange.easyss.mobile.Mobile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -243,7 +242,7 @@ class MainFragment : Fragment() {
 
     private fun updateServerSpinner(view: View) {
         val serverSpinner = view.findViewById<Spinner>(R.id.server_spinner)
-        val serverProfiles = pref.getServerProfiles()
+        val serverProfiles = pref.getProfiles()
         val serverNames = serverProfiles.map { it.name } // Or it.name if that's the display string
         val adapter = ArrayAdapter(mContext, android.R.layout.simple_spinner_item, serverNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -271,7 +270,7 @@ class MainFragment : Fragment() {
                         val selectedProfile =
                                 serverProfiles[position] // serverProfiles must be in scope
 
-                        if (pref.getActiveServerProfile()?.id == selectedProfile.id &&
+                        if (pref.getActiveProfile()?.id == selectedProfile.id &&
                                         !isSwitchingServer
                         ) {
                             Log.d(
@@ -349,7 +348,7 @@ class MainFragment : Fragment() {
                 if (isSwitchingServer && pendingServerProfileId != null) {
                     pendingServerProfileId
                 } else {
-                    pref.getActiveServerProfile()?.id
+                    pref.getActiveProfile()?.id
                 }
 
         if (activeServerIdToDisplay != null) {
@@ -497,28 +496,15 @@ class MainFragment : Fragment() {
     }
 
     private fun fetchGitTag(context: Context): String {
-        val libraryPath = context.applicationInfo.nativeLibraryDir.toString() + "/libeasyss.so"
-        val command = listOf(libraryPath, "--version")
-        val processBuilder = ProcessBuilder(command)
-        processBuilder.redirectErrorStream(true)
-
         return try {
-            val process = processBuilder.start()
-            val gitTag = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                var tag = "Easyss"
-                while (true) {
-                    val currentLine = reader.readLine() ?: break
-                    if (currentLine.startsWith("Git tag:")) {
-                        tag += ": " + currentLine.substringAfter(":").trim()
-                        break
-                    }
-                }
-                tag
+            val version = Mobile.version()
+            if (version.isNotBlank()) {
+                "Easyss: $version"
+            } else {
+                "Easyss"
             }
-            process.waitFor()
-            gitTag
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching Git tag", e)
+            Log.e(TAG, "Error fetching version via Mobile.version()", e)
             "Easyss"
         }
     }
@@ -551,7 +537,7 @@ class MainFragment : Fragment() {
                     TAG,
                     "startVPNService - Inside try block, attempting to get active profile."
             )
-            val activeProfile = pref.getActiveServerProfile() // Get the full profile object
+            val activeProfile = pref.getActiveProfile() // Get the full profile object
             val intent2 = Intent(mContext, TProxyService::class.java)
 
             if (activeProfile != null) {

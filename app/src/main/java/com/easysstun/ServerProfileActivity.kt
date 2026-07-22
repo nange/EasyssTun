@@ -15,7 +15,7 @@ import java.util.UUID
 class ServerProfileActivity : AppCompatActivity() {
 
     private lateinit var pref: Pref
-    private var currentProfile: ServerProfile? = null
+    private var currentProfile: Profile? = null
     private var profileId: String? = null
 
     // Declare UI elements
@@ -23,6 +23,7 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var profileServer: EditText
     private lateinit var profileServerPort: EditText
     private lateinit var profilePassword: EditText
+    private lateinit var profileSocksPort: EditText
     private lateinit var profileEncryption: Spinner
     private lateinit var profileProxyRule: Spinner
     private lateinit var profileOutbound: Spinner
@@ -48,6 +49,7 @@ class ServerProfileActivity : AppCompatActivity() {
         profileServer = findViewById(R.id.profile_server)
         profileServerPort = findViewById(R.id.profile_server_port)
         profilePassword = findViewById(R.id.profile_password)
+        profileSocksPort = findViewById(R.id.profile_socks_port)
         profileEncryption = findViewById(R.id.profile_encryption)
         profileProxyRule = findViewById(R.id.profile_proxy_rule)
         profileOutbound = findViewById(R.id.profile_outbound)
@@ -100,12 +102,13 @@ class ServerProfileActivity : AppCompatActivity() {
 
 
         if (profileId != null) {
-            currentProfile = pref.getServerProfiles().find { it.id == profileId }
+            currentProfile = pref.getProfiles().find { it.id == profileId }
             currentProfile?.let {
                 profileName.setText(it.name)
                 profileServer.setText(it.server)
                 profileServerPort.setText(it.serverPort)
                 profilePassword.setText(it.password)
+                profileSocksPort.setText(it.socksPort)
                 // Set spinner selections
                 setSpinnerSelection(profileEncryption, it.encryption, R.array.easyss_encryption_list)
                 setSpinnerSelection(profileProxyRule, it.proxyRule, R.array.easyss_proxyrule_list_value, R.array.easyss_proxyrule_list_value)
@@ -146,7 +149,7 @@ class ServerProfileActivity : AppCompatActivity() {
 
     private fun deleteProfileAndFinish() {
         profileId?.let {
-            pref.deleteServerProfile(it)
+            pref.deleteProfile(it)
             Toast.makeText(this, "Profile deleted", Toast.LENGTH_SHORT).show()
             finish()
         }
@@ -179,6 +182,7 @@ class ServerProfileActivity : AppCompatActivity() {
         val server = profileServer.text.toString()
         val serverPort = profileServerPort.text.toString()
         val password = profilePassword.text.toString()
+        val socksPort = profileSocksPort.text.toString()
         val encryption = profileEncryption.selectedItem.toString() // May need to get from values array if entries are different
         val proxyRule = getSpinnerValue(profileProxyRule, R.array.easyss_proxyrule_list_value)
         val outbound = getSpinnerValue(profileOutbound, R.array.easyss_outbound_list_value)
@@ -196,7 +200,7 @@ class ServerProfileActivity : AppCompatActivity() {
             return
         }
 
-        val profileToSave = ServerProfile(
+        val profileToSave = Profile(
             id = profileId ?: UUID.randomUUID().toString(),
             name = name.ifBlank { server }, // Default name to server address if blank
             server = server,
@@ -211,18 +215,19 @@ class ServerProfileActivity : AppCompatActivity() {
             serverNameIndication = serverNameIndication,
             customCa = customCa,
             directFile = directFile,
-            proxyFile = proxyFile
+            proxyFile = proxyFile,
+            socksPort = socksPort
         )
 
         if (profileId == null) { // A new profile is being added
-            pref.addServerProfile(profileToSave)
+            pref.addProfile(profileToSave)
             Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
         } else { // An existing profile is being updated
-            pref.updateServerProfile(profileToSave)
+            pref.updateProfile(profileToSave)
             Toast.makeText(this, "Profile updated", Toast.LENGTH_SHORT).show()
 
             // Check if the updated profile is the active one
-            if (profileToSave.id == pref.getActiveServerProfile()?.id) {
+            if (profileToSave.id == pref.getActiveProfile()?.id) {
                 val intent = android.content.Intent(Pref.PREFS_UPDATED).apply {
                     // Ensure the broadcast targets only this app's non-exported receiver
                     setPackage(packageName)

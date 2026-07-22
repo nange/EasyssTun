@@ -53,8 +53,8 @@ class SettingsFragment : Fragment() {
     private fun refreshServerList() {
         serverProfilesContainer.removeAllViews()
 
-        val profiles = pref.getServerProfiles()
-        val activeProfileId = pref.getActiveServerProfile()?.id
+        val profiles = pref.getProfiles()
+        val activeProfileId = pref.getActiveProfile()?.id
 
         profiles.forEachIndexed { index, profile ->
             val cardView = buildServerCard(profile, profile.id == activeProfileId)
@@ -76,7 +76,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun buildServerCard(
-        profile: ServerProfile,
+        profile: Profile,
         isActive: Boolean
     ): MaterialCardView {
         val inflater = LayoutInflater.from(requireContext())

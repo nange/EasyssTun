@@ -24,8 +24,6 @@ class Pref(private val ctx: Context) {
         const val PROXY_MODE_KEY = "proxy_mode"
         const val PROXY_MODE_BYPASS = "bypass"
         const val PROXY_MODE_PROXY_ONLY = "proxy_only"
-        const val SOCKS_PORT_KEY = "socks_port"
-        const val DEFAULT_SOCKS_PORT = "2080"
         const val PREFS_UPDATED = "prefs_updated"
         const val CUSTOM_CA_FILE = "easyss_custom_ca.conf"
         const val DIRECT_FILE = "easyss_direct.conf"
@@ -98,11 +96,11 @@ class Pref(private val ctx: Context) {
         ctx.sendBroadcast(intent)
     }
 
-    fun getServerProfiles(): List<ServerProfile> {
+    fun getProfiles(): List<Profile> {
         val profilesJson = prefs.getString(SERVER_PROFILES, null)
         return if (profilesJson != null) {
             try {
-                json.decodeFromString<List<ServerProfile>>(profilesJson)
+                json.decodeFromString<List<Profile>>(profilesJson)
             } catch (e: Exception) { // Catches any exception during deserialization
                 // In a real scenario, one might log e.message here.
                 Log.e("Pref", "Error deserializing server profiles: ${e.message}", e) // Added logging
@@ -113,32 +111,32 @@ class Pref(private val ctx: Context) {
         }
     }
 
-    private fun saveServerProfiles(profiles: List<ServerProfile>) {
+    private fun saveProfiles(profiles: List<Profile>) {
         val profilesJson = json.encodeToString(profiles)
         prefs.edit {
             putString(SERVER_PROFILES, profilesJson)
         }
     }
 
-    fun addServerProfile(profile: ServerProfile) {
-        val profiles = getServerProfiles().toMutableList()
+    fun addProfile(profile: Profile) {
+        val profiles = getProfiles().toMutableList()
         profiles.add(profile)
-        saveServerProfiles(profiles)
+        saveProfiles(profiles)
     }
 
-    fun updateServerProfile(profile: ServerProfile) {
-        val profiles = getServerProfiles().toMutableList()
+    fun updateProfile(profile: Profile) {
+        val profiles = getProfiles().toMutableList()
         val index = profiles.indexOfFirst { it.id == profile.id }
         if (index != -1) {
             profiles[index] = profile
-            saveServerProfiles(profiles)
+            saveProfiles(profiles)
         }
     }
 
-    fun deleteServerProfile(profileId: String) {
-        val profiles = getServerProfiles().toMutableList()
+    fun deleteProfile(profileId: String) {
+        val profiles = getProfiles().toMutableList()
         profiles.removeAll { it.id == profileId }
-        saveServerProfiles(profiles)
+        saveProfiles(profiles)
         if (prefs.getString(ACTIVE_SERVER_ID, null) == profileId) {
             prefs.edit {
                 remove(ACTIVE_SERVER_ID)
@@ -151,17 +149,17 @@ class Pref(private val ctx: Context) {
         prefs.edit { putString(ACTIVE_SERVER_ID, profileId) }
     }
 
-    fun getActiveServerProfile(): ServerProfile? {
+    fun getActiveProfile(): Profile? {
         val activeId = prefs.getString(ACTIVE_SERVER_ID, null)
         return if (activeId != null) {
-            getServerProfiles().find { it.id == activeId }
+            getProfiles().find { it.id == activeId }
         } else {
             null
         }
     }
 
     fun getEasyssInfo(): easyssInfo {
-        val activeProfile = getActiveServerProfile()
+        val activeProfile = getActiveProfile()
         val easyssInfo = easyssInfo()
 
         if (activeProfile == null) {
@@ -171,9 +169,6 @@ class Pref(private val ctx: Context) {
 
         easyssInfo.valid = true
         easyssInfo.info = "${activeProfile.server}:${activeProfile.serverPort}"
-
-        val localSocksPort = prefs.getString(SOCKS_PORT_KEY, DEFAULT_SOCKS_PORT) ?: DEFAULT_SOCKS_PORT
-        easyssInfo.cmdList = activeProfile.buildCmdList(ctx.cacheDir, localSocksPort)
         return easyssInfo
     }
 
@@ -182,5 +177,4 @@ class Pref(private val ctx: Context) {
 data class easyssInfo(
     var valid: Boolean = false,
     var info: String = "",
-    var cmdList: List<String> = listOf(),
 )

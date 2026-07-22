@@ -62,14 +62,14 @@ class ServiceReceiverTest {
     @Test
     fun onReceive_bootCompleted_serviceEnabled_attemptsStart() {
         // Set a valid profile so the service would have something to connect to
-        val profile = ServerProfile(
+        val profile = Profile(
             id = "boot-test-id",
             name = "Boot Test Server",
             server = "test.example.com",
             serverPort = "443",
             password = "test-password"
         )
-        pref.addServerProfile(profile)
+        pref.addProfile(profile)
         pref.setActiveServer(profile.id)
         pref.isServiceEnabled = true
 

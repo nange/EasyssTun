@@ -64,7 +64,8 @@
                             android:id="@+id/profile_server_port"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:inputType="number" />
+                            android:inputType="number"
+                            android:text="@string/default_server_port" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.textfield.TextInputLayout
@@ -82,6 +83,20 @@
                             android:inputType="textPassword" />
                     </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="@string/hint_socks_port">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/profile_socks_port"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:text="@string/default_socks_port" />
+                </com.google.android.material.textfield.TextInputLayout>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
