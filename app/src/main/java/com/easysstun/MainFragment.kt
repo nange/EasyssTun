@@ -814,6 +814,10 @@ class MainFragment : Fragment() {
         v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text = ""
         v.findViewById<TextView>(R.id.stats_uptime)?.text = ""
         v.findViewById<TextView>(R.id.stats_active_streams)?.text = ""
+        v.findViewById<TextView>(R.id.stats_download_speed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text = ""
     }
 
     private fun updateStatsDisplay(json: JSONObject) {
@@ -830,6 +834,10 @@ class MainFragment : Fragment() {
         val bulkActive = json.optInt("bulk_active_streams", 0)
         val uptime = json.optDouble("uptime_seconds", 0.0)
         val active = json.optInt("active_streams", 0)
+        val dlSpeed = json.optString("download_speed_human", "")
+        val ulSpeed = json.optString("upload_speed_human", "")
+        val peakDl = json.optString("peak_download_speed_human", "")
+        val peakUl = json.optString("peak_upload_speed_human", "")
 
         v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text =
                 getString(R.string.stats_avg_rtt_ms_fmt, String.format(Locale.ROOT, "%.1f ms", avgRttMs))
@@ -851,5 +859,13 @@ class MainFragment : Fragment() {
                 getString(R.string.stats_uptime_fmt, formatDuration(uptime))
         v.findViewById<TextView>(R.id.stats_active_streams)?.text =
                 getString(R.string.stats_active_streams_fmt, active.toString())
+        v.findViewById<TextView>(R.id.stats_download_speed)?.text =
+                getString(R.string.stats_download_speed_fmt, dlSpeed)
+        v.findViewById<TextView>(R.id.stats_upload_speed)?.text =
+                getString(R.string.stats_upload_speed_fmt, ulSpeed)
+        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text =
+                getString(R.string.stats_peak_download_speed_fmt, peakDl)
+        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text =
+                getString(R.string.stats_peak_upload_speed_fmt, peakUl)
     }
 }

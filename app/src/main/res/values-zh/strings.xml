@@ -26,6 +26,10 @@
     <string name="stats_bytes_recv_fmt">接收流量: %s</string>
     <string name="stats_uptime_fmt">运行时长: %s</string>
     <string name="stats_active_streams_fmt">活跃数据流: %s</string>
+    <string name="stats_download_speed_fmt">下载速度: %s</string>
+    <string name="stats_upload_speed_fmt">上传速度: %s</string>
+    <string name="stats_peak_download_speed_fmt">峰值下载: %s</string>
+    <string name="stats_peak_upload_speed_fmt">峰值上传: %s</string>
     <string name="applist_title">应用代理设置</string>
     <string name="log_title">Easyss 日志</string>
 

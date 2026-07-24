@@ -27,6 +27,10 @@
     <string name="stats_bytes_recv_fmt">Received: %s</string>
     <string name="stats_uptime_fmt">Uptime: %s</string>
     <string name="stats_active_streams_fmt">Active: %s</string>
+    <string name="stats_download_speed_fmt">DL: %s</string>
+    <string name="stats_upload_speed_fmt">UL: %s</string>
+    <string name="stats_peak_download_speed_fmt">Peak DL: %s</string>
+    <string name="stats_peak_upload_speed_fmt">Peak UL: %s</string>
     <string name="applist_title">App Proxy Settings</string>
     <string name="log_title">Easyss Log</string>
 
