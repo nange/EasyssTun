@@ -54,6 +54,7 @@ class MainFragment : Fragment() {
 
     private var statsPollingJob: Job? = null
     private var statsHadSuccessfulFetch: Boolean = false
+    private var isStatsExpanded: Boolean = false
 
     private var pendingServerProfileId: String? = null
     private var isSwitchingServer: Boolean = false
@@ -450,8 +451,22 @@ class MainFragment : Fragment() {
             if (pref.isServiceEnabled) {
                 // Brief loading feedback
                 val updatingText = getString(R.string.stats_updating)
-                view.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = updatingText
+                view.findViewById<TextView>(R.id.stats_download_speed)?.text = updatingText
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) { fetchAndUpdateStats() }
+            }
+        }
+
+        // Stats toggle — expand / collapse
+        view.findViewById<TextView>(R.id.stats_toggle).setOnClickListener {
+            isStatsExpanded = !isStatsExpanded
+            val expandable = view.findViewById<LinearLayout>(R.id.stats_expandable)
+            val toggle = view.findViewById<TextView>(R.id.stats_toggle)
+            if (isStatsExpanded) {
+                expandable?.visibility = View.VISIBLE
+                toggle?.text = getString(R.string.stats_show_less)
+            } else {
+                expandable?.visibility = View.GONE
+                toggle?.text = getString(R.string.stats_show_all)
             }
         }
     }
@@ -804,8 +819,12 @@ class MainFragment : Fragment() {
     private fun updateStatsUnavailable() {
         val v = view ?: return
         val txt = getString(R.string.stats_unavailable)
-        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = txt
+        v.findViewById<TextView>(R.id.stats_download_speed)?.text = txt
+        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = ""
         v.findViewById<TextView>(R.id.stats_conns)?.text = ""
+        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text = ""
+        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text = ""
         v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = ""
         v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = ""
         v.findViewById<TextView>(R.id.stats_priority_conns)?.text = ""
@@ -814,10 +833,6 @@ class MainFragment : Fragment() {
         v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text = ""
         v.findViewById<TextView>(R.id.stats_uptime)?.text = ""
         v.findViewById<TextView>(R.id.stats_active_streams)?.text = ""
-        v.findViewById<TextView>(R.id.stats_download_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text = ""
     }
 
     private fun updateStatsDisplay(json: JSONObject) {
@@ -839,33 +854,32 @@ class MainFragment : Fragment() {
         val peakDl = json.optString("peak_download_speed_human", "")
         val peakUl = json.optString("peak_upload_speed_human", "")
 
+        // Row 1: DL Speed | UL Speed | RTT | TCP Conns
+        v.findViewById<TextView>(R.id.stats_download_speed)?.text = dlSpeed
+        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ulSpeed
         v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text =
-                getString(R.string.stats_avg_rtt_ms_fmt, String.format(Locale.ROOT, "%.1f ms", avgRttMs))
-        v.findViewById<TextView>(R.id.stats_conns)?.text =
-                getString(R.string.stats_conns_fmt, conns.toString())
-        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text =
-                getString(R.string.stats_bytes_sent_fmt, formatBytes(sent))
-        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text =
-                getString(R.string.stats_bytes_recv_fmt, formatBytes(recv))
-        v.findViewById<TextView>(R.id.stats_priority_conns)?.text =
-                getString(R.string.stats_priority_conns_fmt, priorityConns.toString())
-        v.findViewById<TextView>(R.id.stats_bulk_conns)?.text =
-                getString(R.string.stats_bulk_conns_fmt, bulkConns.toString())
-        v.findViewById<TextView>(R.id.stats_priority_active_streams)?.text =
-                getString(R.string.stats_priority_active_streams_fmt, priorityActive.toString())
-        v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text =
-                getString(R.string.stats_bulk_active_streams_fmt, bulkActive.toString())
-        v.findViewById<TextView>(R.id.stats_uptime)?.text =
-                getString(R.string.stats_uptime_fmt, formatDuration(uptime))
-        v.findViewById<TextView>(R.id.stats_active_streams)?.text =
-                getString(R.string.stats_active_streams_fmt, active.toString())
-        v.findViewById<TextView>(R.id.stats_download_speed)?.text =
-                getString(R.string.stats_download_speed_fmt, dlSpeed)
-        v.findViewById<TextView>(R.id.stats_upload_speed)?.text =
-                getString(R.string.stats_upload_speed_fmt, ulSpeed)
-        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text =
-                getString(R.string.stats_peak_download_speed_fmt, peakDl)
-        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text =
-                getString(R.string.stats_peak_upload_speed_fmt, peakUl)
+                String.format(Locale.ROOT, "%.1f ms", avgRttMs)
+        v.findViewById<TextView>(R.id.stats_conns)?.text = conns.toString()
+
+        // Row 2: Peak DL | Peak UL | Sent | Received
+        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text = peakDl
+        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text = peakUl
+        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = formatBytes(sent)
+        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = formatBytes(recv)
+
+        // Row 3: Priority Conns | Bulk Conns | Priority Active | Bulk Active
+        v.findViewById<TextView>(R.id.stats_priority_conns)?.text = priorityConns.toString()
+        v.findViewById<TextView>(R.id.stats_bulk_conns)?.text = bulkConns.toString()
+        v.findViewById<TextView>(R.id.stats_priority_active_streams)?.text = priorityActive.toString()
+        v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text = bulkActive.toString()
+
+        // Row 4: Uptime | Active
+        v.findViewById<TextView>(R.id.stats_uptime)?.text = formatDuration(uptime)
+        v.findViewById<TextView>(R.id.stats_active_streams)?.text = active.toString()
+
+        // Update toggle text based on current state
+        v.findViewById<TextView>(R.id.stats_toggle)?.text =
+                if (isStatsExpanded) getString(R.string.stats_show_less)
+                else getString(R.string.stats_show_all)
     }
 }
