@@ -757,6 +757,7 @@ class MainFragment : Fragment() {
                     fetchAndUpdateStats()
                     AppState.isForeground.collectLatest { isForeground ->
                         val interval = if (isForeground) 1_000L else 30_000L
+                        Log.i(TAG, "Stats polling: using ${interval / 1000}s interval (foreground=$isForeground)")
                         while (isActive) {
                             delay(interval)
                             fetchAndUpdateStats()
