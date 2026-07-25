@@ -19,7 +19,7 @@
     <string name="stats_dl_label">下载</string>
     <string name="stats_ul_label">上传</string>
     <string name="stats_rtt_label">延迟</string>
-    <string name="stats_conns_label">连接</string>
+    <string name="stats_conns_label">TCP连接</string>
     <string name="stats_peak_dl_label">峰值下载</string>
     <string name="stats_peak_ul_label">峰值上传</string>
     <string name="stats_sent_label">发送</string>

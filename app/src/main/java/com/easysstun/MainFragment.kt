@@ -7,12 +7,18 @@ import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -452,11 +458,13 @@ class MainFragment : Fragment() {
             val expandable = view.findViewById<LinearLayout>(R.id.stats_expandable)
             val arrow = view.findViewById<ImageView>(R.id.stats_header_arrow)
             if (isStatsExpanded) {
-                expandable?.visibility = View.VISIBLE
-                arrow?.animate()?.rotation(180f)?.setDuration(300)?.start()
+                arrow?.animate()?.rotation(180f)?.setDuration(400)
+                        ?.setInterpolator(OvershootInterpolator(1.5f))?.start()
+                animateHeight(expandable, true)
             } else {
-                expandable?.visibility = View.GONE
-                arrow?.animate()?.rotation(0f)?.setDuration(300)?.start()
+                arrow?.animate()?.rotation(0f)?.setDuration(400)
+                        ?.setInterpolator(OvershootInterpolator(1.5f))?.start()
+                animateHeight(expandable, false)
             }
         }
     }
@@ -839,10 +847,10 @@ class MainFragment : Fragment() {
         val bulkActive = json.optInt("bulk_active_streams", 0)
         val uptime = json.optDouble("uptime_seconds", 0.0)
         val active = json.optInt("active_streams", 0)
-        val dlSpeed = json.optString("download_speed_human", "")
-        val ulSpeed = json.optString("upload_speed_human", "")
-        val peakDl = json.optString("peak_download_speed_human", "")
-        val peakUl = json.optString("peak_upload_speed_human", "")
+        val dlSpeed = stripByteUnit(json.optString("download_speed_human", ""))
+        val ulSpeed = stripByteUnit(json.optString("upload_speed_human", ""))
+        val peakDl = stripByteUnit(json.optString("peak_download_speed_human", ""))
+        val peakUl = stripByteUnit(json.optString("peak_upload_speed_human", ""))
 
         // Row 1: DL Speed | UL Speed | RTT | TCP Conns
         v.findViewById<TextView>(R.id.stats_download_speed)?.text = dlSpeed
@@ -877,7 +885,64 @@ class MainFragment : Fragment() {
         val arrow = v.findViewById<ImageView>(R.id.stats_header_arrow)
         val targetRotation = if (isStatsExpanded) 180f else 0f
         if (arrow?.rotation != targetRotation) {
-            arrow?.animate()?.rotation(targetRotation)?.setDuration(300)?.start()
+            arrow?.animate()?.rotation(targetRotation)?.setDuration(400)
+                    ?.setInterpolator(OvershootInterpolator(1.5f))?.start()
+        }
+    }
+
+    /**
+     * Strips "B" from byte-unit strings for compact display.
+     * "1.5 MB/s" → "1.5 M/s", "1.5 MB" → "1.5 M", "999 B" → "999 B"
+     */
+    private fun stripByteUnit(s: String): String {
+        if (s.isEmpty()) return s
+        return s.replace("B/s", "/s")
+                .replace(Regex("(?<=[KMGT])B$"), "")
+    }
+
+    /**
+     * Animates a view's height for smooth expand/collapse.
+     */
+    private fun animateHeight(view: View?, expand: Boolean) {
+        view ?: return
+        view.measure(
+                View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val targetHeight = view.measuredHeight
+
+        if (expand) {
+            view.visibility = View.VISIBLE
+            view.layoutParams.height = 0
+            ValueAnimator.ofInt(0, targetHeight).apply {
+                duration = 350
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    view.layoutParams.height = it.animatedValue as Int
+                    view.requestLayout()
+                }
+                start()
+            }
+        } else {
+            val startHeight = view.height
+            if (startHeight <= 0) {
+                view.visibility = View.GONE
+                return
+            }
+            ValueAnimator.ofInt(startHeight, 0).apply {
+                duration = 350
+                interpolator = AccelerateInterpolator()
+                addUpdateListener {
+                    view.layoutParams.height = it.animatedValue as Int
+                    view.requestLayout()
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        view.visibility = View.GONE
+                    }
+                })
+                start()
+            }
         }
     }
 }

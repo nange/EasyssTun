@@ -4,7 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_margin="14dp"
+    android:layout_marginLeft="14dp"
+    android:layout_marginRight="14dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="14dp"
     android:orientation="vertical">
 
     <com.google.android.material.card.MaterialCardView
@@ -172,7 +175,7 @@
                     android:layout_height="24dp"
                     android:src="@drawable/expand_more_24px"
                     android:contentDescription="@null"
-                    app:tint="?android:textColorSecondary" />
+                    app:tint="@color/teal_700" />
             </LinearLayout>
 
             <!-- Stats grid: 4 columns, label-on-top -->
@@ -180,9 +183,8 @@
                 android:id="@+id/stats_grid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="vertical"
-                android:animateLayoutChanges="true">
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
 
                 <!-- Row 1: always visible — DL Speed | UL Speed | RTT | TCP Conns -->
                 <LinearLayout
@@ -515,8 +517,8 @@
             <!-- Version info -->
             <TextView
                 android:id="@+id/version_placeholder"
-                style="@style/CardSummary"
-                android:layout_marginTop="8dp"/>
+                style="@style/VersionInfo"
+                android:layout_marginTop="16dp"/>
         </LinearLayout>
 
     </com.google.android.material.card.MaterialCardView>

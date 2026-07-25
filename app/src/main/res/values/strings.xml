@@ -20,7 +20,7 @@
     <string name="stats_dl_label">DL</string>
     <string name="stats_ul_label">UL</string>
     <string name="stats_rtt_label">RTT</string>
-    <string name="stats_conns_label">Conns</string>
+    <string name="stats_conns_label">TCP Conns</string>
     <string name="stats_peak_dl_label">Peak DL</string>
     <string name="stats_peak_ul_label">Peak UL</string>
     <string name="stats_sent_label">Sent</string>

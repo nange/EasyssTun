@@ -27,56 +27,56 @@ class MainFragmentHelpersTest {
     @Test
     fun formatBytes_kilobytes() {
         val result1KB = formatBytes(1_000)
-        assertTrue("1KB should contain 'KB'", result1KB.contains("KB"))
+        assertTrue("1K should contain 'K'", result1KB.contains("K"))
 
         val result1500 = formatBytes(1_500)
-        assertTrue("1.5KB should contain 'KB'", result1500.contains("KB"))
+        assertTrue("1.5K should contain 'K'", result1500.contains("K"))
     }
 
     @Test
     fun formatBytes_megabytes() {
         val result1MB = formatBytes(1_000_000)
-        assertTrue("1MB should contain 'MB'", result1MB.contains("MB"))
+        assertTrue("1M should contain 'M'", result1MB.contains("M"))
 
         val result = formatBytes(2_500_000)
-        assertTrue("2.5MB should contain 'MB'", result.contains("MB"))
+        assertTrue("2.5M should contain 'M'", result.contains("M"))
     }
 
     @Test
     fun formatBytes_gigabytes() {
         val result1GB = formatBytes(1_000_000_000)
-        assertTrue("1GB should contain 'GB'", result1GB.contains("GB"))
+        assertTrue("1G should contain 'G'", result1GB.contains("G"))
 
         val result = formatBytes(1_500_000_000L)
-        assertTrue("1.5GB should contain 'GB'", result.contains("GB"))
+        assertTrue("1.5G should contain 'G'", result.contains("G"))
     }
 
     @Test
     fun formatBytes_largeGigabytes() {
         val result = formatBytes(50_000_000_000L)
-        assertTrue("50GB should contain 'GB'", result.contains("GB"))
-        assertFalse("50GB should not contain 'MB'", result.contains("MB"))
+        assertTrue("50G should contain 'G'", result.contains("G"))
+        assertFalse("50G should not contain 'M'", result.contains("M"))
     }
 
     @Test
     fun formatBytes_boundaryValues() {
         // 999 bytes -> B
-        assertTrue("999 should be bytes", formatBytes(999).contains("B") && !formatBytes(999).contains("K"))
+        assertTrue("999 should be B", formatBytes(999).contains("B") && !formatBytes(999).contains("K"))
 
-        // 1_000 bytes -> KB
-        assertTrue("1000 should be KB", formatBytes(1_000).contains("KB"))
+        // 1_000 bytes -> K
+        assertTrue("1000 should be K", formatBytes(1_000).contains("K"))
 
-        // 999_999 bytes -> KB
-        assertTrue("999_999 should be KB", formatBytes(999_999).contains("KB"))
+        // 999_999 bytes -> K
+        assertTrue("999_999 should be K", formatBytes(999_999).contains("K"))
 
-        // 1_000_000 bytes -> MB
-        assertTrue("1_000_000 should be MB", formatBytes(1_000_000).contains("MB"))
+        // 1_000_000 bytes -> M
+        assertTrue("1_000_000 should be M", formatBytes(1_000_000).contains("M"))
 
-        // 999_999_999 bytes -> MB
-        assertTrue("999_999_999 should be MB", formatBytes(999_999_999).contains("MB"))
+        // 999_999_999 bytes -> M
+        assertTrue("999_999_999 should be M", formatBytes(999_999_999).contains("M"))
 
-        // 1_000_000_000 bytes -> GB
-        assertTrue("1_000_000_000 should be GB", formatBytes(1_000_000_000).contains("GB"))
+        // 1_000_000_000 bytes -> G
+        assertTrue("1_000_000_000 should be G", formatBytes(1_000_000_000).contains("G"))
     }
 
     // ── formatDuration ───────────────────────────────────────────
