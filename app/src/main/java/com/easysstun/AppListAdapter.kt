@@ -160,7 +160,7 @@ class AppListAdapter(
 
 
             checkBox.setOnClickListener {
-                Log.e("app", "selected " + appInfo.packageName)
+                Log.e("AppListAdapter", "selected " + appInfo.packageName)
                 if (checkBox.isChecked) {
                     selectedApps.add(appInfo.packageName)
                 } else {

@@ -37,6 +37,12 @@ class LogFragment : Fragment() {
     private var changingState = false
 
     companion object {
+        // App log tags to display in the log viewer
+        private val APP_LOG_TAGS = arrayOf(
+            "GoLog", "TProxyServiceDiag", "MainFragment", "AppState",
+            "Pref", "Profile", "LogFragment", "AppListAdapter"
+        )
+
         // Pattern A: Go slog format within the logcat message payload
         // Matches: time=... level=... source=... msg=...
         private val LOG_PATTERN_SLOG =
@@ -46,6 +52,12 @@ class LogFragment : Fragment() {
         // Captures logcat wrapper: date, time, level char, and msg=... content
         private val LOG_PATTERN_FALLBACK =
             Pattern.compile("^(\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+easyss\\s+:\\s+msg=(.*)$")
+
+        // Pattern C: Standard android.util.Log logcat output format
+        // Captures: date, time, level char, tag, message
+        // Example: "07-25 10:30:45.123  1234  5678 I TProxyServiceDiag: onStartCommand..."
+        private val LOG_PATTERN_STANDARD =
+            Pattern.compile("^(\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+(\\S+)\\s*:\\s*(.*)$")
 
         /**
          * Convert ISO 8601 timestamp to display format: "MM-DD HH:MM:SS.mmm"
@@ -69,6 +81,17 @@ class LogFragment : Fragment() {
             "E" -> "ERROR"
             "F" -> "FATAL"
             else -> c
+        }
+
+        /** Map a level string to numeric severity for filtering (higher = more severe). */
+        fun levelSeverity(level: String): Int = when (level.uppercase()) {
+            "VERBOSE" -> 2
+            "DEBUG" -> 3
+            "INFO" -> 4
+            "WARN", "WARNING" -> 5
+            "ERROR" -> 6
+            "FATAL" -> 7
+            else -> 4  // Default to INFO
         }
     }
 
@@ -138,7 +161,21 @@ class LogFragment : Fragment() {
         super.onDestroy()
         logJob?.cancel()
     }
+
+    /** Read the configured log level from the active profile, defaulting to INFO (severity 4). */
+    private fun getMinLevelSeverity(): Int {
+        val logLevel = Pref(requireContext()).getActiveProfile()?.logLevel ?: "info"
+        return when (logLevel.lowercase()) {
+            "debug" -> 3
+            "info" -> 4
+            "warn" -> 5
+            "error" -> 6
+            else -> 4  // Default INFO
+        }
+    }
+
     private fun readLogs() {
+        val minLevelSeverity = getMinLevelSeverity()
         logJob = lifecycleScope.launch(Dispatchers.IO) {
             var inputStream: InputStream? = null
             var bufferedReader: BufferedReader? = null
@@ -146,7 +183,8 @@ class LogFragment : Fragment() {
             try {
                 val cleanprocess = Runtime.getRuntime().exec("logcat -c")
                 cleanprocess.waitFor()
-                process = Runtime.getRuntime().exec("logcat -s GoLog")
+                val tags = APP_LOG_TAGS.joinToString(" ")
+                process = Runtime.getRuntime().exec("logcat -s $tags")
                 inputStream = process.inputStream
                 bufferedReader = BufferedReader(InputStreamReader(inputStream))
                 while (isActive) {
@@ -160,8 +198,10 @@ class LogFragment : Fragment() {
                             val source = matcher.group(3) ?: ""
                             val msg = matcher.group(4) ?: ""
                             val displayTime = formatTime(isoTime)
-                            val logItem = LogItem(msg, displayTime, source, level)
-                            logViewModel.addLog(logItem)
+                            if (levelSeverity(level) >= minLevelSeverity) {
+                                val logItem = LogItem(msg, displayTime, source, level)
+                                logViewModel.addLog(logItem)
+                            }
                         } else {
                             // Try fallback pattern for TProxyService lines
                             matcher = LOG_PATTERN_FALLBACK.matcher(line)
@@ -172,8 +212,26 @@ class LogFragment : Fragment() {
                                 val msg = matcher.group(4) ?: ""
                                 val displayTime = "$logDate $logTime"
                                 val level = mapLevelChar(levelChar)
-                                val logItem = LogItem(msg, displayTime, "", level)
-                                logViewModel.addLog(logItem)
+                                if (levelSeverity(level) >= minLevelSeverity) {
+                                    val logItem = LogItem(msg, displayTime, "", level)
+                                    logViewModel.addLog(logItem)
+                                }
+                            } else {
+                                // Try standard android.util.Log pattern for app-side logs
+                                matcher = LOG_PATTERN_STANDARD.matcher(line)
+                                if (matcher.find()) {
+                                    val logDate = matcher.group(1) ?: ""
+                                    val logTime = matcher.group(2) ?: ""
+                                    val levelChar = matcher.group(3) ?: ""
+                                    val tag = matcher.group(4) ?: ""
+                                    val msg = matcher.group(5) ?: ""
+                                    val displayTime = "$logDate $logTime"
+                                    val level = mapLevelChar(levelChar)
+                                    if (levelSeverity(level) >= minLevelSeverity) {
+                                        val logItem = LogItem(msg, displayTime, tag, level)
+                                        logViewModel.addLog(logItem)
+                                    }
+                                }
                             }
                         }
                     }
