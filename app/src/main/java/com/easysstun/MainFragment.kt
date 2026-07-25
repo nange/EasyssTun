@@ -42,6 +42,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -754,9 +755,12 @@ class MainFragment : Fragment() {
                         delay(2_000) // brief wait for stats endpoint to be ready
                     }
                     fetchAndUpdateStats()
-                    while (isActive) {
-                        delay(15_000) // poll every 15 seconds
-                        fetchAndUpdateStats()
+                    AppState.isForeground.collectLatest { isForeground ->
+                        val interval = if (isForeground) 1_000L else 30_000L
+                        while (isActive) {
+                            delay(interval)
+                            fetchAndUpdateStats()
+                        }
                     }
                 }
     }

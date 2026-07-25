@@ -146,6 +146,7 @@ dependencies {
     implementation 'androidx.preference:preference-ktx:1.2.1'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.10.0'
+    implementation 'androidx.lifecycle:lifecycle-process:2.10.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0'
     testImplementation 'junit:junit:4.13.2'
