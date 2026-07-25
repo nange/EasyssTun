@@ -88,7 +88,7 @@
     </style>
 
     <style name="StatsValue">
-        <item name="android:textAppearance">?textAppearanceBodyMedium</item>
+        <item name="android:textAppearance">?textAppearanceBodySmall</item>
         <item name="android:textColor">?android:textColorPrimary</item>
         <item name="android:textStyle">bold</item>
         <item name="android:layout_width">match_parent</item>

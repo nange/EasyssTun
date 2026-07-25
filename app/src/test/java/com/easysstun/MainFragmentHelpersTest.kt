@@ -14,14 +14,14 @@ class MainFragmentHelpersTest {
 
     @Test
     fun formatBytes_zero() {
-        assertEquals("0 B", formatBytes(0))
+        assertEquals("0B", formatBytes(0))
     }
 
     @Test
     fun formatBytes_bytes() {
-        assertEquals("0 B", formatBytes(0))
-        assertEquals("1 B", formatBytes(1))
-        assertEquals("999 B", formatBytes(999))
+        assertEquals("0B", formatBytes(0))
+        assertEquals("1B", formatBytes(1))
+        assertEquals("999B", formatBytes(999))
     }
 
     @Test

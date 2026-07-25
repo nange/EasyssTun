@@ -8,10 +8,10 @@ import java.util.Locale
  */
 internal fun formatBytes(bytes: Long): String {
     return when {
-        bytes >= 1_000_000_000 -> String.format(Locale.ROOT, "%.2f GB", bytes / 1_000_000_000.0)
-        bytes >= 1_000_000 -> String.format(Locale.ROOT, "%.2f MB", bytes / 1_000_000.0)
-        bytes >= 1_000 -> String.format(Locale.ROOT, "%.2f KB", bytes / 1_000.0)
-        else -> "$bytes B"
+        bytes >= 1_000_000_000 -> String.format(Locale.ROOT, "%.2fGB", bytes / 1_000_000_000.0)
+        bytes >= 1_000_000 -> String.format(Locale.ROOT, "%.2fMB", bytes / 1_000_000.0)
+        bytes >= 1_000 -> String.format(Locale.ROOT, "%.2fKB", bytes / 1_000.0)
+        else -> "${bytes}B"
     }
 }
 

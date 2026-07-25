@@ -15,7 +15,6 @@
     <!-- Stats Card -->
     <string name="stats_title">Statistics</string>
     <string name="stats_loading">Loading statistics…</string>
-    <string name="stats_updating">Updating…</string>
     <string name="stats_unavailable">Statistics not available</string>
     <!-- Stats labels (label-on-top layout) -->
     <string name="stats_dl_label">DL</string>
@@ -33,8 +32,6 @@
     <string name="stats_uptime_label">Uptime</string>
     <string name="stats_active_label">Active</string>
 
-    <string name="stats_show_all">Show all statistics ▼</string>
-    <string name="stats_show_less">Show less ▲</string>
     <string name="applist_title">App Proxy Settings</string>
     <string name="log_title">Easyss Log</string>
 

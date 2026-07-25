@@ -143,10 +143,14 @@
 
             <!-- Header -->
             <LinearLayout
+                android:id="@+id/stats_header"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground"
                 tools:ignore="UseCompoundDrawables">
 
                 <ImageView
@@ -155,11 +159,20 @@
                     android:contentDescription="@null" />
 
                 <TextView
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:layout_marginStart="20dp"
                     style="@style/CardTitle"
                     android:text="@string/stats_title" />
+
+                <ImageView
+                    android:id="@+id/stats_header_arrow"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/expand_more_24px"
+                    android:contentDescription="@null"
+                    app:tint="?android:textColorSecondary" />
             </LinearLayout>
 
             <!-- Stats grid: 4 columns, label-on-top -->
@@ -168,13 +181,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:animateLayoutChanges="true">
 
                 <!-- Row 1: always visible — DL Speed | UL Speed | RTT | TCP Conns -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:baselineAligned="false">
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -267,6 +282,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
+                        android:baselineAligned="false"
                         android:layout_marginTop="8dp">
 
                         <LinearLayout
@@ -352,6 +368,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
+                        android:baselineAligned="false"
                         android:layout_marginTop="8dp">
 
                         <LinearLayout
@@ -432,31 +449,13 @@
 
                     </LinearLayout>
 
-                    <!-- Row 4: Uptime | Active | — | — -->
+                    <!-- Row 4: Active | Uptime (span 2) | — -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
+                        android:baselineAligned="false"
                         android:layout_marginTop="8dp">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
-                            android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
-
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_uptime_label" />
-
-                            <TextView
-                                android:id="@+id/stats_uptime"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -477,16 +476,26 @@
                                 android:text="" />
                         </LinearLayout>
 
-                        <!-- Placeholder cells for alignment -->
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
+                            android:layout_weight="2"
                             android:orientation="vertical"
                             android:gravity="center_horizontal"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp" />
+                            android:paddingEnd="4dp">
 
+                            <TextView
+                                style="@style/StatsLabel"
+                                android:text="@string/stats_uptime_label" />
+
+                            <TextView
+                                android:id="@+id/stats_uptime"
+                                style="@style/StatsValue"
+                                android:text="" />
+                        </LinearLayout>
+
+                        <!-- Placeholder cell for alignment -->
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -494,24 +503,12 @@
                             android:orientation="vertical"
                             android:gravity="center_horizontal"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp" />
+                            android:paddingEnd="4dp"
+                            tools:ignore="UselessLeaf" />
 
                     </LinearLayout>
 
                 </LinearLayout>
-
-                <!-- Toggle: expand / collapse -->
-                <TextView
-                    android:id="@+id/stats_toggle"
-                    style="@style/StatsLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="8dp"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:text="@string/stats_show_all" />
 
             </LinearLayout>
 
