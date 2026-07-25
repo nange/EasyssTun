@@ -98,6 +98,8 @@
     <style name="VersionInfo">
         <item name="android:textAppearance">?textAppearanceCaption</item>
         <item name="android:textColor">?android:textColorSecondary</item>
+        <item name="android:fontFamily">sans-serif-light</item>
+        <item name="android:textStyle">italic</item>
         <item name="android:alpha">0.6</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>

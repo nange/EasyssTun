@@ -321,14 +321,6 @@ class MainFragment : Fragment() {
                             isSwitchingServer = false
                             serverSpinner.isEnabled = true
                             this@MainFragment.view?.let {
-                                val serviceSummaryTextView =
-                                        it.findViewById<TextView>(R.id.service_summary)
-                                if (easyssInfo.valid) {
-                                    serviceSummaryTextView.text = easyssInfo.info
-                                } else {
-                                    serviceSummaryTextView.text =
-                                            getString(R.string.easyss_need_config)
-                                }
                                 updateServiceStatu(it)
                             }
                         }
@@ -438,9 +430,7 @@ class MainFragment : Fragment() {
             }
         }
 
-        if (easyssInfo.valid) {
-            view.findViewById<TextView>(R.id.service_summary).let { it.text = easyssInfo.info }
-        } else {
+        if (!easyssInfo.valid) {
             pref.isServiceEnabled = false
         }
 
@@ -666,16 +656,9 @@ class MainFragment : Fragment() {
         // Refresh easyssInfo at the beginning of UI update (if not switching)
         easyssInfo = pref.getEasyssInfo()
 
-        // Update service summary based on current easyssInfo
-        val serviceSummaryTextView = view.findViewById<TextView>(R.id.service_summary)
-        if (easyssInfo.valid) {
-            serviceSummaryTextView.text = easyssInfo.info
-        } else {
-            serviceSummaryTextView.text = getString(R.string.easyss_need_config)
-            // If config is invalid, ensure service is marked as disabled
-            if (pref.isServiceEnabled) { // only if it was previously enabled
-                pref.isServiceEnabled = false
-            }
+        // If config is invalid, ensure service is marked as disabled
+        if (!easyssInfo.valid && pref.isServiceEnabled) {
+            pref.isServiceEnabled = false
         }
 
         // References to UI elements
@@ -906,7 +889,7 @@ class MainFragment : Fragment() {
     private fun animateHeight(view: View?, expand: Boolean) {
         view ?: return
         view.measure(
-                View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec((view.parent as View).width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
         val targetHeight = view.measuredHeight
