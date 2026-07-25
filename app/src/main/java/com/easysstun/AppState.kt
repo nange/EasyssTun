@@ -15,7 +15,7 @@ object AppState {
 
     fun update(foreground: Boolean) {
         if (_isForeground.value != foreground) {
-            Log.i(TAG, "App state changed → ${if (foreground) "FOREGROUND (1s)" else "BACKGROUND (30s)"}")
+            Log.i(TAG, "App state changed → ${if (foreground) "FOREGROUND (2s)" else "BACKGROUND (30s)"}")
         }
         _isForeground.value = foreground
     }
