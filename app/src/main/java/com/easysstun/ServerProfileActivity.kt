@@ -138,19 +138,19 @@ class ServerProfileActivity : AppCompatActivity() {
 
     private fun showDeleteConfirmationDialog() {
         AlertDialog.Builder(this)
-            .setTitle("Confirm Delete")
-            .setMessage("Are you sure you want to delete this server profile?")
-            .setPositiveButton("Delete") { _, _ ->
+            .setTitle(getString(R.string.delete_confirm_title))
+            .setMessage(getString(R.string.delete_confirm_message))
+            .setPositiveButton(getString(R.string.delete_confirm_positive)) { _, _ ->
                 deleteProfileAndFinish()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.delete_confirm_negative), null)
             .show()
     }
 
     private fun deleteProfileAndFinish() {
         profileId?.let {
             pref.deleteProfile(it)
-            Toast.makeText(this, "Profile deleted", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.delete_success), Toast.LENGTH_SHORT).show()
             finish()
         }
     }
@@ -202,7 +202,7 @@ class ServerProfileActivity : AppCompatActivity() {
 
         val profileToSave = Profile(
             id = profileId ?: UUID.randomUUID().toString(),
-            name = name.ifBlank { server }, // Default name to server address if blank
+            name = name.ifBlank { "$server:$serverPort" }, // Default name to server:port if blank
             server = server,
             serverPort = serverPort,
             password = password,

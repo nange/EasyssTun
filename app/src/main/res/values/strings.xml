@@ -59,7 +59,7 @@
     <string name="section_routing_rules">Routing Rules</string>
     <string name="section_options">Options</string>
 
-    <string name="hint_name">Name</string>
+    <string name="hint_name">Name (Optional)</string>
     <string name="hint_server_host">Server Host</string>
     <string name="hint_server_port">Server Port</string>
     <string name="hint_password">Password</string>
@@ -83,8 +83,14 @@
 
     <!-- Misc -->
     <string name="search_hint">Search</string>
-    <string name="add_new_server">Add New Server</string>
+    <string name="add_new_server">Add New Configuration</string>
     <string name="active_badge">Active</string>
     <string name="log_menu_title">Log</string>
     <string name="fab_scroll_to_bottom">Scroll to bottom</string>
+    <!-- Delete confirmation dialog -->
+    <string name="delete_confirm_title">Confirm Delete</string>
+    <string name="delete_confirm_message">Are you sure you want to delete this server profile?</string>
+    <string name="delete_confirm_positive">Delete</string>
+    <string name="delete_confirm_negative">Cancel</string>
+    <string name="delete_success">Profile deleted</string>
 </resources>
