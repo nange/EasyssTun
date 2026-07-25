@@ -168,7 +168,7 @@
                     android:id="@+id/stats_header_arrow"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
-                    android:src="@drawable/expand_more_24px"
+                    android:src="@drawable/expand_arrow_24dp"
                     android:contentDescription="@null"
                     app:tint="@color/teal_700" />
             </LinearLayout>

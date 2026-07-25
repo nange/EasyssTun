@@ -879,7 +879,7 @@ class MainFragment : Fragment() {
      */
     private fun stripByteUnit(s: String): String {
         if (s.isEmpty()) return s
-        return s.replace("B/s", "/s")
+        return s.replace(Regex("(?<=[KMGT])B/s"), "/s")
                 .replace(Regex("(?<=[KMGT])B$"), "")
     }
 

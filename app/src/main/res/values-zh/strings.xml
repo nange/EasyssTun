@@ -26,8 +26,8 @@
     <string name="stats_recv_label">接收</string>
     <string name="stats_priority_conns_label">优先连接</string>
     <string name="stats_bulk_conns_label">普通连接</string>
-    <string name="stats_priority_active_label">优先活跃</string>
-    <string name="stats_bulk_active_label">普通活跃</string>
+    <string name="stats_priority_active_label">优先活跃流</string>
+    <string name="stats_bulk_active_label">普通活跃流</string>
     <string name="stats_uptime_label">运行</string>
     <string name="stats_active_label">活跃流</string>
 
