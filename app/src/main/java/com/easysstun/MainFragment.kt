@@ -39,6 +39,7 @@ import io.github.nange.easyss.mobile.Mobile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -795,6 +796,7 @@ class MainFragment : Fragment() {
             statsHadSuccessfulFetch = true
             withContext(Dispatchers.Main) { updateStatsDisplay(json) }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.w(TAG, "Failed to fetch stats: ${e.message}")
             withContext(Dispatchers.Main) { updateStatsUnavailable() }
         } finally {
