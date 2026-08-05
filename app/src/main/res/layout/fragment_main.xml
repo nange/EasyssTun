@@ -181,12 +181,32 @@
             android:layout_marginTop="8dp"
             android:orientation="vertical">
 
-                <!-- Row 1: always visible — DL Speed | UL Speed | RTT | TCP Conns -->
+                <!-- Row 1: always visible — RTT (hero) | DL Speed | UL Speed | TCP Conns -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:baselineAligned="false">
+
+                    <!-- Latency first, slightly emphasized -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="center_horizontal"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp">
+
+                        <TextView
+                            style="@style/StatsLabel"
+                            android:text="@string/stats_rtt_label" />
+
+                        <TextView
+                            android:id="@+id/stats_avg_rtt_ms"
+                            style="@style/StatsValueHero"
+                            android:text="@string/stats_loading" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -204,7 +224,7 @@
                         <TextView
                             android:id="@+id/stats_download_speed"
                             style="@style/StatsValue"
-                            android:text="@string/stats_loading" />
+                            android:text="" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -222,25 +242,6 @@
 
                         <TextView
                             android:id="@+id/stats_upload_speed"
-                            style="@style/StatsValue"
-                            android:text="" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center_horizontal"
-                        android:paddingStart="4dp"
-                        android:paddingEnd="4dp">
-
-                        <TextView
-                            style="@style/StatsLabel"
-                            android:text="@string/stats_rtt_label" />
-
-                        <TextView
-                            android:id="@+id/stats_avg_rtt_ms"
                             style="@style/StatsValue"
                             android:text="" />
                     </LinearLayout>

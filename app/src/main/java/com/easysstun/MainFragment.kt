@@ -807,7 +807,8 @@ class MainFragment : Fragment() {
     private fun updateStatsUnavailable() {
         val v = view ?: return
         val txt = getString(R.string.stats_unavailable)
-        v.findViewById<TextView>(R.id.stats_download_speed)?.text = txt
+        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = txt
+        v.findViewById<TextView>(R.id.stats_download_speed)?.text = ""
         v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ""
         v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = ""
         v.findViewById<TextView>(R.id.stats_conns)?.text = ""
@@ -842,11 +843,11 @@ class MainFragment : Fragment() {
         val peakDl = stripByteUnit(json.optString("peak_download_speed_human", ""))
         val peakUl = stripByteUnit(json.optString("peak_upload_speed_human", ""))
 
-        // Row 1: DL Speed | UL Speed | RTT | TCP Conns
-        v.findViewById<TextView>(R.id.stats_download_speed)?.text = dlSpeed
-        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ulSpeed
+        // Row 1: RTT | DL Speed | UL Speed | TCP Conns
         v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text =
                 String.format(Locale.ROOT, "%.1fms", avgRttMs)
+        v.findViewById<TextView>(R.id.stats_download_speed)?.text = dlSpeed
+        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ulSpeed
         v.findViewById<TextView>(R.id.stats_conns)?.text =
                 String.format(Locale.ROOT, "%d", conns)
 
