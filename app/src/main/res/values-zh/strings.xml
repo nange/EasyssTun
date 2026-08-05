@@ -43,6 +43,7 @@
     <string name="choose_app_to_proxy">点按配置代理的应用</string>
     <string name="route_desc_proxy_only">仅以上选中的应用会通过 Easyss 代理。\n\n其他应用将直连。</string>
     <string name="clear_all_selected">清空已选</string>
+    <string name="show_system_apps">显示系统应用</string>
     <string name="easyss_configure_title">Easyss 配置</string>
     <string name="route_desc">EasyssTun会跳过局域网流量，同时以上选中的应用也会跳过。\n\n除以上情况外的流量将由Easyss接管。</string>
     <string name="app_name_placeholder">应用名</string>

@@ -9,10 +9,12 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import android.Manifest
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.text.Editable
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -78,27 +80,38 @@ class AppListFragment : Fragment() {
                 }
                 // Reload the app list with the new mode's selections
                 adapter.setProxyMode(pref.getProxyMode())
-                lifecycleScope.launch {
-                    val appList = withContext(Dispatchers.IO) { getInstalledApps() }
-                    adapter.setAppList(appList)
-                }
+                reloadList(requireView())
             }
+        }
+
+        val checkboxShowSystemApps = view.findViewById<MaterialCheckBox>(R.id.checkboxShowSystemApps)
+        checkboxShowSystemApps.isChecked = pref.showSystemApps
+        checkboxShowSystemApps.setOnCheckedChangeListener { _, isChecked ->
+            pref.showSystemApps = isChecked
+            reloadList(requireView())
         }
 
         view.findViewById<MaterialButton>(R.id.btnClearAll).setOnClickListener {
             adapter.clearAllSelected()
         }
 
-        lifecycleScope.launch {
-            val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
-            progressBar.visibility = View.VISIBLE
-            val appList = withContext(Dispatchers.IO) {
-                getInstalledApps()
-            }
-            adapter.setAppList(appList)
-            progressBar.visibility = View.GONE
-        }
+        reloadList(view, showProgress = true)
         return view
+    }
+
+    private fun reloadList(rootView: View, showProgress: Boolean = false) {
+        lifecycleScope.launch {
+            val progressBar = rootView.findViewById<ProgressBar>(R.id.progressBar)
+            if (showProgress) progressBar.visibility = View.VISIBLE
+            try {
+                val appList = withContext(Dispatchers.IO) {
+                    getInstalledApps()
+                }
+                adapter.setAppList(appList)
+            } finally {
+                if (showProgress) progressBar.visibility = View.GONE
+            }
+        }
     }
 
     private fun getInstalledApps(): List<PackageInfo> {
@@ -113,10 +126,14 @@ class AppListFragment : Fragment() {
 
         val pref = Pref(requireContext())
         val selectedApps = pref.getApps()
+        val showSystemApps = pref.showSystemApps
 
         var appList = packages
             .filter { packageInfo ->
-                packageInfo.applicationInfo != null &&
+                val appInfo = packageInfo.applicationInfo
+                appInfo != null &&
+                        (showSystemApps || appInfo.flags and
+                                (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0) &&
                         packageInfo.requestedPermissions?.contains(Manifest.permission.INTERNET) == true &&
                         packageInfo.packageName != requireActivity().applicationContext.packageName
             }

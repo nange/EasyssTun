@@ -24,6 +24,7 @@ class Pref(private val ctx: Context) {
         const val PROXY_MODE_KEY = "proxy_mode"
         const val PROXY_MODE_BYPASS = "bypass"
         const val PROXY_MODE_PROXY_ONLY = "proxy_only"
+        const val SHOW_SYSTEM_APPS = "show_system_apps"
         const val PREFS_UPDATED = "prefs_updated"
         const val CUSTOM_CA_FILE = "easyss_custom_ca.conf"
         const val DIRECT_FILE = "easyss_direct.conf"
@@ -47,6 +48,12 @@ class Pref(private val ctx: Context) {
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
         set(value) {
             prefs.edit { putBoolean(SERVICE_ENABLED, value) }
+        }
+
+    var showSystemApps: Boolean
+        get() = prefs.getBoolean(SHOW_SYSTEM_APPS, true)
+        set(value) {
+            prefs.edit { putBoolean(SHOW_SYSTEM_APPS, value) }
         }
 
     fun getApps(): Set<String> {
