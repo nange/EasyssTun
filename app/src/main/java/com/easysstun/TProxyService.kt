@@ -1,5 +1,6 @@
 package com.easysstun
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -16,17 +17,23 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import io.github.nange.easyss.config.SimpleConfig
 import io.github.nange.easyss.mobile.Mobile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.Locale
 
 
 class TProxyService : VpnService() {
@@ -40,6 +47,7 @@ class TProxyService : VpnService() {
     private val easyScope = CoroutineScope(Dispatchers.IO + easyJob)
     private lateinit var mobileJob: Job
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private var notificationUpdaterJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (ACTION_DISCONNECT == intent?.action) {
@@ -268,7 +276,8 @@ socks5:
         pref.prefs.edit { apply { putBoolean("enable", true) } }
         val channelName = "easysstun"
         initNotificationChannel(channelName)
-        createNotification(channelName)
+        createNotification(channelName, loadedProfile.name)
+        startNotificationUpdater(channelName, loadedProfile.name)
     }
 
     fun stopService() {
@@ -281,6 +290,7 @@ socks5:
             return
         }
         Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}")
+        notificationUpdaterJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
 
         serviceScope.launch {
@@ -367,21 +377,69 @@ socks5:
         Log.i(TAG, "actualFinalizeStop: Service fully stopped and broadcast sent to package $packageName.")
     }
 
-    private fun createNotification(channelName: String) {
+    private fun createNotification(channelName: String, profileName: String) {
+        val notify = buildNotification(
+            channelName,
+            profileName,
+            getString(R.string.notification_stats_unavailable)
+        )
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, notify)
+        } else {
+            startForeground(NOTIFICATION_ID, notify, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        }
+    }
+
+    private fun buildNotification(channelName: String, title: String, contentText: String): Notification {
         val i = Intent(this, MainActivity::class.java)
         i.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         val pi = PendingIntent.getActivity(this, 0, i, PendingIntent.FLAG_IMMUTABLE)
-        val notification = NotificationCompat.Builder(this, channelName)
-        val notify = notification
-            .setContentTitle(getString(R.string.service_running))
+        return NotificationCompat.Builder(this, channelName)
+            .setContentTitle(title)
+            .setContentText(contentText)
             .setSilent(true)
+            .setOngoing(true)
             .setSmallIcon(R.drawable.ic_launcher_foreground_big)
             .setContentIntent(pi)
             .build()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notify)
-        } else {
-            startForeground(1, notify, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+    }
+
+    private fun startNotificationUpdater(channelName: String, profileName: String) {
+        notificationUpdaterJob = serviceScope.launch {
+            delay(2_000) // brief wait for stats endpoint to be ready
+            while (isActive) {
+                val contentText = fetchStatsContentText()
+                    ?: getString(R.string.notification_stats_unavailable)
+                val notify = buildNotification(channelName, profileName, contentText)
+                (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                    .notify(NOTIFICATION_ID, notify)
+                delay(2_000)
+            }
+        }
+    }
+
+    private fun fetchStatsContentText(): String? {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(STATS_URL)
+            conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 2_000
+            conn.readTimeout = 2_000
+            conn.requestMethod = "GET"
+            if (conn.responseCode != 200) return null
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(body)
+            val avgRttMs = json.optDouble("avg_rtt_ms", 0.0)
+            val dlSpeed = json.optString("download_speed_human", "")
+            val rttText = if (avgRttMs > 0) String.format(Locale.ROOT, "%.1fms", avgRttMs) else "--"
+            val speedText = if (dlSpeed.isNotBlank()) dlSpeed else "--"
+            getString(R.string.notification_stats_text, rttText, speedText)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w(TAG, "Failed to fetch stats for notification: ${e.message}")
+            null
+        } finally {
+            conn?.disconnect()
         }
     }
 
@@ -407,6 +465,8 @@ socks5:
         const val ACTION_SERVICE_STOPPED = "com.easysstun.SERVICE_FULLY_STOPPED"
         const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"
         const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
+        const val NOTIFICATION_ID = 1
+        private const val STATS_URL = "http://127.0.0.1:3080/stats"
         private const val TAG = "TProxyServiceDiag"
 
         init {

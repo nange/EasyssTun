@@ -8,6 +8,10 @@
     <string name="service_stopped">EasyssTun 已停止</string>
     <string name="skipped_app_list">已配置跳过 %s 个应用</string>
     <string name="skipped_apps_title">已跳过的应用</string>
+
+    <!-- 前台通知 -->
+    <string name="notification_stats_text">延迟 %1$s · 下载 %2$s</string>
+    <string name="notification_stats_unavailable">延迟 -- · 下载 --</string>
     <string name="choose_app_to_bypass">点按配置跳过的应用</string>
     <string name="easyss_configure">配置</string>
 
