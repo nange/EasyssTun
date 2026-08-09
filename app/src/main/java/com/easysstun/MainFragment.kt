@@ -520,6 +520,11 @@ class MainFragment : Fragment() {
                 TAG,
                 "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver"
         )
+        // A server-switch stop sets isServiceEnabled=false (TProxyService.actualFinalizeStop).
+        // Mark the service as enabled here so the updateServiceStatu() call right after an
+        // auto-restart takes the "running" branch instead of issuing another stop, and so the
+        // vpnPermissionLauncher callback still restarts after granting permission mid-switch.
+        pref.isServiceEnabled = true
         val intent = VpnService.prepare(mContext)
         if (intent != null) {
             Log.d(
