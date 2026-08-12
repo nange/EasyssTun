@@ -11,7 +11,7 @@
 
     <!-- Foreground notification -->
     <string name="notification_stats_text">RTT %1$s · DL %2$s</string>
-    <string name="notification_stats_unavailable">RTT -- · DL --</string>
+    <string name="notification_stats_unavailable">RTT — · DL —</string>
 
     <string name="choose_app_to_bypass">Tap to select SKIP applications.</string>
     <string name="easyss_configure">Configure</string>
