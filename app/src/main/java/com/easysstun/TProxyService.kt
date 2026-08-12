@@ -272,7 +272,8 @@ socks5:
             return
         }
         Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${newTunFd.fd}.")
-        TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
+        val started = TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
+        Log.d(TAG, "startService: TProxyStartService returned: $started")
         pref.prefs.edit { apply { putBoolean("enable", true) } }
         val channelName = "easysstun"
         initNotificationChannel(channelName)
@@ -299,8 +300,8 @@ socks5:
                 val tproxyStopJob = launch {
                     try {
                         Log.d(TAG, "stopService: TProxyStopService coroutine calling TProxyStopService()")
-                        TProxyStopService()
-                        Log.d(TAG, "stopService: TProxyStopService coroutine TProxyStopService() completed.")
+                        val stopped = TProxyStopService()
+                        Log.d(TAG, "stopService: TProxyStopService returned: $stopped")
                     } catch (e: Throwable) {
                         Log.e(TAG, "stopService: Exception during TProxyStopService: ${e.message}", e)
                     }
@@ -454,9 +455,11 @@ socks5:
 
     companion object {
         @JvmStatic
-        private external fun TProxyStartService(config_path: String, fd: Int)
+        private external fun TProxyStartService(config_path: String, fd: Int): Boolean
         @JvmStatic
-        private external fun TProxyStopService()
+        private external fun TProxyStopService(): Boolean
+        @JvmStatic
+        private external fun TProxyIsRunning(): Boolean
         @JvmStatic
         private external fun TProxyGetStats(): LongArray
 
