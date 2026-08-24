@@ -447,7 +447,7 @@
 
                     </LinearLayout>
 
-                    <!-- Row 4: Active | Uptime (span 2) | — -->
+                    <!-- Row 4: Active | Degraded | Rotated | Probe Slow -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -477,7 +477,74 @@
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="2"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp">
+
+                            <TextView
+                                style="@style/StatsLabel"
+                                android:text="@string/stats_slot_retired_degraded_label" />
+
+                            <TextView
+                                android:id="@+id/stats_slot_retired_degraded"
+                                style="@style/StatsValue"
+                                android:text="" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp">
+
+                            <TextView
+                                style="@style/StatsLabel"
+                                android:text="@string/stats_conn_rotated_label" />
+
+                            <TextView
+                                android:id="@+id/stats_conn_rotated"
+                                style="@style/StatsValue"
+                                android:text="" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp">
+
+                            <TextView
+                                style="@style/StatsLabel"
+                                android:text="@string/stats_slot_probe_slow_label" />
+
+                            <TextView
+                                android:id="@+id/stats_slot_probe_slow"
+                                style="@style/StatsValue"
+                                android:text="" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <!-- Row 5: Uptime (label 1 col, value 3 cols) -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:baselineAligned="false"
+                        android:layout_marginTop="8dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:orientation="vertical"
                             android:gravity="center_horizontal"
                             android:paddingStart="4dp"
@@ -486,23 +553,22 @@
                             <TextView
                                 style="@style/StatsLabel"
                                 android:text="@string/stats_uptime_label" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="3"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp">
 
                             <TextView
                                 android:id="@+id/stats_uptime"
                                 style="@style/StatsValue"
                                 android:text="" />
                         </LinearLayout>
-
-                        <!-- Placeholder cell for alignment -->
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
-                            android:paddingStart="4dp"
-                            android:paddingEnd="4dp"
-                            tools:ignore="UselessLeaf" />
 
                     </LinearLayout>
 

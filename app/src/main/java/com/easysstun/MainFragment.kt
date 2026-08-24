@@ -827,6 +827,9 @@ class MainFragment : Fragment() {
         v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text = ""
         v.findViewById<TextView>(R.id.stats_uptime)?.text = ""
         v.findViewById<TextView>(R.id.stats_active_streams)?.text = ""
+        v.findViewById<TextView>(R.id.stats_slot_retired_degraded)?.text = ""
+        v.findViewById<TextView>(R.id.stats_conn_rotated)?.text = ""
+        v.findViewById<TextView>(R.id.stats_slot_probe_slow)?.text = ""
     }
 
     private fun updateStatsDisplay(json: JSONObject) {
@@ -843,6 +846,9 @@ class MainFragment : Fragment() {
         val bulkActive = json.optInt("bulk_active_streams", 0)
         val uptime = json.optDouble("uptime_seconds", 0.0)
         val active = json.optInt("active_streams", 0)
+        val slotRetiredDegraded = json.optInt("slot_retired_degraded", 0)
+        val connRotated = json.optInt("conn_rotated", 0)
+        val slotProbeSlow = json.optInt("slot_probe_slow", 0)
         val dlSpeed = stripByteUnit(json.optString("download_speed_human", ""))
         val ulSpeed = stripByteUnit(json.optString("upload_speed_human", ""))
         val peakDl = stripByteUnit(json.optString("peak_download_speed_human", ""))
@@ -872,9 +878,17 @@ class MainFragment : Fragment() {
         v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text =
                 String.format(Locale.ROOT, "%d", bulkActive)
 
-        // Row 4: Active | Uptime (span 2)
+        // Row 4: Active | Degraded | Rotated | Probe Slow
         v.findViewById<TextView>(R.id.stats_active_streams)?.text =
                 String.format(Locale.ROOT, "%d", active)
+        v.findViewById<TextView>(R.id.stats_slot_retired_degraded)?.text =
+                String.format(Locale.ROOT, "%d", slotRetiredDegraded)
+        v.findViewById<TextView>(R.id.stats_conn_rotated)?.text =
+                String.format(Locale.ROOT, "%d", connRotated)
+        v.findViewById<TextView>(R.id.stats_slot_probe_slow)?.text =
+                String.format(Locale.ROOT, "%d", slotProbeSlow)
+
+        // Row 5: Uptime (span 2)
         v.findViewById<TextView>(R.id.stats_uptime)?.text = formatDuration(uptime)
 
         // Sync arrow rotation with current expand state

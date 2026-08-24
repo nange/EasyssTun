@@ -32,8 +32,11 @@
     <string name="stats_bulk_conns_label">普通连接</string>
     <string name="stats_priority_active_label">优先活跃流</string>
     <string name="stats_bulk_active_label">普通活跃流</string>
-    <string name="stats_uptime_label">运行</string>
+    <string name="stats_uptime_label">运行时间</string>
     <string name="stats_active_label">活跃流</string>
+    <string name="stats_slot_retired_degraded_label">连接退化</string>
+    <string name="stats_conn_rotated_label">新连接替换</string>
+    <string name="stats_slot_probe_slow_label">探测慢速</string>
 
     <string name="applist_title">应用代理设置</string>
     <string name="log_title">Easyss 日志</string>

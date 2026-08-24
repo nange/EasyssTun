@@ -35,6 +35,9 @@
     <string name="stats_bulk_active_label">Bulk Active</string>
     <string name="stats_uptime_label">Uptime</string>
     <string name="stats_active_label">Active</string>
+    <string name="stats_slot_retired_degraded_label">Degraded</string>
+    <string name="stats_conn_rotated_label">Rotated</string>
+    <string name="stats_slot_probe_slow_label">Probe Slow</string>
 
     <string name="applist_title">App Proxy Settings</string>
     <string name="log_title">Easyss Log</string>
