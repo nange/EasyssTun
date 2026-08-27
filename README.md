@@ -24,26 +24,19 @@
 ## 构建方式
 
 ```bash
-git clone --recursive https://github.com/nange/EasyssTun.git
+git clone https://github.com/nange/EasyssTun.git
 cd EasyssTun
 make build
 ```
 
+首次构建时会自动从 GitHub Release 下载 `libeasyss.aar` 与 `hev-socks5-tunnel.aar` 到 `app/libs/`，无需 NDK。
+
 也可直接在Release页面下载编译好的APK文件。
 
-## 更新子模块 
+## 升级 tun2socks
 
-```bash
-git submodule update --init --recursive
+hev-socks5-tunnel（tun2socks）以预编译 AAR 形式引入，版本由 `version.properties` 中的 `hevSocks5TunnelVersion` 锁定。升级步骤：
 
-cd path/to/submodule
-git fetch origin 
-git checkout <commit version> | <main>
-git submodule update | git pull --recurse-submodules
-
----------------
-git add path/to/submodule
-git commit -m "更新子模块至 <version>"
-
-git push origin <path>
-```
+1. 到 [nange/hev-socks5-tunnel](https://github.com/nange/hev-socks5-tunnel)（fork 的 `easyss` 分支）合入上游改动并发布新版本（打 tag 触发 CI 构建，release 资产中包含 `hev-socks5-tunnel.aar`）。
+2. 更新本仓库 `version.properties` 中的 `hevSocks5TunnelVersion` 为新 tag。
+3. 删除本地 `app/libs/hev-socks5-tunnel.aar`，下次构建自动重新下载。
