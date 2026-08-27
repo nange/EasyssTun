@@ -93,6 +93,43 @@ app/src/test/                 # Robolectric 单元测试
 - 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
 - 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
 
+## Git 提交与 PR 规范
+
+### Commit 信息格式
+
+遵循 Conventional Commits 风格，单行、全英文、小写开头、祈使语气、结尾不加句号：
+
+```
+<type>: <简短英文描述>
+```
+
+常用 `type`（与仓库现有提交历史保持一致）：
+
+| type | 用途 |
+|---|---|
+| `feat` | 新功能 |
+| `fix` | 缺陷修复 |
+| `docs` | 文档变更 |
+| `build` | 构建 / 依赖 / 环境调整 |
+| `chore` | 版本号递增、子模块指针更新等杂项 |
+| `tweak` | 小幅行为或展示微调 |
+
+示例（摘自仓库历史）：
+
+- `feat: add option to show/hide system apps in app proxy list`
+- `fix: keep VPN running when switching server on home page`
+- `docs: add AGENTS.md agent guide`
+- `chore: bump v3.0.0-rc15.1`
+
+一次提交只做一件事；改动较大时拆分为多个小提交。
+
+### PR 提交要求
+
+- **分支**：不要直接向 `easyss` 主分支提交改动。应从最新的 `easyss` 分支切出**单独的功能分支**开发（命名用英文短横线格式，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
+- **PR 标题**：用英文，建议同样采用 `<type>: <description>` 格式。
+- **PR 描述**：用中文撰写，需包含：改动动机、具体内容、影响范围、验证方式（如 `make check` 通过、真机测试结果等）。
+- PR 合入 `easyss` 后 CI 会自动执行 `make check`；提交 PR 前请在本地先跑一遍确保通过。
+
 ## 版本发布流程
 
 1. 更新 `version.properties`（递增 `versionCode`、`versionName`，必要时同步 `libeasyssVersion`）。
