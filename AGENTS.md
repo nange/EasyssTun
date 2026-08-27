@@ -125,7 +125,7 @@ app/src/test/                 # Robolectric 单元测试
 
 ### PR 提交要求
 
-- **分支**：不要直接向 `easyss` 主分支提交改动。应从最新的 `easyss` 分支切出**单独的功能分支**开发（命名用英文短横线格式，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
+- **分支**：如果用户要求提交PR。则不要直接向 `easyss` 主分支提交改动，应从最新的 `easyss` 分支切出**单独的功能分支**开发（命名用英文短横线格式，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
 - **PR 标题**：用英文，建议同样采用 `<type>: <description>` 格式。
 - **PR 描述**：用中文撰写，需包含：改动动机、具体内容、影响范围、验证方式（如 `make check` 通过、真机测试结果等）。
 - PR 合入 `easyss` 后 CI 会自动执行 `make check`；提交 PR 前请在本地先跑一遍确保通过。
