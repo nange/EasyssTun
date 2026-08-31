@@ -782,7 +782,11 @@ class MainFragment : Fragment() {
     private suspend fun fetchAndUpdateStats() {
         var conn: HttpURLConnection? = null
         try {
-            val url = URL("http://127.0.0.1:3080/stats")
+            // Stats endpoint port follows the active profile's SOCKS port + 1000
+            // (e.g. default 2080 -> 3080). Recompute each fetch so a server switch
+            // that restarts the service with a new profile is picked up.
+            val statsUrl = pref.getActiveProfile()?.statsUrl() ?: Profile.defaultStatsUrl()
+            val url = URL(statsUrl)
             conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 2000
             conn.readTimeout = 2000

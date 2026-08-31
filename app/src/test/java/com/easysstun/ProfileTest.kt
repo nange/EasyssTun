@@ -66,6 +66,7 @@ class ProfileTest {
         assertEquals("Default customCa should be empty", "", decoded.customCa)
         assertEquals("Default directFile should be empty", "", decoded.directFile)
         assertEquals("Default proxyFile should be empty", "", decoded.proxyFile)
+        assertEquals("Default socksPort should be 2080", "2080", decoded.socksPort)
     }
 
     @Test
@@ -132,5 +133,38 @@ class ProfileTest {
         assertTrue("JSON should contain customCa", encoded.contains("\"customCa\""))
         assertTrue("JSON should contain directFile", encoded.contains("\"directFile\":\"direct_domains_list\""))
         assertTrue("JSON should contain proxyFile", encoded.contains("\"proxyFile\":\"proxy_domains_list\""))
+    }
+
+    // ── Stats endpoint (SOCKS port + 1000) ──────────────────────────────
+
+    @Test
+    fun statsPort_withDefaultSocksPort_returns3080() {
+        val profile = createFullProfile()
+        assertEquals("Default socks port 2080 should map to stats port 3080", 3080, profile.statsPort())
+    }
+
+    @Test
+    fun statsUrl_withDefaultSocksPort_usesPort3080() {
+        val profile = createFullProfile()
+        assertEquals("http://127.0.0.1:3080/stats", profile.statsUrl())
+    }
+
+    @Test
+    fun statsPort_withCustomSocksPort_followsPortPlus1000() {
+        val profile = createFullProfile().copy(socksPort = "1080")
+        assertEquals("Socks port 1080 should map to stats port 2080", 2080, profile.statsPort())
+        assertEquals("http://127.0.0.1:2080/stats", profile.statsUrl())
+    }
+
+    @Test
+    fun statsPort_withBlankOrInvalidSocksPort_fallsBackToDefault() {
+        assertEquals("Blank socks port should fall back to 3080", 3080, createFullProfile().copy(socksPort = "").statsPort())
+        assertEquals("Non-numeric socks port should fall back to 3080", 3080, createFullProfile().copy(socksPort = "abc").statsPort())
+        assertEquals("Blank socks port should fall back to default URL", "http://127.0.0.1:3080/stats", createFullProfile().copy(socksPort = "").statsUrl())
+    }
+
+    @Test
+    fun defaultStatsUrl_pointsToDefaultStatsPort() {
+        assertEquals("http://127.0.0.1:3080/stats", Profile.defaultStatsUrl())
     }
 }
