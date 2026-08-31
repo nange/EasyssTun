@@ -278,7 +278,7 @@ socks5:
         val channelName = "easysstun"
         initNotificationChannel(channelName)
         createNotification(channelName, loadedProfile.name)
-        startNotificationUpdater(channelName, loadedProfile.name)
+        startNotificationUpdater(channelName, loadedProfile.name, loadedProfile.statsUrl())
     }
 
     fun stopService() {
@@ -405,11 +405,11 @@ socks5:
             .build()
     }
 
-    private fun startNotificationUpdater(channelName: String, profileName: String) {
+    private fun startNotificationUpdater(channelName: String, profileName: String, statsUrl: String) {
         notificationUpdaterJob = serviceScope.launch {
             delay(2_000) // brief wait for stats endpoint to be ready
             while (isActive) {
-                val contentText = fetchStatsContentText()
+                val contentText = fetchStatsContentText(statsUrl)
                     ?: getString(R.string.notification_stats_unavailable)
                 val notify = buildNotification(channelName, profileName, contentText)
                 (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
@@ -419,10 +419,10 @@ socks5:
         }
     }
 
-    private fun fetchStatsContentText(): String? {
+    private fun fetchStatsContentText(statsUrl: String): String? {
         var conn: HttpURLConnection? = null
         return try {
-            val url = URL(STATS_URL)
+            val url = URL(statsUrl)
             conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 2_000
             conn.readTimeout = 2_000
@@ -469,7 +469,6 @@ socks5:
         const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"
         const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
         const val NOTIFICATION_ID = 1
-        private const val STATS_URL = "http://127.0.0.1:3080/stats"
         private const val TAG = "TProxyServiceDiag"
 
         init {

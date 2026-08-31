@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.Locale
 
 @Serializable
 data class Profile(
@@ -24,8 +25,34 @@ data class Profile(
     val customCa: String = "",
     val directFile: String = "",
     val proxyFile: String = "",
-    val socksPort: String = "2080"
-)
+    val socksPort: String = DEFAULT_SOCKS_PORT
+) {
+    companion object {
+        const val DEFAULT_SOCKS_PORT = "2080"
+        const val STATS_PORT_OFFSET = 1000
+        private const val STATS_URL_FORMAT = "http://127.0.0.1:%d/stats"
+
+        /**
+         * Stats URL for the default SOCKS port (i.e. 3080), used when no active
+         * profile is available.
+         */
+        fun defaultStatsUrl(): String =
+            String.format(Locale.ROOT, STATS_URL_FORMAT, DEFAULT_SOCKS_PORT.toInt() + STATS_PORT_OFFSET)
+    }
+
+    /**
+     * The local HTTP stats endpoint port, derived from the SOCKS port
+     * (matches the easyss native convention: HTTPPort = SocksPort + 1000).
+     */
+    fun statsPort(): Int =
+        (socksPort.toIntOrNull() ?: DEFAULT_SOCKS_PORT.toInt()) + STATS_PORT_OFFSET
+
+    /**
+     * The local HTTP stats endpoint URL, e.g. http://127.0.0.1:3080/stats
+     * for the default SOCKS port 2080.
+     */
+    fun statsUrl(): String = String.format(Locale.ROOT, STATS_URL_FORMAT, statsPort())
+}
 
 /**
  * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
@@ -49,7 +76,7 @@ fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     }
     config.setSN(sni)
 
-    config.setLocalPort(socksPort.toLongOrNull() ?: 2080L)
+    config.setLocalPort(socksPort.toLongOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toLong())
 
     if (customCa.isNotBlank()) {
         val customCaFile = File(cacheDir, Pref.CUSTOM_CA_FILE)
