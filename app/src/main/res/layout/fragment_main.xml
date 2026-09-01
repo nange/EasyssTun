@@ -182,90 +182,116 @@
             android:orientation="vertical">
 
                 <!-- Row 1: always visible — RTT (hero) | DL Speed | UL Speed | TCP Conns -->
-                <LinearLayout
+                <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:baselineAligned="false">
+                    android:layout_height="wrap_content">
 
-                    <!-- Latency first, slightly emphasized -->
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/stats_rtt_label"
+                        style="@style/StatsLabel"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center_horizontal"
+                        android:gravity="start"
                         android:paddingStart="4dp"
-                        android:paddingEnd="4dp">
+                        android:paddingEnd="4dp"
+                        android:text="@string/stats_rtt_label"
+                        app:layout_constraintEnd_toStartOf="@id/stats_dl_label"
+                        app:layout_constraintHorizontal_chainStyle="spread"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
 
-                        <TextView
-                            style="@style/StatsLabel"
-                            android:text="@string/stats_rtt_label" />
-
-                        <TextView
-                            android:id="@+id/stats_avg_rtt_ms"
-                            style="@style/StatsValueHero"
-                            android:text="@string/stats_loading" />
-                    </LinearLayout>
-
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/stats_avg_rtt_ms"
+                        style="@style/StatsValueHero"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center_horizontal"
+                        android:gravity="start"
                         android:paddingStart="4dp"
-                        android:paddingEnd="4dp">
+                        android:paddingEnd="4dp"
+                        android:text="@string/stats_loading"
+                        app:layout_constraintEnd_toStartOf="@id/stats_download_speed"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/stats_rtt_label" />
 
-                        <TextView
-                            style="@style/StatsLabel"
-                            android:text="@string/stats_dl_label" />
-
-                        <TextView
-                            android:id="@+id/stats_download_speed"
-                            style="@style/StatsValue"
-                            android:text="" />
-                    </LinearLayout>
-
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/stats_dl_label"
+                        style="@style/StatsLabel"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center_horizontal"
+                        android:gravity="start"
                         android:paddingStart="4dp"
-                        android:paddingEnd="4dp">
+                        android:paddingEnd="4dp"
+                        android:text="@string/stats_dl_label"
+                        app:layout_constraintEnd_toStartOf="@id/stats_ul_label"
+                        app:layout_constraintStart_toEndOf="@id/stats_rtt_label"
+                        app:layout_constraintTop_toTopOf="parent" />
 
-                        <TextView
-                            style="@style/StatsLabel"
-                            android:text="@string/stats_ul_label" />
-
-                        <TextView
-                            android:id="@+id/stats_upload_speed"
-                            style="@style/StatsValue"
-                            android:text="" />
-                    </LinearLayout>
-
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/stats_download_speed"
+                        style="@style/StatsValue"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center_horizontal"
+                        android:gravity="start"
                         android:paddingStart="4dp"
-                        android:paddingEnd="4dp">
+                        android:paddingEnd="4dp"
+                        android:text=""
+                        app:layout_constraintEnd_toStartOf="@id/stats_upload_speed"
+                        app:layout_constraintStart_toEndOf="@id/stats_avg_rtt_ms"
+                        app:layout_constraintTop_toBottomOf="@id/stats_dl_label" />
 
-                        <TextView
-                            style="@style/StatsLabel"
-                            android:text="@string/stats_conns_label" />
+                    <TextView
+                        android:id="@+id/stats_ul_label"
+                        style="@style/StatsLabel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="start"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="@string/stats_ul_label"
+                        app:layout_constraintEnd_toStartOf="@id/stats_conns_label"
+                        app:layout_constraintStart_toEndOf="@id/stats_dl_label"
+                        app:layout_constraintTop_toTopOf="parent" />
 
-                        <TextView
-                            android:id="@+id/stats_conns"
-                            style="@style/StatsValue"
-                            android:text="" />
-                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/stats_upload_speed"
+                        style="@style/StatsValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="start"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text=""
+                        app:layout_constraintEnd_toStartOf="@id/stats_conns"
+                        app:layout_constraintStart_toEndOf="@id/stats_download_speed"
+                        app:layout_constraintTop_toBottomOf="@id/stats_ul_label" />
 
-                </LinearLayout>
+                    <TextView
+                        android:id="@+id/stats_conns_label"
+                        style="@style/StatsLabel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="start"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="@string/stats_conns_label"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toEndOf="@id/stats_ul_label"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/stats_conns"
+                        style="@style/StatsValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="start"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text=""
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toEndOf="@id/stats_upload_speed"
+                        app:layout_constraintTop_toBottomOf="@id/stats_conns_label" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <!-- Expandable section: hidden by default -->
                 <LinearLayout
@@ -276,262 +302,343 @@
                     android:visibility="gone">
 
                     <!-- Row 2: Peak DL | Peak UL | Sent | Received -->
-                    <LinearLayout
+                    <androidx.constraintlayout.widget.ConstraintLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:baselineAligned="false"
                         android:layout_marginTop="8dp">
 
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_peak_dl_label"
+                            style="@style/StatsLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_peak_dl_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_peak_ul_label"
+                            app:layout_constraintHorizontal_chainStyle="spread"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_peak_dl_label" />
-
-                            <TextView
-                                android:id="@+id/stats_peak_download_speed"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_peak_download_speed"
+                            style="@style/StatsValue"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_peak_upload_speed"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@id/stats_peak_dl_label" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_peak_ul_label" />
-
-                            <TextView
-                                android:id="@+id/stats_peak_upload_speed"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_peak_ul_label"
+                            style="@style/StatsLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_peak_ul_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_sent_label"
+                            app:layout_constraintStart_toEndOf="@id/stats_peak_dl_label"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_sent_label" />
-
-                            <TextView
-                                android:id="@+id/stats_bytes_sent"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_peak_upload_speed"
+                            style="@style/StatsValue"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_bytes_sent"
+                            app:layout_constraintStart_toEndOf="@id/stats_peak_download_speed"
+                            app:layout_constraintTop_toBottomOf="@id/stats_peak_ul_label" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_recv_label" />
+                        <TextView
+                            android:id="@+id/stats_sent_label"
+                            style="@style/StatsLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_sent_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_recv_label"
+                            app:layout_constraintStart_toEndOf="@id/stats_peak_ul_label"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                android:id="@+id/stats_bytes_recv"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
+                        <TextView
+                            android:id="@+id/stats_bytes_sent"
+                            style="@style/StatsValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_bytes_recv"
+                            app:layout_constraintStart_toEndOf="@id/stats_peak_upload_speed"
+                            app:layout_constraintTop_toBottomOf="@id/stats_sent_label" />
 
-                    </LinearLayout>
+                        <TextView
+                            android:id="@+id/stats_recv_label"
+                            style="@style/StatsLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_recv_label"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toEndOf="@id/stats_sent_label"
+                            app:layout_constraintTop_toTopOf="parent" />
+
+                        <TextView
+                            android:id="@+id/stats_bytes_recv"
+                            style="@style/StatsValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toEndOf="@id/stats_bytes_sent"
+                            app:layout_constraintTop_toBottomOf="@id/stats_recv_label" />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
 
                     <!-- Row 3: Priority Conns | Bulk Conns | Priority Active | Bulk Active -->
-                    <LinearLayout
+                    <androidx.constraintlayout.widget.ConstraintLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:baselineAligned="false"
                         android:layout_marginTop="8dp">
 
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_priority_conns_label"
+                            style="@style/StatsLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_priority_conns_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_bulk_conns_label"
+                            app:layout_constraintHorizontal_chainStyle="spread"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_priority_conns_label" />
-
-                            <TextView
-                                android:id="@+id/stats_priority_conns"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_priority_conns"
+                            style="@style/StatsValue"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_bulk_conns"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@id/stats_priority_conns_label" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_bulk_conns_label" />
-
-                            <TextView
-                                android:id="@+id/stats_bulk_conns"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_bulk_conns_label"
+                            style="@style/StatsLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_bulk_conns_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_priority_active_label"
+                            app:layout_constraintStart_toEndOf="@id/stats_priority_conns_label"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_priority_active_label" />
-
-                            <TextView
-                                android:id="@+id/stats_priority_active_streams"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_bulk_conns"
+                            style="@style/StatsValue"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_priority_active_streams"
+                            app:layout_constraintStart_toEndOf="@id/stats_priority_conns"
+                            app:layout_constraintTop_toBottomOf="@id/stats_bulk_conns_label" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_bulk_active_label" />
+                        <TextView
+                            android:id="@+id/stats_priority_active_label"
+                            style="@style/StatsLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_priority_active_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_bulk_active_label"
+                            app:layout_constraintStart_toEndOf="@id/stats_bulk_conns_label"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                android:id="@+id/stats_bulk_active_streams"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
+                        <TextView
+                            android:id="@+id/stats_priority_active_streams"
+                            style="@style/StatsValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_bulk_active_streams"
+                            app:layout_constraintStart_toEndOf="@id/stats_bulk_conns"
+                            app:layout_constraintTop_toBottomOf="@id/stats_priority_active_label" />
 
-                    </LinearLayout>
+                        <TextView
+                            android:id="@+id/stats_bulk_active_label"
+                            style="@style/StatsLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_bulk_active_label"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toEndOf="@id/stats_priority_active_label"
+                            app:layout_constraintTop_toTopOf="parent" />
+
+                        <TextView
+                            android:id="@+id/stats_bulk_active_streams"
+                            style="@style/StatsValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toEndOf="@id/stats_priority_active_streams"
+                            app:layout_constraintTop_toBottomOf="@id/stats_bulk_active_label" />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
 
                     <!-- Row 4: Active | Degraded | Rotated | Probe Slow -->
-                    <LinearLayout
+                    <androidx.constraintlayout.widget.ConstraintLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:baselineAligned="false"
                         android:layout_marginTop="8dp">
 
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_active_label"
+                            style="@style/StatsLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_active_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_slot_retired_degraded_label"
+                            app:layout_constraintHorizontal_chainStyle="spread"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_active_label" />
-
-                            <TextView
-                                android:id="@+id/stats_active_streams"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_active_streams"
+                            style="@style/StatsValue"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_slot_retired_degraded"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@id/stats_active_label" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_slot_retired_degraded_label" />
-
-                            <TextView
-                                android:id="@+id/stats_slot_retired_degraded"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_slot_retired_degraded_label"
+                            style="@style/StatsLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_slot_retired_degraded_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_conn_rotated_label"
+                            app:layout_constraintStart_toEndOf="@id/stats_active_label"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_conn_rotated_label" />
-
-                            <TextView
-                                android:id="@+id/stats_conn_rotated"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
-
-                        <LinearLayout
+                        <TextView
+                            android:id="@+id/stats_slot_retired_degraded"
+                            style="@style/StatsValue"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:gravity="center_horizontal"
+                            android:gravity="start"
                             android:paddingStart="4dp"
-                            android:paddingEnd="4dp">
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_conn_rotated"
+                            app:layout_constraintStart_toEndOf="@id/stats_active_streams"
+                            app:layout_constraintTop_toBottomOf="@id/stats_slot_retired_degraded_label" />
 
-                            <TextView
-                                style="@style/StatsLabel"
-                                android:text="@string/stats_slot_probe_slow_label" />
+                        <TextView
+                            android:id="@+id/stats_conn_rotated_label"
+                            style="@style/StatsLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_conn_rotated_label"
+                            app:layout_constraintEnd_toStartOf="@id/stats_slot_probe_slow_label"
+                            app:layout_constraintStart_toEndOf="@id/stats_slot_retired_degraded_label"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <TextView
-                                android:id="@+id/stats_slot_probe_slow"
-                                style="@style/StatsValue"
-                                android:text="" />
-                        </LinearLayout>
+                        <TextView
+                            android:id="@+id/stats_conn_rotated"
+                            style="@style/StatsValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toStartOf="@id/stats_slot_probe_slow"
+                            app:layout_constraintStart_toEndOf="@id/stats_slot_retired_degraded"
+                            app:layout_constraintTop_toBottomOf="@id/stats_conn_rotated_label" />
 
-                    </LinearLayout>
+                        <TextView
+                            android:id="@+id/stats_slot_probe_slow_label"
+                            style="@style/StatsLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/stats_slot_probe_slow_label"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toEndOf="@id/stats_conn_rotated_label"
+                            app:layout_constraintTop_toTopOf="parent" />
+
+                        <TextView
+                            android:id="@+id/stats_slot_probe_slow"
+                            style="@style/StatsValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text=""
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toEndOf="@id/stats_conn_rotated"
+                            app:layout_constraintTop_toBottomOf="@id/stats_slot_probe_slow_label" />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
 
                     <!-- Row 5: Uptime (label 1 col, value 3 cols) -->
                     <LinearLayout
