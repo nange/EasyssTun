@@ -1,6 +1,7 @@
 package com.easysstun
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
@@ -137,9 +138,16 @@ class ServerProfileActivity : AppCompatActivity() {
     }
 
     private fun showDeleteConfirmationDialog() {
+        val isActive = profileId != null && profileId == pref.getActiveProfile()?.id
+        val message = if (isActive && pref.isServiceEnabled) {
+            // Deleting the active profile while the VPN is running will disconnect it.
+            getString(R.string.delete_confirm_message_active)
+        } else {
+            getString(R.string.delete_confirm_message)
+        }
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.delete_confirm_title))
-            .setMessage(getString(R.string.delete_confirm_message))
+            .setMessage(message)
             .setPositiveButton(getString(R.string.delete_confirm_positive)) { _, _ ->
                 deleteProfileAndFinish()
             }
@@ -149,8 +157,18 @@ class ServerProfileActivity : AppCompatActivity() {
 
     private fun deleteProfileAndFinish() {
         profileId?.let {
+            val wasActive = pref.getActiveProfile()?.id == it
+            val wasRunning = pref.isServiceEnabled
             pref.deleteProfile(it)
             Toast.makeText(this, getString(R.string.delete_success), Toast.LENGTH_SHORT).show()
+            if (wasActive && wasRunning) {
+                // The VPN was running with the profile being deleted. Disconnect it
+                // explicitly (same signal as the home screen stop button) instead of
+                // letting it keep running with a config that no longer exists.
+                val intent = Intent(this, TProxyService::class.java)
+                    .setAction(TProxyService.ACTION_DISCONNECT)
+                startService(intent)
+            }
             finish()
         }
     }

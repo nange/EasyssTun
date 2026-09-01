@@ -84,39 +84,54 @@ class MainFragment : Fragment() {
                                     TAG,
                                     "pendingServerProfileId is NOT null. Attempting to switch."
                             )
-                            pendingServerProfileId?.let { pref.setActiveServer(it) }
-                            Log.d(
-                                    TAG,
-                                    "pref.setActiveServer called with ID: $pendingServerProfileId"
-                            )
-                            easyssInfo = pref.getEasyssInfo()
-                            Log.d(
-                                    TAG,
-                                    "pref.getEasyssInfo called. easyssInfo.valid=${easyssInfo.valid}"
-                            )
-
-                            Log.i(
-                                    TAG,
-                                    "Calling startVPNService for server switch. ID: $pendingServerProfileId"
-                            )
-                            startVPNService(isCalledFromReceiver = true)
-                            Log.d(TAG, "Returned from startVPNService call.")
-
-                            pendingServerProfileId = null
-                            Log.d(TAG, "pendingServerProfileId reset to null.")
-                            isSwitchingServer = false
-                            Log.d(TAG, "isSwitchingServer reset to false.")
-
-                            view?.let {
+                            if (pref.getProfiles().none { it.id == pendingServerProfileId }) {
+                                // The pending profile was deleted while the switch was in
+                                // flight (e.g. from the profile edit screen). Abandon the
+                                // switch instead of activating a stale id.
+                                Log.w(
+                                        TAG,
+                                        "Pending server profile no longer exists. Abandoning switch."
+                                )
+                                pendingServerProfileId = null
+                                isSwitchingServer = false
+                                view?.let {
+                                    updateServiceStatu(it)
+                                }
+                            } else {
+                                pendingServerProfileId?.let { pref.setActiveServer(it) }
                                 Log.d(
                                         TAG,
-                                        "Calling updateServiceStatu (after switch)."
+                                        "pref.setActiveServer called with ID: $pendingServerProfileId"
                                 )
-                                updateServiceStatu(it)
+                                easyssInfo = pref.getEasyssInfo()
                                 Log.d(
                                         TAG,
-                                        "Returned from updateServiceStatu (after switch)."
+                                        "pref.getEasyssInfo called. easyssInfo.valid=${easyssInfo.valid}"
                                 )
+
+                                Log.i(
+                                        TAG,
+                                        "Calling startVPNService for server switch. ID: $pendingServerProfileId"
+                                )
+                                startVPNService(isCalledFromReceiver = true)
+                                Log.d(TAG, "Returned from startVPNService call.")
+
+                                pendingServerProfileId = null
+                                Log.d(TAG, "pendingServerProfileId reset to null.")
+                                isSwitchingServer = false
+                                Log.d(TAG, "isSwitchingServer reset to false.")
+
+                                view?.let {
+                                    Log.d(
+                                            TAG,
+                                            "Calling updateServiceStatu (after switch)."
+                                    )
+                                    updateServiceStatu(it)
+                                    Log.d(
+                                            TAG,
+                                            "Returned from updateServiceStatu (after switch)."
+                                    )
+                                }
                             }
                         } else {
                             Log.d(
@@ -278,6 +293,19 @@ class MainFragment : Fragment() {
                     ) {
                         val selectedProfile =
                                 serverProfiles[position] // serverProfiles must be in scope
+
+                        // Guard: never implicitly switch while the VPN is running when no
+                        // active profile exists (can only happen in stale states left by
+                        // older versions). Silently activating an arbitrary profile here
+                        // would race with the running service.
+                        if (pref.isServiceEnabled && pref.getActiveProfile() == null) {
+                            Log.w(
+                                    TAG,
+                                    "Spinner selected while VPN running but no active profile. " +
+                                            "Ignoring to avoid an implicit server switch."
+                            )
+                            return
+                        }
 
                         if (pref.getActiveProfile()?.id == selectedProfile.id &&
                                         !isSwitchingServer
