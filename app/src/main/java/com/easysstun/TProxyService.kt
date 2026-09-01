@@ -48,6 +48,7 @@ class TProxyService : VpnService() {
     private lateinit var mobileJob: Job
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private var notificationUpdaterJob: Job? = null
+    private var isRestarting: Boolean = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (ACTION_DISCONNECT == intent?.action) {
@@ -78,8 +79,13 @@ class TProxyService : VpnService() {
 
     private val prefsUpdatedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (tunFd != null) {
-                stopService()
+            if (tunFd != null && !isRestarting) {
+                restartService()
+            } else {
+                Log.d(
+                        TAG,
+                        "prefsUpdatedReceiver: tunFd=${tunFd?.fd}, isRestarting=$isRestarting. Ignoring PREFS_UPDATED."
+                )
             }
         }
     }
@@ -291,6 +297,66 @@ socks5:
             return
         }
         Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}")
+        shutdownTunnel {
+            actualFinalizeStop()
+        }
+    }
+
+    /**
+     * Tears down the current tunnel and re-establishes it with the latest
+     * SharedPreferences state. Used when PREFS_UPDATED is broadcast while the
+     * VPN is running (active profile edited, proxy mode toggled, app list
+     * changed), so the service keeps running with the new config instead of
+     * stopping for good.
+     */
+    private fun restartService() {
+        if (isRestarting) {
+            Log.d(TAG, "restartService: restart already in progress, ignoring broadcast.")
+            return
+        }
+        Log.i(TAG, "restartService() called. Tearing down tunnel to reload latest prefs.")
+        isRestarting = true
+        shutdownTunnel {
+            performRestart()
+        }
+    }
+
+    private fun performRestart() {
+        try {
+            if (::pref.isInitialized && !pref.isServiceEnabled) {
+                // User pressed stop while the tunnel was being torn down.
+                Log.w(TAG, "performRestart: Service was disabled during restart window. Finalizing stop instead.")
+                actualFinalizeStop()
+                return
+            }
+            Log.i(TAG, "performRestart: Reloading latest prefs and re-establishing tunnel.")
+            // Force reload of the active profile from SharedPreferences, which
+            // startService() falls back to when receivedProfileJson is null.
+            receivedProfileJson = null
+            val proxyMode = pref.getProxyMode()
+            receivedProxyMode = proxyMode
+            receivedSelectedApps = ArrayList(pref.getAppsForMode(proxyMode))
+            startService()
+            if (tunFd == null) {
+                // startService() failed to establish a tunnel (invalid profile,
+                // establish() returned null). Finalize so the UI is notified.
+                Log.w(TAG, "performRestart: startService did not establish a tunnel. Finalizing stop.")
+                actualFinalizeStop()
+            }
+        } catch (e: IOException) {
+            Log.e(TAG, "performRestart: startService failed. Finalizing stop.", e)
+            actualFinalizeStop()
+        } finally {
+            isRestarting = false
+        }
+    }
+
+    /**
+     * Common teardown sequence: stops the native tunnel and Mobile proxy,
+     * cancels the notification updater, closes the TUN fd, then runs
+     * [onShutdownComplete] on the main thread.
+     */
+    private fun shutdownTunnel(onShutdownComplete: () -> Unit) {
         notificationUpdaterJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
 
@@ -299,54 +365,62 @@ socks5:
                 // 1. Stop TProxy (hev-socks5-tunnel)
                 val tproxyStopJob = launch {
                     try {
-                        Log.d(TAG, "stopService: TProxyStopService coroutine calling TProxyStopService()")
+                        Log.d(TAG, "shutdownTunnel: TProxyStopService coroutine calling TProxyStopService()")
                         val stopped = TProxyStopService()
-                        Log.d(TAG, "stopService: TProxyStopService returned: $stopped")
+                        Log.d(TAG, "shutdownTunnel: TProxyStopService returned: $stopped")
                     } catch (e: Throwable) {
-                        Log.e(TAG, "stopService: Exception during TProxyStopService: ${e.message}", e)
+                        Log.e(TAG, "shutdownTunnel: Exception during TProxyStopService: ${e.message}", e)
                     }
                 }
 
                 // 2. Stop Mobile proxy (via AAR)
                 try {
-                    Log.d(TAG, "stopService: Calling Mobile.stop()...")
+                    Log.d(TAG, "shutdownTunnel: Calling Mobile.stop()...")
                     Mobile.stop()
-                    Log.d(TAG, "stopService: Mobile.stop() completed.")
+                    Log.d(TAG, "shutdownTunnel: Mobile.stop() completed.")
                 } catch (e: Exception) {
-                    Log.e(TAG, "stopService: Exception during Mobile.stop(): ${e.message}", e)
+                    Log.e(TAG, "shutdownTunnel: Exception during Mobile.stop(): ${e.message}", e)
                 }
 
                 // 3. Cancel and join the mobile coroutine
                 if (::mobileJob.isInitialized && mobileJob.isActive) {
-                    Log.d(TAG, "stopService: Cancelling mobileJob.")
+                    Log.d(TAG, "shutdownTunnel: Cancelling mobileJob.")
                     try {
                         mobileJob.cancel()
                     } catch (e: Exception) {
-                        Log.e(TAG, "stopService: Exception during mobileJob.cancel(): ${e.message}", e)
+                        Log.e(TAG, "shutdownTunnel: Exception during mobileJob.cancel(): ${e.message}", e)
                     }
 
-                    Log.d(TAG, "stopService: Joining mobileJob.")
+                    Log.d(TAG, "shutdownTunnel: Joining mobileJob.")
                     try {
                         mobileJob.join()
-                        Log.d(TAG, "stopService: mobileJob completed.")
+                        Log.d(TAG, "shutdownTunnel: mobileJob completed.")
                     } catch (e: Exception) {
-                        Log.e(TAG, "stopService: Exception during mobileJob.join(): ${e.message}", e)
+                        Log.e(TAG, "shutdownTunnel: Exception during mobileJob.join(): ${e.message}", e)
                     }
                 } else {
-                    Log.d(TAG, "stopService: mobileJob was not active or initialized.")
+                    Log.d(TAG, "shutdownTunnel: mobileJob was not active or initialized.")
                 }
 
                 // 4. Wait for TProxy to stop
-                Log.d(TAG, "stopService: Waiting for TProxyStopService job (tproxyStopJob) to complete.")
+                Log.d(TAG, "shutdownTunnel: Waiting for TProxyStopService job (tproxyStopJob) to complete.")
                 tproxyStopJob.join()
-                Log.d(TAG, "stopService: TProxyStopService job (tproxyStopJob) completed.")
+                Log.d(TAG, "shutdownTunnel: TProxyStopService job (tproxyStopJob) completed.")
 
             } catch (e: Exception) {
-                Log.e(TAG, "stopService: Unhandled exception during native cleanup phase: ${e.message}", e)
+                Log.e(TAG, "shutdownTunnel: Unhandled exception during native cleanup phase: ${e.message}", e)
             } finally {
-                Log.d(TAG, "stopService: Native cleanup phase complete or errored. Proceeding with final Java-level cleanup.")
+                Log.d(TAG, "shutdownTunnel: Native cleanup phase complete or errored. Proceeding with final Java-level cleanup.")
                 withContext(Dispatchers.Main.immediate) {
-                    actualFinalizeStop()
+                    Log.d(TAG, "shutdownTunnel: Closing tunFd: ${tunFd?.fd}.")
+                    try {
+                        tunFd?.close()
+                    } catch (e: IOException) {
+                        Log.e(TAG, "shutdownTunnel: Exception closing tunFd: ${e.message}", e)
+                    }
+                    tunFd = null
+                    Log.d(TAG, "shutdownTunnel: tunFd set to null.")
+                    onShutdownComplete()
                 }
             }
         }
