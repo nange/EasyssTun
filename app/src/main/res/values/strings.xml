@@ -98,6 +98,7 @@
     <!-- Delete confirmation dialog -->
     <string name="delete_confirm_title">Confirm Delete</string>
     <string name="delete_confirm_message">Are you sure you want to delete this server profile?</string>
+    <string name="delete_confirm_message_active">The VPN is currently using this server. Deleting it will disconnect the VPN.</string>
     <string name="delete_confirm_positive">Delete</string>
     <string name="delete_confirm_negative">Cancel</string>
     <string name="delete_success">Profile deleted</string>

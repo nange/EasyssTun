@@ -120,6 +120,33 @@ class PrefTest {
         assertNull("Active server ID should be cleared from SharedPreferences after deletion", sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
         assertTrue("Server profiles list should be empty", pref.getProfiles().isEmpty())
     }
+
+    @Test
+    fun deleteActiveServerProfile_fallsBackToFirstRemaining() {
+        val profile1 = createDummyProfile("id1")
+        val profile2 = createDummyProfile("id2")
+        pref.addProfile(profile1)
+        pref.addProfile(profile2)
+        pref.setActiveServer("id2")
+
+        pref.deleteProfile("id2")
+        assertEquals("Deleting the active profile should fall back to the first remaining profile", "id1", sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
+        assertEquals("The fallback profile should be returned as active", profile1, pref.getActiveProfile())
+        assertEquals("Server profiles list should contain only the remaining profile", listOf(profile1), pref.getProfiles())
+    }
+
+    @Test
+    fun deleteNonActiveProfile_keepsActiveServer() {
+        val profile1 = createDummyProfile("id1")
+        val profile2 = createDummyProfile("id2")
+        pref.addProfile(profile1)
+        pref.addProfile(profile2)
+        pref.setActiveServer("id1")
+
+        pref.deleteProfile("id2")
+        assertEquals("Deleting a non-active profile should keep the active server unchanged", "id1", sharedPreferences.getString(Pref.ACTIVE_SERVER_ID, null))
+        assertEquals("Active profile should still be profile1", profile1, pref.getActiveProfile())
+    }
     
     @Test
     fun setActiveAndGetActiveServerProfile() {

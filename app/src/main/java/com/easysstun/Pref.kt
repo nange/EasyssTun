@@ -145,9 +145,13 @@ class Pref(private val ctx: Context) {
         profiles.removeAll { it.id == profileId }
         saveProfiles(profiles)
         if (prefs.getString(ACTIVE_SERVER_ID, null) == profileId) {
+            // Keep the invariant "an active server always exists while profiles remain":
+            // fall back to the first remaining profile instead of leaving the active
+            // server dangling. Only clear it when the last profile is deleted.
+            val fallback = profiles.firstOrNull()
             prefs.edit {
-                remove(ACTIVE_SERVER_ID)
-                apply()
+                if (fallback != null) putString(ACTIVE_SERVER_ID, fallback.id)
+                else remove(ACTIVE_SERVER_ID)
             }
         }
     }
