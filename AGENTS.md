@@ -60,9 +60,10 @@ app/src/main/java/com/easysstun/
   SettingsFragment.kt         # 偏好设置页
   ServiceReceiver.kt          # 开机自启广播接收
   AppState.kt / FormatUtils.kt / EasyssTunApplication.kt  # 辅助类
+app/src/main/java/hev/htproxy/TProxyService.kt  # tun2socks JNI shim（hev-socks5-tunnel AAR 固定契约，勿改包名/类名/方法签名）
 app/libs/                     # ★ 本地 AAR 依赖（均不入库，首次构建自动下载）
   libeasyss.aar               #   easyss 代理原生库
-  hev-socks5-tunnel.aar       #   tun2socks 实现（nange/hev-socks5-tunnel 预编译，含 arm64-v8a .so）
+  hev-socks5-tunnel.aar       #   tun2socks 实现（nange/hev-socks5-tunnel 预编译，含 4 ABI .so，固定 JNI 契约）
 app/src/test/                 # Robolectric 单元测试
 .github/workflows/
   ci.yml                      # push/PR 到 easyss 分支时跑 make check
@@ -72,7 +73,7 @@ app/src/test/                 # Robolectric 单元测试
 ## 构建机制要点
 
 - **libeasyss.aar 自动下载**：本地不存在时，`app/build.gradle` 会按 `version.properties` 中的 `libeasyssVersion`（如 `v3.0.0-rc10`）从 `nange/easyss` 的 GitHub Release 下载到 `app/libs/`；未锁定版本则调 GitHub API 取最新版。删除该文件即可触发重新下载。
-- **hev-socks5-tunnel.aar 自动下载**：机制同上，版本由 `version.properties` 中的 `hevSocks5TunnelVersion`（如 `2.17.1`）锁定，从 `nange/hev-socks5-tunnel`（本仓库维护的 fork，`easyss` 分支）的 GitHub Release 下载。AAR 内为预编译的 `arm64-v8a` `libhev-socks5-tunnel.so`，构建时注入 `-DPKGNAME=com/easysstun` 使 JNI 注册到 `com.easysstun.TProxyService`。升级 tun2socks：更新 `hevSocks5TunnelVersion` 并删除本地 aar，或到 fork 仓库发新 release。
+- **hev-socks5-tunnel.aar 自动下载**：机制同上，版本由 `version.properties` 中的 `hevSocks5TunnelVersion`（如 `2.17.1.1`）锁定，从 `nange/hev-socks5-tunnel`（本仓库维护的 fork，`easyss` 分支）的 GitHub Release 下载。AAR 采用**固定 JNI 契约**：构建时不注入 PKGNAME/CLSNAME，含 4 个 ABI 的 `libhev-socks5-tunnel.so`，JNI 注册到 `hev.htproxy.TProxyService`。App 侧通过 `app/src/main/java/hev/htproxy/TProxyService.kt` shim 桥接，`com.easysstun.TProxyService` 内的原生调用均经该 shim 转发（勿改 shim 的包名/类名/方法签名）。升级 tun2socks：更新 `hevSocks5TunnelVersion` 并删除本地 aar，或到 fork 仓库发新 release。
 - **签名**：优先读本地 `keystore.properties`；CI 走 `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` 环境变量。两者都没有时 release 构建产出未签名 APK。
 - **debug 变体**：包名后缀 `.debug`，应用名带 "(Debug)"，可与正式版共存。
 - **APK 命名**：`EasyssTun_v{versionName}_{versionCode}_{abi}_{variant}_{yyyyMMdd}.apk`。
