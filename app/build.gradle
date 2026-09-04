@@ -26,6 +26,9 @@ def libeasyssVersion = versionProps.getProperty('libeasyssVersion')?.trim()
 // hev-socks5-tunnel 版本锁定：AAR 来自 nange/hev-socks5-tunnel 的 GitHub Release
 def hevSocks5TunnelVersion = versionProps.getProperty('hevSocks5TunnelVersion')?.trim()
 
+// ABI 覆盖（可选）：模拟器/测试用，如 ./gradlew assembleDebug -PabiOverride=x86_64
+def abiOverride = providers.gradleProperty('abiOverride').orNull
+
 android {
     namespace = 'com.easysstun'
     compileSdk = 37
@@ -94,7 +97,7 @@ android {
         abi {
             enable = true
             reset()
-            include "arm64-v8a"
+            include(abiOverride ?: "arm64-v8a")
             universalApk = false
         }
     }
