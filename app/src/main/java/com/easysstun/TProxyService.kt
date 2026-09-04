@@ -528,14 +528,19 @@ socks5:
     }
 
     companion object {
-        @JvmStatic
-        private external fun TProxyStartService(config_path: String, fd: Int): Boolean
-        @JvmStatic
-        private external fun TProxyStopService(): Boolean
-        @JvmStatic
-        private external fun TProxyIsRunning(): Boolean
-        @JvmStatic
-        private external fun TProxyGetStats(): LongArray
+        // JNI natives live on hev.htproxy.TProxyService (fixed contract of the
+        // prebuilt hev-socks5-tunnel AAR); these are thin forwarding wrappers.
+        private fun TProxyStartService(config_path: String, fd: Int): Boolean =
+            hev.htproxy.TProxyService.TProxyStartService(config_path, fd)
+
+        private fun TProxyStopService(): Boolean =
+            hev.htproxy.TProxyService.TProxyStopService()
+
+        private fun TProxyIsRunning(): Boolean =
+            hev.htproxy.TProxyService.TProxyIsRunning()
+
+        private fun TProxyGetStats(): LongArray =
+            hev.htproxy.TProxyService.TProxyGetStats()
 
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
@@ -544,9 +549,5 @@ socks5:
         const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
         const val NOTIFICATION_ID = 1
         private const val TAG = "TProxyServiceDiag"
-
-        init {
-            System.loadLibrary("hev-socks5-tunnel")
-        }
     }
 }
