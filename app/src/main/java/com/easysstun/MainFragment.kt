@@ -1,9 +1,11 @@
 package com.easysstun
 
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.drawable.AnimatedVectorDrawable
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
@@ -67,6 +69,7 @@ class MainFragment : Fragment() {
 
     private var pendingServerProfileId: String? = null
     private var isSwitchingServer: Boolean = false
+    private var isConnecting: Boolean = false
 
     private val serviceStoppedReceiver =
             object : BroadcastReceiver() {
@@ -187,11 +190,33 @@ class MainFragment : Fragment() {
                 }
             }
 
+    private val serviceStartedReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != TProxyService.ACTION_SERVICE_STARTED) return
+                    Log.d(TAG, "ACTION_SERVICE_STARTED received. Leaving connecting state.")
+                    isConnecting = false
+                    view?.let { updateServiceStatu(it) }
+                }
+            }
+
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (pref.isServiceEnabled) {
-            startVPNService()
+        if (result.resultCode == Activity.RESULT_OK) {
+            Log.d(TAG, "VPN permission granted. Restarting start flow.")
+            if (pref.isServiceEnabled) {
+                startVPNService()
+            }
+        } else {
+            Log.w(
+                    TAG,
+                    "VPN permission not granted (resultCode=${result.resultCode}). " +
+                            "Aborting start and reverting to stopped state."
+            )
+            pref.isServiceEnabled = false
+            isConnecting = false
+            view?.let { updateServiceStatu(it) }
         }
     }
 
@@ -261,6 +286,15 @@ class MainFragment : Fragment() {
                 ContextCompat.RECEIVER_NOT_EXPORTED
         )
         Log.d(TAG, "serviceStartFailedReceiver registered.")
+
+        val startedFilter = IntentFilter(TProxyService.ACTION_SERVICE_STARTED)
+        ContextCompat.registerReceiver(
+                requireActivity(),
+                serviceStartedReceiver,
+                startedFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        Log.d(TAG, "serviceStartedReceiver registered.")
     }
 
     override fun onDestroy() {
@@ -268,6 +302,8 @@ class MainFragment : Fragment() {
         Log.d(TAG, "serviceStoppedReceiver unregistered.")
         requireActivity().unregisterReceiver(serviceStartFailedReceiver)
         Log.d(TAG, "serviceStartFailedReceiver unregistered.")
+        requireActivity().unregisterReceiver(serviceStartedReceiver)
+        Log.d(TAG, "serviceStartedReceiver unregistered.")
         super.onDestroy()
     }
 
@@ -433,6 +469,7 @@ class MainFragment : Fragment() {
                 }
                 if (pref.isServiceEnabled) {
                     pref.isServiceEnabled = false
+                    isConnecting = false
                 } else {
                     if (!easyssInfo.valid) {
                         Toast.makeText(
@@ -444,6 +481,8 @@ class MainFragment : Fragment() {
                         return@setOnClickListener
                     }
                     pref.isServiceEnabled = true
+                    isConnecting = true
+                    startVPNService()
                 }
                 updateServiceStatu(view)
             }
@@ -728,6 +767,26 @@ class MainFragment : Fragment() {
                     "updateServiceStatu: Not switching server, proceeding with normal UI update."
             )
         }
+
+        // Connecting state: the user pressed Start and the service startup
+        // is still in flight (VPN permission pending, native tunnel
+        // starting). Show a spinner and keep the button disabled so it
+        // cannot be re-tapped. ACTION_SERVICE_STARTED clears this flag; a
+        // failed/aborted start (pref.isServiceEnabled == false) falls
+        // through to the normal UI update below.
+        if (isConnecting && pref.isServiceEnabled) {
+            Log.d(
+                    TAG,
+                    "updateServiceStatu: Connection in progress, button shows spinner and is disabled."
+            )
+            service_button.text = getString(R.string.service_connecting)
+            service_button.isEnabled = false
+            service_button.icon = getDrawable(mContext, R.drawable.ic_spinner_anim)
+            (service_button.icon as? AnimatedVectorDrawable)?.start()
+            service_title.text = getString(R.string.service_connecting)
+            return
+        }
+        isConnecting = false
 
         // Refresh easyssInfo at the beginning of UI update (if not switching)
         easyssInfo = pref.getEasyssInfo()
