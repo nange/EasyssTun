@@ -319,9 +319,18 @@ socks5:
                 }
                 coroutineContext.ensureActive()
 
-                // Proxy is serving: only now expose the VPN so no app
-                // traffic (or Android's connectivity check) is dropped into
-                // a dead TUN.
+                // Warm up the first connection (dial + TLS + bootstrap) with
+                // a jittered, minimal probe before the VPN goes live: the
+                // "connecting" notification stays visible meanwhile, the VPN
+                // comes up with a warm connection, and the first page load
+                // no longer pays the cold-start cost. Best-effort: failures
+                // only log, startup proceeds regardless.
+                warmUpMobileProxy(startupElapsed)
+                coroutineContext.ensureActive()
+
+                // Proxy is serving and the connection is warm: only now
+                // expose the VPN so no app traffic (or Android's
+                // connectivity check) is dropped into a dead TUN.
                 val newTunFd = builder.establish()
                 tunFd = newTunFd
                 if (newTunFd != null) {
@@ -368,6 +377,26 @@ socks5:
         runCatching { TProxyStopService() }
         tunFd = null
         actualFinalizeStop()
+    }
+
+    /**
+     * Invokes the AAR's Mobile.warmUp() when the bundled libeasyss supports
+     * it. The AAR is an external, versioned artifact: older releases (e.g.
+     * the pinned v3.0.0-rc11 that CI downloads until a new easyss release
+     * exists) lack the method, so a direct call would not compile against
+     * them. Reflection keeps the app compatible with both old and new AARs;
+     * warm-up is best-effort anyway (see the caller).
+     */
+    private fun warmUpMobileProxy(startupElapsed: () -> Long) {
+        try {
+            Log.i(TAG, "startup: warmUp() begin, t+${startupElapsed()}ms")
+            Mobile::class.java.getMethod("warmUp").invoke(null)
+            Log.i(TAG, "startup: warmUp() done, t+${startupElapsed()}ms")
+        } catch (e: NoSuchMethodException) {
+            Log.d(TAG, "startup: bundled AAR has no warmUp(), skipping warm-up")
+        } catch (e: Exception) {
+            Log.w(TAG, "startup: warmUp() failed, continuing", e)
+        }
     }
 
     /**
