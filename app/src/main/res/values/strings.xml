@@ -57,6 +57,7 @@
     <string name="route_desc">EasyssTun will skip LAN traffic, and the apps selected above will also be skipped.\n\nOther traffic will be taken over by Easyss.</string>
     <string name="app_name_placeholder">PackageName</string>
     <string name="easyss_need_config">Easyss Server Not Configured</string>
+    <string name="start_failed_title">Start Failed</string>
 
     <!-- Version info -->
     <string name="version_info">%1$s | EasyssTun: v%2$s</string>
