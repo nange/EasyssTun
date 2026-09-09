@@ -56,6 +56,7 @@
     <string name="route_desc">EasyssTun会跳过局域网流量，同时以上选中的应用也会跳过。\n\n除以上情况外的流量将由Easyss接管。</string>
     <string name="app_name_placeholder">应用名</string>
     <string name="easyss_need_config">Easyss 服务未配置</string>
+    <string name="start_failed_title">启动失败</string>
 
     <!-- 版本信息 -->
     <string name="version_info">%1$s | EasyssTun: v%2$s</string>

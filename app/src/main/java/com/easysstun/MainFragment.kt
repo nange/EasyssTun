@@ -35,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.nange.easyss.mobile.Mobile
 import java.net.HttpURLConnection
 import java.net.URL
@@ -175,6 +176,17 @@ class MainFragment : Fragment() {
                 }
             }
 
+    private val serviceStartFailedReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != TProxyService.ACTION_SERVICE_START_FAILED) return
+                    val errorMessage = intent.getStringExtra(TProxyService.EXTRA_START_ERROR)
+                    Log.e(TAG, "ACTION_SERVICE_START_FAILED received. Error: $errorMessage")
+                    if (errorMessage.isNullOrBlank()) return
+                    showStartFailedDialog(errorMessage)
+                }
+            }
+
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -240,11 +252,22 @@ class MainFragment : Fragment() {
                 ContextCompat.RECEIVER_NOT_EXPORTED
         )
         Log.d(TAG, "serviceStoppedReceiver registered.")
+
+        val startFailedFilter = IntentFilter(TProxyService.ACTION_SERVICE_START_FAILED)
+        ContextCompat.registerReceiver(
+                requireActivity(),
+                serviceStartFailedReceiver,
+                startFailedFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        Log.d(TAG, "serviceStartFailedReceiver registered.")
     }
 
     override fun onDestroy() {
         requireActivity().unregisterReceiver(serviceStoppedReceiver)
         Log.d(TAG, "serviceStoppedReceiver unregistered.")
+        requireActivity().unregisterReceiver(serviceStartFailedReceiver)
+        Log.d(TAG, "serviceStartFailedReceiver unregistered.")
         super.onDestroy()
     }
 
@@ -658,6 +681,24 @@ class MainFragment : Fragment() {
     private fun stopVPNService() {
         val intent2 = Intent(mContext, TProxyService::class.java)
         mContext.startService(intent2.setAction(TProxyService.ACTION_DISCONNECT))
+    }
+
+    /**
+     * Shows the specific native error text returned by the Go side when
+     * Mobile.start() failed. Guarded against a finishing/detached activity so
+     * the dialog never throws BadTokenException (e.g. when the failure
+     * surfaces while the app is backgrounded or being destroyed).
+     */
+    private fun showStartFailedDialog(errorMessage: String) {
+        if (!isAdded || requireActivity().isFinishing) {
+            Log.w(TAG, "showStartFailedDialog: fragment not added or activity finishing, skipping dialog. Error: $errorMessage")
+            return
+        }
+        MaterialAlertDialogBuilder(requireActivity())
+                .setTitle(R.string.start_failed_title)
+                .setMessage(errorMessage)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
     }
 
     // Removed deprecated service status check helper; rely on Pref state and service lifecycle

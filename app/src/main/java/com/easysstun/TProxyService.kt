@@ -305,9 +305,25 @@ socks5:
                     buildNotification(channelName, loadedProfile.name, getString(R.string.notification_connecting))
                 )
 
+                // Mobile.start() mirrors the Go export `func Start(cfg) error`:
+                // the gomobile binding throws Exception carrying the specific Go
+                // error text when startup fails. Surface it to the user via a
+                // dialog instead of silently tearing down.
                 Log.i(TAG, "startup: Mobile.start() begin, t+${startupElapsed()}ms")
-                Mobile.start(config)
-                Log.i(TAG, "startup: Mobile.start() returned, t+${startupElapsed()}ms")
+                try {
+                    Mobile.start(config)
+                    Log.i(TAG, "startup: Mobile.start() returned, t+${startupElapsed()}ms")
+                } catch (e: CancellationException) {
+                    // User stopped the service while startup was in flight; let
+                    // the outer catch rethrow and the teardown own the cleanup.
+                    throw e
+                } catch (e: Exception) {
+                    val message = e.message ?: e.toString()
+                    Log.e(TAG, "startup: Mobile.start() failed: $message", e)
+                    notifyStartFailure(message)
+                    finishStartupFailure()
+                    return@launch
+                }
 
                 coroutineContext.ensureActive()
                 val socksReady = waitForSocksReady(socksPort, STARTUP_READY_TIMEOUT_MS)
@@ -383,6 +399,19 @@ socks5:
         runCatching { TProxyStopService() }
         tunFd = null
         actualFinalizeStop()
+    }
+
+    /**
+     * Notifies the UI that the native proxy failed to start, carrying the
+     * specific error text returned by the Go side (see Mobile.start's
+     * Exception contract). MainFragment shows it in a dialog.
+     */
+    internal fun notifyStartFailure(errorMessage: String) {
+        Log.e(TAG, "Broadcasting $ACTION_SERVICE_START_FAILED with error: $errorMessage")
+        val broadcastIntent = Intent(ACTION_SERVICE_START_FAILED)
+        broadcastIntent.setPackage(packageName)
+        broadcastIntent.putExtra(EXTRA_START_ERROR, errorMessage)
+        sendBroadcast(broadcastIntent)
     }
 
     /**
@@ -693,6 +722,8 @@ socks5:
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
         const val ACTION_SERVICE_STOPPED = "com.easysstun.SERVICE_FULLY_STOPPED"
+        const val ACTION_SERVICE_START_FAILED = "com.easysstun.SERVICE_START_FAILED"
+        const val EXTRA_START_ERROR = "com.easysstun.START_ERROR_EXTRA"
         const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"
         const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
         const val NOTIFICATION_ID = 1
