@@ -1,8 +1,7 @@
 package com.easysstun
 
-import android.os.Bundle
 import android.annotation.SuppressLint
-import android.util.Log
+import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,88 +11,20 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.isActive
-import java.io.BufferedReader
-import java.io.IOException
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.util.regex.Pattern
 
 
 class LogFragment : Fragment() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var logViewModel: LogViewModel
     private lateinit var logAdapter: LogAdapter
-    private var logJob: Job? = null
 
     private var isAtBottom = true
     private var changingState = false
-
-    companion object {
-        // App log tags to display in the log viewer
-        private val APP_LOG_TAGS = arrayOf(
-            "GoLog", "TProxyServiceDiag", "MainFragment", "AppState",
-            "Pref", "Profile", "LogFragment", "AppListAdapter"
-        )
-
-        // Pattern A: Go slog format within the logcat message payload
-        // Matches: time=... level=... source=... msg=...
-        private val LOG_PATTERN_SLOG =
-            Pattern.compile("time=([^ ]+) level=([^ ]+) source=([^ ]+) msg=(.*)")
-
-        // Pattern B: Fallback for TProxyService direct log lines
-        // Captures logcat wrapper: date, time, level char, and msg=... content
-        private val LOG_PATTERN_FALLBACK =
-            Pattern.compile("^(\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+easyss\\s+:\\s+msg=(.*)$")
-
-        // Pattern C: Standard android.util.Log logcat output format
-        // Captures: date, time, level char, tag, message
-        // Example: "07-25 10:30:45.123  1234  5678 I TProxyServiceDiag: onStartCommand..."
-        private val LOG_PATTERN_STANDARD =
-            Pattern.compile("^(\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+(\\S+)\\s*:\\s*(.*)$")
-
-        /**
-         * Convert ISO 8601 timestamp to display format: "MM-DD HH:MM:SS.mmm"
-         * Input:  "2026-07-19T19:08:48.135+08:00"
-         * Output: "07-19 19:08:48.135"
-         */
-        fun formatTime(isoTime: String): String {
-            val t = isoTime.indexOf('T')
-            if (t < 0) return isoTime
-            val datePart = isoTime.substring(5, 10)  // "07-19"
-            val timePart = isoTime.substring(t + 1).takeWhile { c -> c != '+' && c != '-' && c != 'Z' }
-            return "$datePart $timePart"
-        }
-
-        /** Map logcat level character to readable level string. */
-        fun mapLevelChar(c: String): String = when (c) {
-            "V" -> "VERBOSE"
-            "D" -> "DEBUG"
-            "I" -> "INFO"
-            "W" -> "WARN"
-            "E" -> "ERROR"
-            "F" -> "FATAL"
-            else -> c
-        }
-
-        /** Map a level string to numeric severity for filtering (higher = more severe). */
-        fun levelSeverity(level: String): Int = when (level.uppercase()) {
-            "VERBOSE" -> 2
-            "DEBUG" -> 3
-            "INFO" -> 4
-            "WARN", "WARNING" -> 5
-            "ERROR" -> 6
-            "FATAL" -> 7
-            else -> 4  // Default to INFO
-        }
-    }
 
 
     override fun onCreateView(
@@ -107,6 +38,8 @@ class LogFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        LogStore.ensureStarted(requireContext())
+
         recyclerView = view.findViewById(R.id.logRecyclerView)
         logAdapter = LogAdapter()
 
@@ -128,6 +61,8 @@ class LogFragment : Fragment() {
                 recyclerView.scrollToPosition(logItems.size - 1)
             }
             changingState = false
+            // 首屏不足一屏时自动补页（如大字体/行数少）
+            recyclerView.post { fillViewportIfNeeded() }
         }
 
         val fabToBotton = view.findViewById<FloatingActionButton>(R.id.fabToBotton)
@@ -142,6 +77,12 @@ class LogFragment : Fragment() {
                         isAtBottom = false
                         fabToBotton.show()
                     }
+                    // 滑到顶部时加载更早的一页日志
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE &&
+                        !recyclerView.canScrollVertically(-1)
+                    ) {
+                        loadOlderLogs()
+                    }
             }
         })
 
@@ -155,94 +96,32 @@ class LogFragment : Fragment() {
         }
 
 
-        readLogs()
-    }
-    override fun onDestroy() {
-        super.onDestroy()
-        logJob?.cancel()
+        logViewModel.open()
     }
 
-    /** Read the configured log level from the active profile, defaulting to INFO (severity 4). */
-    private fun getMinLevelSeverity(): Int {
-        val logLevel = Pref(requireContext()).getActiveProfile()?.logLevel ?: "info"
-        return when (logLevel.lowercase()) {
-            "debug" -> 3
-            "info" -> 4
-            "warn" -> 5
-            "error" -> 6
-            else -> 4  // Default INFO
+    /**
+     * 在列表顶部向前加载更早的一页日志，并保持视口锚定在加载前
+     * 的第一条可见项上（loadMore 通过 setValue 同步触发列表更新）。
+     */
+    private fun loadOlderLogs() {
+        if (!logViewModel.canLoadMore()) return
+        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+        val firstPos = layoutManager.findFirstVisibleItemPosition()
+        val firstView = layoutManager.findViewByPosition(firstPos)
+        val offset = firstView?.top ?: 0
+        val prepended = logViewModel.loadMore()
+        if (prepended > 0 && !isAtBottom) {
+            val target = firstPos + prepended
+            if (target in 0 until logAdapter.itemCount) {
+                layoutManager.scrollToPositionWithOffset(target, offset)
+            }
         }
     }
 
-    private fun readLogs() {
-        val minLevelSeverity = getMinLevelSeverity()
-        logJob = lifecycleScope.launch(Dispatchers.IO) {
-            var inputStream: InputStream? = null
-            var bufferedReader: BufferedReader? = null
-            var process: Process? = null
-            try {
-                val cleanprocess = Runtime.getRuntime().exec("logcat -c")
-                cleanprocess.waitFor()
-                val tags = APP_LOG_TAGS.joinToString(" ")
-                process = Runtime.getRuntime().exec("logcat -s $tags")
-                inputStream = process.inputStream
-                bufferedReader = BufferedReader(InputStreamReader(inputStream))
-                while (isActive) {
-                    val line: String? = bufferedReader.readLine()
-                    if (line != null) {
-                        // Try Go slog pattern first
-                        var matcher = LOG_PATTERN_SLOG.matcher(line)
-                        if (matcher.find()) {
-                            val isoTime = matcher.group(1) ?: ""
-                            val level = matcher.group(2) ?: ""
-                            val source = matcher.group(3) ?: ""
-                            val msg = matcher.group(4) ?: ""
-                            val displayTime = formatTime(isoTime)
-                            if (levelSeverity(level) >= minLevelSeverity) {
-                                val logItem = LogItem(msg, displayTime, source, level)
-                                logViewModel.addLog(logItem)
-                            }
-                        } else {
-                            // Try fallback pattern for TProxyService lines
-                            matcher = LOG_PATTERN_FALLBACK.matcher(line)
-                            if (matcher.find()) {
-                                val logDate = matcher.group(1) ?: ""
-                                val logTime = matcher.group(2) ?: ""
-                                val levelChar = matcher.group(3) ?: ""
-                                val msg = matcher.group(4) ?: ""
-                                val displayTime = "$logDate $logTime"
-                                val level = mapLevelChar(levelChar)
-                                if (levelSeverity(level) >= minLevelSeverity) {
-                                    val logItem = LogItem(msg, displayTime, "", level)
-                                    logViewModel.addLog(logItem)
-                                }
-                            } else {
-                                // Try standard android.util.Log pattern for app-side logs
-                                matcher = LOG_PATTERN_STANDARD.matcher(line)
-                                if (matcher.find()) {
-                                    val logDate = matcher.group(1) ?: ""
-                                    val logTime = matcher.group(2) ?: ""
-                                    val levelChar = matcher.group(3) ?: ""
-                                    val tag = matcher.group(4) ?: ""
-                                    val msg = matcher.group(5) ?: ""
-                                    val displayTime = "$logDate $logTime"
-                                    val level = mapLevelChar(levelChar)
-                                    if (levelSeverity(level) >= minLevelSeverity) {
-                                        val logItem = LogItem(msg, displayTime, tag, level)
-                                        logViewModel.addLog(logItem)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (e: IOException) {
-                Log.e("LogFragment", "Error reading logs", e)
-            } finally {
-                inputStream?.close()
-                bufferedReader?.close()
-                process?.destroy()
-            }
+    /** 窗口内容不足一屏且仍有更早日志时，继续向前补页直到填满或到顶。 */
+    private fun fillViewportIfNeeded() {
+        if (logViewModel.canLoadMore() && !recyclerView.canScrollVertically(1)) {
+            loadOlderLogs()
         }
     }
 }
@@ -292,26 +171,88 @@ class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
 }
 
 
-data class LogItem(val message: String, var time: String, var source: String, var level: String)
-
+/**
+ * Holds the visible window into [LogStore]: the window always spans
+ * [windowStart, store.endIndex), starting with the latest page on open.
+ * Scrolling up prepends older pages; new logs always append at the tail.
+ */
 class LogViewModel : ViewModel() {
-    private val _logItems = MutableLiveData<List<LogItem>>()
+    private val window = mutableListOf<LogItem>()
+    private val _logItems = MutableLiveData<List<LogItem>>(emptyList())
     val logItems: LiveData<List<LogItem>> get() = _logItems
 
-    companion object {
-        private const val MAX_LOG_SIZE = 1000
-    }
+    /** Capture-stream index of window[0]. */
+    private var windowStart = 0
+    /** Capture-stream index one past the last synced item (== store endIndex). */
+    private var windowEndIndex = 0
+    private var opened = false
 
-    fun addLog(logItem: LogItem) {
-        val currentList = _logItems.value.orEmpty().toMutableList()
-        currentList.add(logItem)
-        if (currentList.size > MAX_LOG_SIZE) {
-            currentList.subList(0, currentList.size - MAX_LOG_SIZE).clear()
+    init {
+        // Every store append (or eviction) triggers a resync; intermediate
+        // emissions may be skipped, but each resync reads the current store
+        // state so the window always converges.
+        viewModelScope.launch {
+            LogStore.updates.collect { resync() }
         }
-        _logItems.postValue(currentList)
     }
 
-    fun clearLogs() {
-        _logItems.postValue(emptyList())
+    /** Show the latest page; called when the log screen opens. Idempotent. */
+    fun open() {
+        if (opened) return
+        opened = true
+        val end = LogStore.endIndex
+        windowStart = maxOf(LogStore.frontIndex, end - LogStore.PAGE_SIZE)
+        windowEndIndex = end
+        window.clear()
+        window.addAll(LogStore.sliceRange(windowStart, end))
+        _logItems.value = window.toList()
+    }
+
+    /**
+     * Prepend the next older page of logs. Returns how many items were
+     * actually prepended (0 when nothing older is available).
+     */
+    fun loadMore(): Int {
+        if (!opened) return 0
+        val front = LogStore.frontIndex
+        if (windowStart < front) {
+            // Eviction passed the front of our window: rebuild from the retained range
+            rebuildWindow()
+            return 0
+        }
+        if (windowStart <= front) return 0
+        val newStart = maxOf(front, windowStart - LogStore.PAGE_SIZE)
+        val older = LogStore.sliceRange(newStart, windowStart)
+        if (older.isEmpty()) return 0
+        window.addAll(0, older)
+        windowStart = newStart
+        _logItems.value = window.toList()
+        return older.size
+    }
+
+    /** True when an older page is still available. */
+    fun canLoadMore(): Boolean = opened && windowStart > LogStore.frontIndex
+
+    private fun resync() {
+        if (!opened) return
+        val front = LogStore.frontIndex
+        val end = LogStore.endIndex
+        if (windowStart < front) {
+            rebuildWindow()
+        } else if (end > windowEndIndex) {
+            window.addAll(LogStore.sliceRange(windowEndIndex, end))
+            windowEndIndex = end
+            _logItems.value = window.toList()
+        }
+    }
+
+    private fun rebuildWindow() {
+        val front = LogStore.frontIndex
+        val end = LogStore.endIndex
+        windowStart = maxOf(windowStart, front)
+        windowEndIndex = end
+        window.clear()
+        window.addAll(LogStore.sliceRange(windowStart, end))
+        _logItems.value = window.toList()
     }
 }
