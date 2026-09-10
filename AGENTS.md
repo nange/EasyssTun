@@ -41,6 +41,13 @@ make clean
 
 改动代码后至少执行 `make check` 验证。
 
+**Windows**：`Makefile` 会按平台自动选择 Gradle wrapper（cmd.exe/PowerShell → `gradlew.bat`，Git Bash/MSYS → `./gradlew`），因此 `make check` 在 Windows 上同样可用（需自行安装 GNU Make，如 `choco install make`、`scoop install make` 或 MSYS2 的 `make`）。环境里确实没有 make 时，直接在仓库根目录跑等价命令：
+
+```powershell
+.\gradlew.bat lintDebug   # PowerShell / cmd
+./gradlew lintDebug       # Git Bash / WSL / macOS / Linux
+```
+
 ## 仓库结构与关键文件
 
 ```
