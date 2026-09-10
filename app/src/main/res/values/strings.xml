@@ -2,6 +2,7 @@
     <string name="app_name">EasyssTun</string>
     <string name="service_enable">Start</string>
     <string name="service_disable">Stop</string>
+    <string name="service_connecting">Connecting…</string>
     <string name="service_switching">Switching…</string>
 
     <string name="service_running">EasyssTun is Running</string>

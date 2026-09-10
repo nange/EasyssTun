@@ -374,6 +374,7 @@ socks5:
                 createNotification(channelName, loadedProfile.name)
                 startNotificationUpdater(channelName, loadedProfile.name, loadedProfile.statsUrl())
                 Log.i(TAG, "startup: service fully started, t+${startupElapsed()}ms")
+                notifyServiceStarted()
             } catch (e: CancellationException) {
                 // User stopped the service while startup was in flight; the
                 // teardown path owns the cleanup.
@@ -411,6 +412,18 @@ socks5:
         val broadcastIntent = Intent(ACTION_SERVICE_START_FAILED)
         broadcastIntent.setPackage(packageName)
         broadcastIntent.putExtra(EXTRA_START_ERROR, errorMessage)
+        sendBroadcast(broadcastIntent)
+    }
+
+    /**
+     * Notifies the UI that the tunnel is fully up and serving traffic.
+     * MainFragment listens for this to leave the "connecting" (spinner,
+     * disabled button) state and show the running "Stop" state.
+     */
+    internal fun notifyServiceStarted() {
+        Log.i(TAG, "Broadcasting $ACTION_SERVICE_STARTED")
+        val broadcastIntent = Intent(ACTION_SERVICE_STARTED)
+        broadcastIntent.setPackage(packageName)
         sendBroadcast(broadcastIntent)
     }
 
@@ -722,6 +735,7 @@ socks5:
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
         const val ACTION_SERVICE_STOPPED = "com.easysstun.SERVICE_FULLY_STOPPED"
+        const val ACTION_SERVICE_STARTED = "com.easysstun.SERVICE_STARTED"
         const val ACTION_SERVICE_START_FAILED = "com.easysstun.SERVICE_START_FAILED"
         const val EXTRA_START_ERROR = "com.easysstun.START_ERROR_EXTRA"
         const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"

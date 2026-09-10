@@ -3,6 +3,7 @@
     <string name="app_name">EasyssTun</string>
     <string name="service_enable">开启</string>
     <string name="service_disable">停止</string>
+    <string name="service_connecting">连接中…</string>
     <string name="service_switching">切换中…</string>
     <string name="service_running">EasyssTun 服务运行中</string>
     <string name="service_stopped">EasyssTun 已停止</string>
