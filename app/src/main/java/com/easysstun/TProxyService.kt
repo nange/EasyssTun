@@ -335,23 +335,11 @@ socks5:
                 }
                 coroutineContext.ensureActive()
 
-                // Warm up the first connection (dial + TLS + bootstrap) with
-                // a jittered, minimal probe before the VPN goes live: the
-                // "connecting" notification stays visible meanwhile, the VPN
-                // comes up with a warm connection, and the first page load
-                // no longer pays the cold-start cost. Best-effort: failures
-                // only log, startup proceeds regardless.
-                try {
-                    Log.i(TAG, "startup: warmUp() begin, t+${startupElapsed()}ms")
-                    Mobile.warmUp()
-                    Log.i(TAG, "startup: warmUp() done, t+${startupElapsed()}ms")
-                } catch (e: Exception) {
-                    Log.w(TAG, "startup: warmUp() failed, continuing", e)
-                }
-                coroutineContext.ensureActive()
-
-                // Proxy is serving and the connection is warm: only now
-                // expose the VPN so no app traffic (or Android's
+                // The transport warm-up is no longer driven from here: the
+                // AAR's runner dispatches it in the background once the core
+                // is up (runner.Core.StartWarmUp), unless the configuration
+                // sets transport.disable_warm_up. Only the SOCKS5 readiness
+                // above gates the VPN, so no app traffic (or Android's
                 // connectivity check) is dropped into a dead TUN.
                 val newTunFd = builder.establish()
                 tunFd = newTunFd
