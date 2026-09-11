@@ -31,7 +31,7 @@ make build
 
 首次构建时会自动从 GitHub Release 下载 `libeasyss.aar` 与 `hev-socks5-tunnel.aar` 到 `app/libs/`，无需 NDK。
 
-Windows 下同样可以直接 `make build`（Makefile 会按平台自动改用 `gradlew.bat`）；若未安装 GNU Make，在 PowerShell/cmd 中执行 `.\gradlew.bat assembleDebug` 即可。
+Windows 下同样可以直接 `make build`（Makefile 会按平台自动选择 wrapper：Windows 上统一经 `cmd /c gradlew.bat` 调用，兼容 cmd.exe、PowerShell 与 Git Bash/MSYS）；若未安装 GNU Make，在 PowerShell/cmd 中执行 `.\gradlew.bat assembleDebug` 即可。
 
 也可直接在Release页面下载编译好的APK文件。
 
