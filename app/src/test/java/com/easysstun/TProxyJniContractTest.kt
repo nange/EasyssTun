@@ -2,26 +2,31 @@ package com.easysstun
 
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.lang.reflect.Modifier
 
 /**
- * Guards the fixed JNI contract of the prebuilt hev-socks5-tunnel AAR.
+ * Guards the JNI contract of the prebuilt hev-socks5-tunnel AAR.
  *
- * The AAR registers its natives to hev.htproxy.TProxyService at load time
- * (JNI_OnLoad -> FindClass + RegisterNatives). If the shim's package, class
- * name, or the native method names/signatures drift, System.loadLibrary
- * fails with UnsatisfiedLinkError at runtime.
+ * The AAR ships its Java binding class, and the natives are registered to that
+ * exact class at load time
+ * (JNI_OnLoad -> FindClass("hev/htproxy/TProxyService") + RegisterNatives).
+ * Upgrading the AAR without matching that contract makes System.loadLibrary
+ * fail with UnsatisfiedLinkError at runtime, so the class, the native method
+ * names/signatures, and their staticness are pinned here. A missing binding
+ * class fails the build earlier, at Kotlin compile time.
  *
- * The class is inspected with Class.forName(initialize = false) so the
- * shim's init block (System.loadLibrary) is NOT triggered under Robolectric.
+ * The class is inspected with Class.forName(initialize = false) so the binding
+ * class's static initializer (System.loadLibrary) is NOT triggered under
+ * Robolectric, where no Android .so is available.
  */
 class TProxyJniContractTest {
 
     @Test
-    fun shimMatchesJniContract() {
+    fun aarBindingClassMatchesJniContract() {
         val clazz = Class.forName("hev.htproxy.TProxyService", false, javaClass.classLoader)
-        val methods = clazz.declaredMethods
-            .map { it.name to it.parameterTypes.toList() }
-            .toList()
+        val declared = clazz.declaredMethods.map {
+            Triple(it.name, it.parameterTypes.toList(), it.modifiers)
+        }
         val expected = mapOf(
             "TProxyStartService" to listOf(String::class.java, Int::class.javaPrimitiveType),
             "TProxyStopService" to emptyList<Class<*>>(),
@@ -29,11 +34,16 @@ class TProxyJniContractTest {
             "TProxyGetStats" to emptyList<Class<*>>(),
         )
         for ((name, params) in expected) {
-            assertTrue("Missing native method $name", methods.any { it.first == name })
+            val found = declared.filter { it.first == name }
+            val match = found.find { it.second == params }
             assertTrue(
-                "Native method $name signature mismatch: expected $params, " +
-                    "found ${methods.filter { it.first == name }.map { it.second }}",
-                methods.any { it.first == name && it.second == params }
+                "Missing native method $name with params $params; AAR declares " +
+                    "${found.map { it.first to it.second }}",
+                match != null
+            )
+            assertTrue(
+                "Native method $name must be static and native (RegisterNatives target)",
+                Modifier.isStatic(match!!.third) && Modifier.isNative(match.third)
             )
         }
     }
