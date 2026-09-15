@@ -68,10 +68,9 @@ app/src/main/java/com/easysstun/
   SettingsFragment.kt         # 偏好设置页
   ServiceReceiver.kt          # 开机自启广播接收
   AppState.kt / FormatUtils.kt / EasyssTunApplication.kt  # 辅助类
-app/src/main/java/hev/htproxy/TProxyService.kt  # tun2socks JNI shim（hev-socks5-tunnel AAR 固定契约，勿改包名/类名/方法签名）
 app/libs/                     # ★ 本地 AAR 依赖（均不入库，首次构建自动下载）
   libeasyss.aar               #   easyss 代理原生库
-  hev-socks5-tunnel.aar       #   tun2socks 实现（nange/hev-socks5-tunnel 预编译，含 4 ABI .so，固定 JNI 契约）
+  hev-socks5-tunnel.aar       #   tun2socks 实现（nange/hev-socks5-tunnel 预编译，含 4 ABI .so + 自带绑定类的 classes.jar）
 app/src/test/                 # Robolectric 单元测试
 .github/workflows/
   ci.yml                      # push/PR 到 easyss 分支时跑 make check
@@ -81,7 +80,7 @@ app/src/test/                 # Robolectric 单元测试
 ## 构建机制要点
 
 - **libeasyss.aar 自动下载**：本地不存在时，`app/build.gradle` 会按 `version.properties` 中的 `libeasyssVersion`（如 `v3.0.0-rc10`）从 `nange/easyss` 的 GitHub Release 下载到 `app/libs/`；未锁定版本则调 GitHub API 取最新版。删除该文件即可触发重新下载。
-- **hev-socks5-tunnel.aar 自动下载**：机制同上，版本由 `version.properties` 中的 `hevSocks5TunnelVersion`（如 `2.17.1.1`）锁定，从 `nange/hev-socks5-tunnel`（本仓库维护的 fork，`easyss` 分支）的 GitHub Release 下载。AAR 采用**固定 JNI 契约**：构建时不注入 PKGNAME/CLSNAME，含 4 个 ABI 的 `libhev-socks5-tunnel.so`，JNI 注册到 `hev.htproxy.TProxyService`。App 侧通过 `app/src/main/java/hev/htproxy/TProxyService.kt` shim 桥接，`com.easysstun.TProxyService` 内的原生调用均经该 shim 转发（勿改 shim 的包名/类名/方法签名）。升级 tun2socks：更新 `hevSocks5TunnelVersion` 并删除本地 aar，或到 fork 仓库发新 release。
+- **hev-socks5-tunnel.aar 自动下载**：机制同上，版本由 `version.properties` 中的 `hevSocks5TunnelVersion`（如 `2.17.1.2`）锁定，从 `nange/hev-socks5-tunnel`（本仓库维护的 fork，`easyss` 分支）的 GitHub Release 下载。AAR **自包含**：含 4 个 ABI 的 `libhev-socks5-tunnel.so`、`classes.jar`（内有绑定类 `hev.htproxy.TProxyService`，静态 native 方法 + 静态块 `System.loadLibrary`）与 `proguard.txt`，与 libeasyss 的 gomobile 绑定结构同类；App 侧不需要任何 shim，"com.easysstun.TProxyService" 内以全限定名直接调用 `TProxyStartService`/`TProxyStopService`。native 侧仍是**固定 JNI 契约**：`src/hev-jni.c` 用编译期宏 `PKGNAME=hev/htproxy`、`CLSNAME=TProxyService`（fork 构建时不注入覆盖值），**勿改类名/方法名/签名**——确需改动必须同时用 `-DPKGNAME/-DCLSNAME` 重编 .so；契约由 `app/src/test/java/com/easysstun/TProxyJniContractTest.kt` 守护。升级 tun2socks：更新 `hevSocks5TunnelVersion` 并删除本地 aar（新 AAR 必须带 `classes.jar`，否则 Kotlin 编译期即失败）。
 - **签名**：优先读本地 `keystore.properties`；CI 走 `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` 环境变量。两者都没有时 release 构建产出未签名 APK。
 - **debug 变体**：包名后缀 `.debug`，应用名带 "(Debug)"，可与正式版共存。
 - **APK 命名**：`EasyssTun_v{versionName}_{versionCode}_{abi}_{variant}_{yyyyMMdd}.apk`。
