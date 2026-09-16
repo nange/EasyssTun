@@ -78,7 +78,7 @@ class MainFragment : Fragment() {
                             TAG,
                             "serviceStoppedReceiver - Entry. Action: ${intent?.action}"
                     )
-                    if (intent?.action == TProxyService.ACTION_SERVICE_STOPPED) {
+                    if (intent?.action == EasyssVpnService.ACTION_SERVICE_STOPPED) {
                         Log.d(
                                 TAG,
                                 "ACTION_SERVICE_STOPPED received. Pending server ID: $pendingServerProfileId, isSwitchingServer: $isSwitchingServer"
@@ -182,8 +182,8 @@ class MainFragment : Fragment() {
     private val serviceStartFailedReceiver =
             object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
-                    if (intent?.action != TProxyService.ACTION_SERVICE_START_FAILED) return
-                    val errorMessage = intent.getStringExtra(TProxyService.EXTRA_START_ERROR)
+                    if (intent?.action != EasyssVpnService.ACTION_SERVICE_START_FAILED) return
+                    val errorMessage = intent.getStringExtra(EasyssVpnService.EXTRA_START_ERROR)
                     Log.e(TAG, "ACTION_SERVICE_START_FAILED received. Error: $errorMessage")
                     if (errorMessage.isNullOrBlank()) return
                     showStartFailedDialog(errorMessage)
@@ -193,7 +193,7 @@ class MainFragment : Fragment() {
     private val serviceStartedReceiver =
             object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
-                    if (intent?.action != TProxyService.ACTION_SERVICE_STARTED) return
+                    if (intent?.action != EasyssVpnService.ACTION_SERVICE_STARTED) return
                     Log.d(TAG, "ACTION_SERVICE_STARTED received. Leaving connecting state.")
                     isConnecting = false
                     view?.let { updateServiceStatu(it) }
@@ -269,7 +269,7 @@ class MainFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val intentFilter = IntentFilter(TProxyService.ACTION_SERVICE_STOPPED)
+        val intentFilter = IntentFilter(EasyssVpnService.ACTION_SERVICE_STOPPED)
         ContextCompat.registerReceiver(
                 requireActivity(),
                 serviceStoppedReceiver,
@@ -278,7 +278,7 @@ class MainFragment : Fragment() {
         )
         Log.d(TAG, "serviceStoppedReceiver registered.")
 
-        val startFailedFilter = IntentFilter(TProxyService.ACTION_SERVICE_START_FAILED)
+        val startFailedFilter = IntentFilter(EasyssVpnService.ACTION_SERVICE_START_FAILED)
         ContextCompat.registerReceiver(
                 requireActivity(),
                 serviceStartFailedReceiver,
@@ -287,7 +287,7 @@ class MainFragment : Fragment() {
         )
         Log.d(TAG, "serviceStartFailedReceiver registered.")
 
-        val startedFilter = IntentFilter(TProxyService.ACTION_SERVICE_STARTED)
+        val startedFilter = IntentFilter(EasyssVpnService.ACTION_SERVICE_STARTED)
         ContextCompat.registerReceiver(
                 requireActivity(),
                 serviceStartedReceiver,
@@ -610,7 +610,7 @@ class MainFragment : Fragment() {
                 TAG,
                 "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver"
         )
-        // A server-switch stop sets isServiceEnabled=false (TProxyService.actualFinalizeStop).
+        // A server-switch stop sets isServiceEnabled=false (EasyssVpnService.actualFinalizeStop).
         // Mark the service as enabled here so the updateServiceStatu() call right after an
         // auto-restart takes the "running" branch instead of issuing another stop, and so the
         // vpnPermissionLauncher callback still restarts after granting permission mid-switch.
@@ -638,7 +638,7 @@ class MainFragment : Fragment() {
                     "startVPNService - Inside try block, attempting to get active profile."
             )
             val activeProfile = pref.getActiveProfile() // Get the full profile object
-            val intent2 = Intent(mContext, TProxyService::class.java)
+            val intent2 = Intent(mContext, EasyssVpnService::class.java)
 
             if (activeProfile != null) {
                 val json = Json {
@@ -672,7 +672,7 @@ class MainFragment : Fragment() {
                     return
                 }
             } else {
-                Log.w(TAG, "No active server profile found to start TProxyService.")
+                Log.w(TAG, "No active server profile found to start EasyssVpnService.")
                 if (isCalledFromReceiver) {
                     Toast.makeText(
                                     mContext,
@@ -689,13 +689,13 @@ class MainFragment : Fragment() {
             // Pass proxy mode and selected apps via Intent to avoid multi-process SharedPreferences issues
             val proxyMode = pref.getProxyMode()
             val selectedApps = ArrayList(pref.getAppsForMode(proxyMode))
-            intent2.putExtra(TProxyService.EXTRA_PROXY_MODE, proxyMode)
-            intent2.putStringArrayListExtra(TProxyService.EXTRA_SELECTED_APPS, selectedApps)
+            intent2.putExtra(EasyssVpnService.EXTRA_PROXY_MODE, proxyMode)
+            intent2.putStringArrayListExtra(EasyssVpnService.EXTRA_SELECTED_APPS, selectedApps)
             Log.d(TAG, "startVPNService: proxyMode=$proxyMode, selectedApps=$selectedApps")
 
-            mContext.startService(intent2.setAction(TProxyService.ACTION_CONNECT))
+            mContext.startService(intent2.setAction(EasyssVpnService.ACTION_CONNECT))
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting TProxyService", e)
+            Log.e(TAG, "Error starting EasyssVpnService", e)
             if (isCalledFromReceiver) {
                 // IMPORTANT: Do NOT throw RuntimeException if called from serviceStoppedReceiver,
                 // as it would crash the receiver and leave the UI in a stuck state.
@@ -710,7 +710,7 @@ class MainFragment : Fragment() {
                 // If strict crashing is desired for non-receiver contexts:
                 // if (e !is kotlinx.serialization.SerializationException) { // Already handled
                 // above
-                //    throw RuntimeException("Non-receiver context: Error starting TProxyService",
+                //    throw RuntimeException("Non-receiver context: Error starting EasyssVpnService",
                 // e)
                 // }
             }
@@ -718,8 +718,8 @@ class MainFragment : Fragment() {
     }
 
     private fun stopVPNService() {
-        val intent2 = Intent(mContext, TProxyService::class.java)
-        mContext.startService(intent2.setAction(TProxyService.ACTION_DISCONNECT))
+        val intent2 = Intent(mContext, EasyssVpnService::class.java)
+        mContext.startService(intent2.setAction(EasyssVpnService.ACTION_DISCONNECT))
     }
 
     /**

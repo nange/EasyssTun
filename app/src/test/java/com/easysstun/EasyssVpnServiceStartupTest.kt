@@ -19,10 +19,10 @@ import java.net.ServerSocket
  */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])
-class TProxyServiceStartupTest {
+class EasyssVpnServiceStartupTest {
 
-    private fun newService(): TProxyService =
-        Robolectric.buildService(TProxyService::class.java).get()
+    private fun newService(): EasyssVpnService =
+        Robolectric.buildService(EasyssVpnService::class.java).get()
 
     @Test
     fun waitForSocksReady_returnsTrueWhenProbeSucceedsImmediately() {

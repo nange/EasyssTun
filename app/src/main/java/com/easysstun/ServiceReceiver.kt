@@ -19,8 +19,8 @@ class ServiceReceiver : BroadcastReceiver() {
                     context.startActivity(i)
                 } else {
                     // Permission already granted, start service directly
-                    val serviceIntent = Intent(context, TProxyService::class.java)
-                        .setAction(TProxyService.ACTION_CONNECT)
+                    val serviceIntent = Intent(context, EasyssVpnService::class.java)
+                        .setAction(EasyssVpnService.ACTION_CONNECT)
                     context.startForegroundService(serviceIntent)
                 }
             }

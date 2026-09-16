@@ -45,7 +45,7 @@ object LogParser {
     private val LOG_PATTERN_SLOG =
         Pattern.compile("time=([^ ]+) level=([^ ]+) source=([^ ]+) msg=(.*)")
 
-    // Pattern B: Fallback for TProxyService direct log lines
+    // Pattern B: Fallback for EasyssVpnService direct log lines
     // Captures logcat wrapper: date, time, level char, and msg=... content
     private val LOG_PATTERN_FALLBACK =
         Pattern.compile("^(\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+easyss\\s+:\\s+msg=(.*)$")
@@ -67,7 +67,7 @@ object LogParser {
             val msg = matcher.group(4) ?: ""
             return LogItem(msg, formatTime(isoTime), source, level)
         }
-        // Try fallback pattern for TProxyService lines
+        // Try fallback pattern for EasyssVpnService lines
         matcher = LOG_PATTERN_FALLBACK.matcher(line)
         if (matcher.find()) {
             val logDate = matcher.group(1) ?: ""
