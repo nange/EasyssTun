@@ -48,11 +48,11 @@ class LogParserTest {
     @Test
     fun parseLine_standardLogFormat() {
         val item = LogParser.parseLine(
-            "07-25 10:30:45.123  1234  5678 I TProxyServiceDiag: onStartCommand: Received ACTION_DISCONNECT."
+            "07-25 10:30:45.123  1234  5678 I EasyssVpnServiceDiag: onStartCommand: Received ACTION_DISCONNECT."
         )
         assertEquals("onStartCommand: Received ACTION_DISCONNECT.", item?.message)
         assertEquals("07-25 10:30:45.123", item?.time)
-        assertEquals("TProxyServiceDiag", item?.source)
+        assertEquals("EasyssVpnServiceDiag", item?.source)
         assertEquals("INFO", item?.level)
     }
 

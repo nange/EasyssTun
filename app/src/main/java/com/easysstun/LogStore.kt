@@ -32,7 +32,7 @@ object LogParser {
 
     // App log tags to display in the log viewer
     val APP_LOG_TAGS = arrayOf(
-        "GoLog", "TProxyServiceDiag", "MainFragment", "AppState",
+        "GoLog", "EasyssVpnServiceDiag", "MainFragment", "AppState",
         "Pref", "Profile", "LogFragment", "AppListAdapter", "LogStore"
     )
 
@@ -52,7 +52,7 @@ object LogParser {
 
     // Pattern C: Standard android.util.Log logcat output format
     // Captures: date, time, level char, tag, message
-    // Example: "07-25 10:30:45.123  1234  5678 I TProxyServiceDiag: onStartCommand..."
+    // Example: "07-25 10:30:45.123  1234  5678 I EasyssVpnServiceDiag: onStartCommand..."
     private val LOG_PATTERN_STANDARD =
         Pattern.compile("^(\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+(\\S+)\\s*:\\s*(.*)$")
 

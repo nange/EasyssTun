@@ -718,6 +718,6 @@ socks5:
         const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"
         const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
         const val NOTIFICATION_ID = 1
-        private const val TAG = "TProxyServiceDiag"
+        private const val TAG = "EasyssVpnServiceDiag"
     }
 }
