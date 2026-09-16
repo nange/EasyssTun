@@ -15,19 +15,19 @@ import org.robolectric.annotation.Config
  * Guards the Start-failure notification contract introduced when the
  * libeasyss AAR's Go export changed to `func Start(cfg) error`: the
  * gomobile binding now throws Exception from Mobile.start(), and
- * TProxyService must broadcast the specific error text so the UI can show
+ * EasyssVpnService must broadcast the specific error text so the UI can show
  * it in a dialog (MainFragment shows it on ACTION_SERVICE_START_FAILED).
  */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])
-class TProxyServiceStartFailureTest {
+class EasyssVpnServiceStartFailureTest {
 
-    private fun newService(): TProxyService =
-        Robolectric.buildService(TProxyService::class.java).get()
+    private fun newService(): EasyssVpnService =
+        Robolectric.buildService(EasyssVpnService::class.java).get()
 
-    private fun startFailedBroadcasts(service: TProxyService): List<Intent> {
+    private fun startFailedBroadcasts(service: EasyssVpnService): List<Intent> {
         return shadowOf(service).broadcastIntents
-            .filter { it.action == TProxyService.ACTION_SERVICE_START_FAILED }
+            .filter { it.action == EasyssVpnService.ACTION_SERVICE_START_FAILED }
     }
 
     @Test
@@ -38,10 +38,10 @@ class TProxyServiceStartFailureTest {
         val broadcasts = startFailedBroadcasts(service)
         assertTrue("expected a SERVICE_START_FAILED broadcast", broadcasts.isNotEmpty())
         val intent = broadcasts.last()
-        assertEquals(TProxyService.ACTION_SERVICE_START_FAILED, intent.action)
+        assertEquals(EasyssVpnService.ACTION_SERVICE_START_FAILED, intent.action)
         assertEquals(
             "dial tcp 1.2.3.4:443: connection refused",
-            intent.getStringExtra(TProxyService.EXTRA_START_ERROR)
+            intent.getStringExtra(EasyssVpnService.EXTRA_START_ERROR)
         )
         assertEquals("broadcast must be scoped to this package", service.packageName, intent.`package`)
     }
@@ -55,7 +55,7 @@ class TProxyServiceStartFailureTest {
         assertTrue("expected a SERVICE_START_FAILED broadcast", broadcasts.isNotEmpty())
         assertEquals(
             "already started, call Stop first",
-            broadcasts.last().getStringExtra(TProxyService.EXTRA_START_ERROR)
+            broadcasts.last().getStringExtra(EasyssVpnService.EXTRA_START_ERROR)
         )
     }
 }

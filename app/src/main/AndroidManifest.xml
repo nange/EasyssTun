@@ -38,7 +38,7 @@
         </receiver>
 
         <service
-            android:name=".TProxyService"
+            android:name=".EasyssVpnService"
             android:exported="true"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:foregroundServiceType="specialUse">

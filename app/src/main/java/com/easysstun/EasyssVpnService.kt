@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import io.github.nange.easyss.mobile.Mobile
+import hev.htproxy.TProxyService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +40,7 @@ import java.net.URL
 import java.util.Locale
 
 
-class TProxyService : VpnService() {
+class EasyssVpnService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
     private var receivedProfileJson: String? = null
     private var receivedProxyMode: String? = null
@@ -352,11 +353,9 @@ socks5:
                 }
 
                 Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${newTunFd.fd}.")
-                // The natives live on the binding class shipped by the
-                // hev-socks5-tunnel AAR itself (classes.jar), so it is called
-                // with its fully-qualified name: this file's own class is also
-                // named TProxyService and would shadow an import.
-                val started = hev.htproxy.TProxyService.TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
+                // Natives of the hev-socks5-tunnel AAR; the binding class coming
+                // from hev.htproxy is imported at the top of this file.
+                val started = TProxyService.TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
                 Log.d(TAG, "startService: TProxyStartService returned: $started, t+${startupElapsed()}ms")
                 if (!started) {
                     Log.w(TAG, "startService: TProxyStartService reported failure")
@@ -389,7 +388,7 @@ socks5:
     private fun finishStartupFailure() {
         Log.w(TAG, "finishStartupFailure: cleaning up partial startup.")
         runCatching { Mobile.stop() }
-        runCatching { hev.htproxy.TProxyService.TProxyStopService() }
+        runCatching { TProxyService.TProxyStopService() }
         tunFd = null
         actualFinalizeStop()
     }
@@ -543,7 +542,7 @@ socks5:
                 val tproxyStopJob = launch {
                     try {
                         Log.d(TAG, "shutdownTunnel: TProxyStopService coroutine calling TProxyStopService()")
-                        val stopped = hev.htproxy.TProxyService.TProxyStopService()
+                        val stopped = TProxyService.TProxyStopService()
                         Log.d(TAG, "shutdownTunnel: TProxyStopService returned: $stopped")
                     } catch (e: Throwable) {
                         Log.e(TAG, "shutdownTunnel: Exception during TProxyStopService: ${e.message}", e)

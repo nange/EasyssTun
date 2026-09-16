@@ -165,8 +165,8 @@ class ServerProfileActivity : AppCompatActivity() {
                 // The VPN was running with the profile being deleted. Disconnect it
                 // explicitly (same signal as the home screen stop button) instead of
                 // letting it keep running with a config that no longer exists.
-                val intent = Intent(this, TProxyService::class.java)
-                    .setAction(TProxyService.ACTION_DISCONNECT)
+                val intent = Intent(this, EasyssVpnService::class.java)
+                    .setAction(EasyssVpnService.ACTION_DISCONNECT)
                 startService(intent)
             }
             finish()

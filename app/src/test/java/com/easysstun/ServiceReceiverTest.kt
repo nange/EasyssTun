@@ -82,10 +82,10 @@ class ServiceReceiverTest {
         try {
             receiver.onReceive(context, intent)
         } catch (_: Exception) {
-            // Expected in Robolectric — TProxyService not fully mockable without native libs
+            // Expected in Robolectric — EasyssVpnService not fully mockable without native libs
         }
 
-        // No assertion on side effects since TProxyService can't fully start,
+        // No assertion on side effects since EasyssVpnService can't fully start,
         // but the point is that the receiver entered the branch for boot+enabled.
     }
 
