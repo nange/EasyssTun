@@ -50,6 +50,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
@@ -65,6 +66,10 @@ class MainFragment : Fragment() {
 
     private var statsPollingJob: Job? = null
     private var statsHadSuccessfulFetch: Boolean = false
+    // Set when EasyssVpnService broadcasts ACTION_SERVICE_STARTED (tunnel fully
+    // up); cleared on ACTION_SERVICE_STOPPED. Used to gate the first stats fetch
+    // on actual service readiness instead of a fixed blind delay.
+    private var statsServiceReady: Boolean = false
     private var isStatsExpanded: Boolean = false
 
     private var pendingServerProfileId: String? = null
@@ -83,6 +88,9 @@ class MainFragment : Fragment() {
                                 TAG,
                                 "ACTION_SERVICE_STOPPED received. Pending server ID: $pendingServerProfileId, isSwitchingServer: $isSwitchingServer"
                         )
+                        // Service is down: clear the readiness signal so the next
+                        // start waits for a fresh ACTION_SERVICE_STARTED again.
+                        statsServiceReady = false
                         if (pendingServerProfileId != null) {
                             Log.d(
                                     TAG,
@@ -196,6 +204,9 @@ class MainFragment : Fragment() {
                     if (intent?.action != EasyssVpnService.ACTION_SERVICE_STARTED) return
                     Log.d(TAG, "ACTION_SERVICE_STARTED received. Leaving connecting state.")
                     isConnecting = false
+                    // Tunnel is fully up: release any stats poll waiting for this
+                    // signal so the first fetch fires immediately.
+                    statsServiceReady = true
                     view?.let { updateServiceStatu(it) }
                 }
             }
@@ -884,9 +895,16 @@ class MainFragment : Fragment() {
         view?.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.VISIBLE
         statsPollingJob =
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                    // Only delay on initial service start; skip delay when returning to this screen
-                    if (!statsHadSuccessfulFetch) {
-                        delay(2_000) // brief wait for stats endpoint to be ready
+                    // Gate the first fetch on the service's ACTION_SERVICE_STARTED
+                    // broadcast (tunnel fully up) instead of a fixed blind delay, so
+                    // stats appear as soon as the endpoint is actually ready. Fall
+                    // back to a 2s cushion when no broadcast is expected (e.g.
+                    // re-entering this screen while the service is already running);
+                    // skip the wait entirely once a fetch has already succeeded.
+                    if (!statsHadSuccessfulFetch && !statsServiceReady) {
+                        withTimeoutOrNull(2_000) {
+                            while (!statsServiceReady) delay(100)
+                        }
                     }
                     fetchAndUpdateStats()
                     AppState.isForeground.collectLatest { isForeground ->
