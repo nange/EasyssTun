@@ -20,6 +20,10 @@ data class Profile(
     val outbound: String = "native",
     val logLevel: String = "info",
     val enableQuic: String = "false",
+    // Disables the AAR's background transport warm-up (transport.disable_warm_up).
+    // "false" keeps the easyss default: the connection pools are pre-heated
+    // asynchronously right after the core starts.
+    val disableWarmUp: String = "false",
     val ipv6Rule: String = "auto",
     val serverNameIndication: String = "",
     val customCa: String = "",
@@ -55,6 +59,13 @@ data class Profile(
 }
 
 /**
+ * Parses a profile flag stored as a string ("true"/"false"). Anything that is
+ * not "true" (case-insensitive) counts as false, so a missing or hand-edited
+ * value falls back to the safest option for the corresponding switch.
+ */
+internal fun parseBooleanFlag(value: String): Boolean = value.equals("true", ignoreCase = true)
+
+/**
  * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
  */
 fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
@@ -67,7 +78,8 @@ fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     config.setProxyRule(proxyRule)
     config.setOutboundProto(outbound)
     config.setLogLevel(logLevel)
-    config.setEnableQUIC(enableQuic.equals("true", ignoreCase = true))
+    config.setEnableQUIC(parseBooleanFlag(enableQuic))
+    config.setDisableWarmUp(parseBooleanFlag(disableWarmUp))
     config.setIPV6Rule(ipv6Rule)
 
     var sni = serverNameIndication

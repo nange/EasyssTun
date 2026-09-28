@@ -22,6 +22,7 @@ class ProfileTest {
         outbound = "ipv4_only",
         logLevel = "debug",
         enableQuic = "true",
+        disableWarmUp = "true",
         ipv6Rule = "ipv6_only",
         serverNameIndication = "sni.example.com",
         customCa = "-----BEGIN CERTIFICATE-----\nMOCK",
@@ -39,6 +40,37 @@ class ProfileTest {
         assertEquals("ID should survive round-trip", original.id, decoded.id)
         assertEquals("Name should survive round-trip", original.name, decoded.name)
         assertEquals("Server should survive round-trip", original.server, decoded.server)
+        assertEquals("disableWarmUp should survive round-trip", "true", decoded.disableWarmUp)
+    }
+
+    @Test
+    fun jsonWithoutDisableWarmUp_defaultsToWarmUpEnabled() {
+        // Profiles stored before the option existed have no "disableWarmUp" key.
+        val legacyJson = """
+            {
+                "id": "legacy",
+                "name": "Legacy",
+                "server": "legacy.example.com",
+                "serverPort": "443",
+                "password": "pw",
+                "enableQuic": "true"
+            }
+        """.trimIndent()
+
+        val profile = json.decodeFromString(Profile.serializer(), legacyJson)
+        assertEquals("Missing key must keep warm-up enabled", "false", profile.disableWarmUp)
+        assertFalse("Missing key must not disable warm-up", parseBooleanFlag(profile.disableWarmUp))
+    }
+
+    @Test
+    fun parseBooleanFlag_onlyTrueIsTrue() {
+        assertTrue(parseBooleanFlag("true"))
+        assertTrue(parseBooleanFlag("TRUE"))
+        assertTrue(parseBooleanFlag("True"))
+        assertFalse(parseBooleanFlag("false"))
+        assertFalse(parseBooleanFlag(""))
+        assertFalse(parseBooleanFlag("yes"))
+        assertFalse(parseBooleanFlag("1"))
     }
 
     @Test
@@ -61,6 +93,7 @@ class ProfileTest {
         assertEquals("Default outbound should be native", "native", decoded.outbound)
         assertEquals("Default logLevel should be info", "info", decoded.logLevel)
         assertEquals("Default enableQuic should be false", "false", decoded.enableQuic)
+        assertEquals("Default disableWarmUp should be false (warm-up enabled)", "false", decoded.disableWarmUp)
         assertEquals("Default ipv6Rule should be auto", "auto", decoded.ipv6Rule)
         assertEquals("Default serverNameIndication should be empty", "", decoded.serverNameIndication)
         assertEquals("Default customCa should be empty", "", decoded.customCa)
@@ -131,6 +164,7 @@ class ProfileTest {
         assertTrue("JSON should contain id", encoded.contains("\"id\":\"test-id-001\""))
         assertTrue("JSON should contain encryption", encoded.contains("\"encryption\":\"aes-256-gcm\""))
         assertTrue("JSON should contain customCa", encoded.contains("\"customCa\""))
+        assertTrue("JSON should contain disableWarmUp", encoded.contains("\"disableWarmUp\":\"true\""))
         assertTrue("JSON should contain directFile", encoded.contains("\"directFile\":\"direct_domains_list\""))
         assertTrue("JSON should contain proxyFile", encoded.contains("\"proxyFile\":\"proxy_domains_list\""))
     }
