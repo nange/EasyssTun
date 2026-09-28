@@ -196,6 +196,16 @@
         <item>false</item>
         <item>true</item>
     </string-array>
+    <!-- Items reference string resources so the labels stay localized; must stay
+         index-aligned with easyss_disable_warm_up_list_value. -->
+    <string-array name="easyss_disable_warm_up_list">
+        <item>@string/label_no</item>
+        <item>@string/label_yes</item>
+    </string-array>
+    <string-array name="easyss_disable_warm_up_list_value">
+        <item>false</item>
+        <item>true</item>
+    </string-array>
     <string-array name="easyss_loglevel_list_value">
         <item>info</item>
         <item>debug</item>
