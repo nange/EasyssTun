@@ -273,18 +273,6 @@
                 <TextView
                     style="@style/SectionLabel"
                     android:layout_marginTop="12dp"
-                    android:text="@string/label_disable_warm_up" />
-                <Spinner
-                    android:id="@+id/profile_disable_warm_up"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:entries="@array/easyss_disable_warm_up_list"
-                    android:entryValues="@array/easyss_disable_warm_up_list_value" />
-
-                <TextView
-                    style="@style/SectionLabel"
-                    android:layout_marginTop="12dp"
                     android:text="@string/label_ipv6_rule" />
                 <Spinner
                     android:id="@+id/profile_ipv6_rule"
