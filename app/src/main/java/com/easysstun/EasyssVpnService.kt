@@ -298,6 +298,11 @@ socks5:
         val startupElapsed: () -> Long = { SystemClock.elapsedRealtime() - startElapsed }
         mobileJob = serviceScope.launch {
             try {
+                // libeasyss prints a version banner in its CLI only, never
+                // through the gomobile binding used here, so log it for the
+                // in-app log viewer before the startup sequence begins.
+                logVersionBanner("profile='${loadedProfile.name}' logLevel=${loadedProfile.logLevel}")
+
                 // Foreground immediately with a "connecting" state: the
                 // startup sequence waits for the proxy to become ready and
                 // can take a few seconds, and Android requires the
