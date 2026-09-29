@@ -341,12 +341,9 @@ socks5:
                 }
                 coroutineContext.ensureActive()
 
-                // The transport warm-up is no longer driven from here: the
-                // AAR's runner dispatches it in the background once the core
-                // is up (runner.Core.StartWarmUp), unless the configuration
-                // sets transport.disable_warm_up. Only the SOCKS5 readiness
-                // above gates the VPN, so no app traffic (or Android's
-                // connectivity check) is dropped into a dead TUN.
+                // Only the SOCKS5 readiness above gates the VPN, so no app
+                // traffic (or Android's connectivity check) is dropped into a
+                // dead TUN: the native core is already up at this point.
                 val newTunFd = builder.establish()
                 tunFd = newTunFd
                 if (newTunFd != null) {

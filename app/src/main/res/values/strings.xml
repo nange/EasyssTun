@@ -87,11 +87,7 @@
     <string name="label_outbound_protocol">Outbound Protocol</string>
     <string name="label_log_level">Log Level</string>
     <string name="label_enable_quic">Enable QUIC</string>
-    <string name="label_disable_warm_up">Disable Warm Up</string>
     <string name="label_ipv6_rule">IPv6 Rule</string>
-
-    <string name="label_yes">Yes</string>
-    <string name="label_no">No</string>
 
     <string name="button_save">Save</string>
     <string name="button_delete">Delete</string>

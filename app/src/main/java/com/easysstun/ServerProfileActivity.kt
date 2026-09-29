@@ -34,7 +34,6 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var profileProxyFile: EditText
     private lateinit var profileLogLevel: Spinner
     private lateinit var profileEnableQuic: Spinner
-    private lateinit var profileDisableWarmUp: Spinner
     private lateinit var profileIpv6Rule: Spinner
     private lateinit var saveProfileButton: Button
     private lateinit var deleteProfileButton: Button // Added delete button
@@ -61,7 +60,6 @@ class ServerProfileActivity : AppCompatActivity() {
         profileProxyFile = findViewById(R.id.profile_proxy_file)
         profileLogLevel = findViewById(R.id.profile_log_level)
         profileEnableQuic = findViewById(R.id.profile_enable_quic)
-        profileDisableWarmUp = findViewById(R.id.profile_disable_warm_up)
         profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
         saveProfileButton = findViewById(R.id.save_profile_button)
         deleteProfileButton = findViewById(R.id.delete_profile_button) // Initialize delete button
@@ -97,12 +95,6 @@ class ServerProfileActivity : AppCompatActivity() {
         enableQuicAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         profileEnableQuic.adapter = enableQuicAdapter
 
-        val disableWarmUpAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_disable_warm_up_list, android.R.layout.simple_spinner_item
-        )
-        disableWarmUpAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileDisableWarmUp.adapter = disableWarmUpAdapter
-
         val ipv6RuleAdapter = ArrayAdapter.createFromResource(
             this, R.array.easyss_ipv6_rule_list, android.R.layout.simple_spinner_item
         )
@@ -124,7 +116,6 @@ class ServerProfileActivity : AppCompatActivity() {
                 setSpinnerSelection(profileOutbound, it.outbound, R.array.easyss_outbound_list_value, R.array.easyss_outbound_list_value)
                 setSpinnerSelection(profileLogLevel, it.logLevel, R.array.easyss_loglevel_list_value, R.array.easyss_loglevel_list_value)
                 setSpinnerSelection(profileEnableQuic, it.enableQuic, R.array.easyss_enable_quic_list_value, R.array.easyss_enable_quic_list_value)
-                setSpinnerSelection(profileDisableWarmUp, it.disableWarmUp, R.array.easyss_disable_warm_up_list_value, R.array.easyss_disable_warm_up_list_value)
                 setSpinnerSelection(profileIpv6Rule, it.ipv6Rule, R.array.easyss_ipv6_rule_value, R.array.easyss_ipv6_rule_value)
 
                 profileServerNameIndication.setText(it.serverNameIndication)
@@ -219,7 +210,6 @@ class ServerProfileActivity : AppCompatActivity() {
         val proxyFile = profileProxyFile.text.toString()
         val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
         val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value)
-        val disableWarmUp = getSpinnerValue(profileDisableWarmUp, R.array.easyss_disable_warm_up_list_value)
         val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
 
 
@@ -239,7 +229,6 @@ class ServerProfileActivity : AppCompatActivity() {
             outbound = outbound,
             logLevel = logLevel,
             enableQuic = enableQuic,
-            disableWarmUp = disableWarmUp,
             ipv6Rule = ipv6Rule,
             serverNameIndication = serverNameIndication,
             customCa = customCa,

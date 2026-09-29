@@ -20,10 +20,6 @@ data class Profile(
     val outbound: String = "native",
     val logLevel: String = "info",
     val enableQuic: String = "false",
-    // Disables the AAR's background transport warm-up (transport.disable_warm_up).
-    // "false" keeps the easyss default: the connection pools are pre-heated
-    // asynchronously right after the core starts.
-    val disableWarmUp: String = "false",
     val ipv6Rule: String = "auto",
     val serverNameIndication: String = "",
     val customCa: String = "",
@@ -79,7 +75,6 @@ fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     config.setOutboundProto(outbound)
     config.setLogLevel(logLevel)
     config.setEnableQUIC(parseBooleanFlag(enableQuic))
-    config.setDisableWarmUp(parseBooleanFlag(disableWarmUp))
     config.setIPV6Rule(ipv6Rule)
 
     var sni = serverNameIndication
