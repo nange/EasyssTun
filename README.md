@@ -39,6 +39,7 @@ Windows 下同样可以直接 `make build`（Makefile 会按平台自动选择 w
 
 hev-socks5-tunnel（tun2socks）以预编译 AAR 形式引入，版本由 `version.properties` 中的 `hevSocks5TunnelVersion` 锁定。升级步骤：
 
-1. 到 [nange/hev-socks5-tunnel](https://github.com/nange/hev-socks5-tunnel)（fork 的 `easyss` 分支）合入上游改动并发布新版本（打 tag 触发 CI 构建，release 资产中包含 `hev-socks5-tunnel.aar`）。
-2. 更新本仓库 `version.properties` 中的 `hevSocks5TunnelVersion` 为新 tag。
+1. 到上游 [heiher/hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel) 的 Releases 页面确认新版本已包含 `hev-socks5-tunnel.aar` 资产（上游自 `2.18.0` 起官方构建 AAR，无需 fork）。
+2. 更新本仓库 `version.properties` 中的 `hevSocks5TunnelVersion` 为上游 tag（如 `2.18.0`）。
 3. 删除本地 `app/libs/hev-socks5-tunnel.aar`，下次构建自动重新下载。
+4. 上游 AAR 必须带 `classes.jar`（绑定类 `hev.htproxy.TProxyService`），否则 Kotlin 编译期即失败；JNI 契约由 `TProxyJniContractTest` 守护。
