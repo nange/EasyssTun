@@ -23,7 +23,8 @@ versionProps.load(new FileInputStream(versionPropsFile))
 // libeasyss 版本锁定（可选）：配置后跳过 API 调用，直接从指定版本下载
 def libeasyssVersion = versionProps.getProperty('libeasyssVersion')?.trim()
 
-// hev-socks5-tunnel 版本锁定：AAR 来自 nange/hev-socks5-tunnel 的 GitHub Release
+// hev-socks5-tunnel 版本锁定：AAR 来自上游 heiher/hev-socks5-tunnel 的 GitHub Release
+// （2.18.0 起上游官方 Release 直接提供 hev-socks5-tunnel.aar，无需 fork）
 def hevSocks5TunnelVersion = versionProps.getProperty('hevSocks5TunnelVersion')?.trim()
 
 // ABI 覆盖（可选）：模拟器/测试用，如 ./gradlew assembleDebug -PabiOverride=x86_64
@@ -234,8 +235,9 @@ afterEvaluate {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-download hev-socks5-tunnel.aar from nange/hev-socks5-tunnel GitHub
-// release if it doesn't exist locally (e.g., in CI / fresh checkout).
+// Auto-download hev-socks5-tunnel.aar from the upstream
+// heiher/hev-socks5-tunnel GitHub release if it doesn't exist locally
+// (e.g., in CI / fresh checkout).
 // ---------------------------------------------------------------------------
 task downloadHevSocks5TunnelAar {
     def targetDir = file("libs")
@@ -254,13 +256,13 @@ task downloadHevSocks5TunnelAar {
         if (hevSocks5TunnelVersion) {
             // Version pinned: use direct URL, skip GitHub API call
             releaseTag = hevSocks5TunnelVersion
-            downloadUrl = "https://github.com/nange/hev-socks5-tunnel/releases/download/${releaseTag}/hev-socks5-tunnel.aar"
+            downloadUrl = "https://github.com/heiher/hev-socks5-tunnel/releases/download/${releaseTag}/hev-socks5-tunnel.aar"
             logger.lifecycle("hev-socks5-tunnel.aar not found locally, downloading version ${releaseTag}...")
         } else {
             // No version pinned: fetch latest release via GitHub API
             logger.lifecycle("hev-socks5-tunnel.aar not found locally, downloading from latest release...")
 
-            def apiUrl = "https://api.github.com/repos/nange/hev-socks5-tunnel/releases/latest"
+            def apiUrl = "https://api.github.com/repos/heiher/hev-socks5-tunnel/releases/latest"
             def connection = new URL(apiUrl).openConnection()
             connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
 
