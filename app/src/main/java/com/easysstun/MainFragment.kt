@@ -594,7 +594,13 @@ class MainFragment : Fragment() {
 
     private fun updateVersionInfo(view: View) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val gitTag = withContext(Dispatchers.IO) { fetchGitTag(requireContext()) }
+            val gitTag = withContext(Dispatchers.IO) {
+                // Version banner for the in-app log viewer. Logged from the IO
+                // thread because reading the libeasyss version loads the
+                // native library on first use.
+                logVersionBanner()
+                fetchGitTag(requireContext())
+            }
             val versionPlaceholder = view.findViewById<TextView>(R.id.version_placeholder)
             val appVersion = BuildConfig.VERSION_NAME
             versionPlaceholder.text = getString(R.string.version_info, gitTag, appVersion)

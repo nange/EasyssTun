@@ -35,6 +35,45 @@ class LogParserTest {
     }
 
     @Test
+    fun parseLine_slogQuotedMessage_isUnquoted() {
+        // slog quotes values containing spaces; the quotes are not part of the
+        // message. Attributes written after msg= stay attached to it.
+        val item = LogParser.parseLine(
+            "07-25 10:30:45.123  1234  5678 I GoLog   : " +
+                "time=2026-07-19T19:08:48.135+08:00 level=INFO source=runner/runner.go:133 " +
+                "msg=\"[EASYSS] client core ready\" elapsed_ms=12"
+        )
+        assertEquals("[EASYSS] client core ready elapsed_ms=12", item?.message)
+        assertEquals("INFO", item?.level)
+    }
+
+    @Test
+    fun parseLine_slogEscapedMessage_isUnescaped() {
+        val item = LogParser.parseLine(
+            "time=2026-07-19T19:08:48.135+08:00 level=WARN source=core msg=\"dial failed: \\\"boom\\\"\""
+        )
+        assertEquals("dial failed: \"boom\"", item?.message)
+    }
+
+    @Test
+    fun parseLine_slogChineseMessage_isUnquotedIntact() {
+        val item = LogParser.parseLine(
+            "time=2026-07-19T19:08:48.135+08:00 level=INFO source=core msg=\"服务器域名解析成功\""
+        )
+        assertEquals("服务器域名解析成功", item?.message)
+    }
+
+    @Test
+    fun unquoteSlogValue_leavesPlainAndTruncatedValues() {
+        // No quotes: nothing to do.
+        assertEquals("plain", LogParser.unquoteSlogValue("plain"))
+        // Truncated by the stdout→logcat bridge: keep the raw text.
+        assertEquals("\"cut off", LogParser.unquoteSlogValue("\"cut off"))
+        // Escaped newline inside a quoted value.
+        assertEquals("a\nb", LogParser.unquoteSlogValue("\"a\\nb\""))
+    }
+
+    @Test
     fun parseLine_tproxyFallbackFormat() {
         val item = LogParser.parseLine(
             "07-25 10:30:45.123  1234  5678 I easyss   : msg=native hello"

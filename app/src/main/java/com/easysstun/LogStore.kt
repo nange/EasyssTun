@@ -33,7 +33,8 @@ object LogParser {
     // App log tags to display in the log viewer
     val APP_LOG_TAGS = arrayOf(
         "GoLog", "EasyssVpnServiceDiag", "MainFragment", "AppState",
-        "Pref", "Profile", "LogFragment", "AppListAdapter", "LogStore"
+        "Pref", "Profile", "LogFragment", "AppListAdapter", "LogStore",
+        VERSION_LOG_TAG
     )
 
     // Written to logcat right before the LogStore reader starts; everything
@@ -64,7 +65,7 @@ object LogParser {
             val isoTime = matcher.group(1) ?: ""
             val level = matcher.group(2) ?: ""
             val source = matcher.group(3) ?: ""
-            val msg = matcher.group(4) ?: ""
+            val msg = unquoteSlogValue(matcher.group(4) ?: "")
             return LogItem(msg, formatTime(isoTime), source, level)
         }
         // Try fallback pattern for EasyssVpnService lines
@@ -87,6 +88,41 @@ object LogParser {
             return LogItem(msg, "$logDate $logTime", tag, mapLevelChar(levelChar))
         }
         return null
+    }
+
+    /**
+     * Undo slog's text-handler quoting for an attribute value. slog writes a
+     * Go-quoted string whenever the value contains a space, `=` or a quote —
+     * which is the common case for `msg=` (`msg="[EASYSS] client core ready"`)
+     * — and appends any further attributes after it on the same line, so only
+     * the leading quoted value is unescaped here and the remainder is kept.
+     * Values that are not quoted (a single word, or a line truncated by the
+     * stdout→logcat bridge) are returned unchanged.
+     */
+    fun unquoteSlogValue(value: String): String {
+        if (!value.startsWith('"')) return value
+        val out = StringBuilder(value.length)
+        var i = 1
+        while (i < value.length) {
+            val c = value[i]
+            if (c == '\\' && i + 1 < value.length) {
+                when (value[i + 1]) {
+                    '"' -> { out.append('"'); i += 2; continue }
+                    '\\' -> { out.append('\\'); i += 2; continue }
+                    'n' -> { out.append('\n'); i += 2; continue }
+                    't' -> { out.append('\t'); i += 2; continue }
+                    'r' -> { out.append('\r'); i += 2; continue }
+                }
+            } else if (c == '"') {
+                // Closing quote: keep the attributes slog wrote after the value.
+                out.append(value, i + 1, value.length)
+                return out.toString()
+            }
+            out.append(c)
+            i++
+        }
+        // Unterminated quote: the entry was cut off, keep the raw value.
+        return value
     }
 
     /**
