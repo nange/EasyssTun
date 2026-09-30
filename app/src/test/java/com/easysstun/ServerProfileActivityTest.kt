@@ -15,8 +15,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 
 /**
- * Tests for the server profile form: the timeout parameter must be validated and
- * reach the stored profile.
+ * Tests for the server profile form: parameter fields must be saved without
+ * surrounding whitespace, and the timeout parameter must reach the profile.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -41,10 +41,39 @@ class ServerProfileActivityTest {
     }
 
     @Test
+    fun save_trimsSurroundingWhitespaceOfEveryParameterField() {
+        val activity = launch()
+        activity.field(R.id.profile_name).setText("  My Server  ")
+        activity.field(R.id.profile_server).setText(" example.com ")
+        activity.field(R.id.profile_server_port).setText(" 8443 ")
+        activity.field(R.id.profile_password).setText(" secret ")
+        activity.field(R.id.profile_socks_port).setText(" 2081 ")
+        activity.field(R.id.profile_server_name_indication).setText(" sni.example.com ")
+        activity.field(R.id.profile_custom_ca).setText("\n-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----\n")
+        activity.field(R.id.profile_direct_file).setText(" example.org\n")
+        activity.field(R.id.profile_proxy_file).setText(" example.net ")
+        activity.field(R.id.profile_timeout).setText(" 45 ")
+
+        activity.save()
+
+        val saved = Pref(activity).getProfiles().single()
+        assertEquals("My Server", saved.name)
+        assertEquals("example.com", saved.server)
+        assertEquals("8443", saved.serverPort)
+        assertEquals("secret", saved.password)
+        assertEquals("2081", saved.socksPort)
+        assertEquals("sni.example.com", saved.serverNameIndication)
+        assertEquals("-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----", saved.customCa)
+        assertEquals("example.org", saved.directFile)
+        assertEquals("example.net", saved.proxyFile)
+        assertEquals("45", saved.timeout)
+    }
+
+    @Test
     fun save_storesTimeoutChosenByTheUser() {
         val activity = launch()
         activity.fillRequired()
-        activity.field(R.id.profile_timeout).setText("45")
+        activity.field(R.id.profile_timeout).setText(" 45 ")
 
         activity.save()
 
@@ -57,7 +86,7 @@ class ServerProfileActivityTest {
     fun save_allowsBlankTimeoutAsNativeDefault() {
         val activity = launch()
         activity.fillRequired()
-        activity.field(R.id.profile_timeout).setText("")
+        activity.field(R.id.profile_timeout).setText("   ")
 
         activity.save()
 
@@ -79,6 +108,20 @@ class ServerProfileActivityTest {
             "Timeout must be a whole number of seconds (15–60)",
             ShadowToast.getTextOfLatestToast()
         )
+    }
+
+    @Test
+    fun parameterField_isTrimmedWhenItLosesFocus() {
+        val activity = launch()
+        val server = activity.field(R.id.profile_server)
+        server.setText("  example.com  ")
+
+        // Focus gained: keep the text untouched so typing never fights the caret.
+        server.onFocusChangeListener.onFocusChange(server, true)
+        assertEquals("  example.com  ", server.text.toString())
+        // Focus lost: strip the stray whitespace right away.
+        server.onFocusChangeListener.onFocusChange(server, false)
+        assertEquals("example.com", server.text.toString())
     }
 
     @Test

@@ -39,6 +39,25 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var saveProfileButton: Button
     private lateinit var deleteProfileButton: Button // Added delete button
 
+    /**
+     * Every free-form parameter field of the form. Used to strip the leading and
+     * trailing whitespace pasted along with server addresses, ports, passwords and
+     * keys, which the native side would otherwise take literally.
+     */
+    private val parameterFields: List<EditText>
+        get() = listOf(
+            profileName,
+            profileServer,
+            profileServerPort,
+            profilePassword,
+            profileSocksPort,
+            profileServerNameIndication,
+            profileCustomCa,
+            profileDirectFile,
+            profileProxyFile,
+            profileTimeout
+        )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_server_profile)
@@ -131,6 +150,8 @@ class ServerProfileActivity : AppCompatActivity() {
             }
         }
 
+        setupAutoTrim()
+
         saveProfileButton.setOnClickListener {
             saveProfile()
         }
@@ -198,23 +219,58 @@ class ServerProfileActivity : AppCompatActivity() {
     }
 
 
+    /**
+     * Strips leading/trailing whitespace from every parameter field as soon as it
+     * loses focus, so the user sees the value that will actually be saved (pasting
+     * a server address, port or password usually drags a space or a newline in).
+     * Trimming on focus loss instead of on every keystroke keeps the caret from
+     * jumping around while typing; [saveProfile] trims again as the authoritative
+     * pass, since a field can be saved straight from the IME without losing focus.
+     */
+    private fun setupAutoTrim() {
+        for (field in parameterFields) {
+            field.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) trimField(field)
+            }
+        }
+    }
+
+    /** Trims [field] in place, leaving its text and caret untouched when clean. */
+    private fun trimField(field: EditText) {
+        val text = field.text.toString()
+        val trimmed = text.trim()
+        if (trimmed != text) {
+            field.setText(trimmed)
+            field.setSelection(trimmed.length)
+        }
+    }
+
+    /**
+     * Trims every parameter field and returns the trimmed value, used by
+     * [saveProfile] so nothing is persisted with stray surrounding whitespace.
+     */
+    private fun trimmedText(field: EditText): String {
+        trimField(field)
+        return field.text.toString()
+    }
+
     private fun saveProfile() {
-        val name = profileName.text.toString()
-        val server = profileServer.text.toString()
-        val serverPort = profileServerPort.text.toString()
-        val password = profilePassword.text.toString()
-        val socksPort = profileSocksPort.text.toString()
+        val name = trimmedText(profileName)
+        val server = trimmedText(profileServer)
+        val serverPort = trimmedText(profileServerPort)
+        val password = trimmedText(profilePassword)
+        val socksPort = trimmedText(profileSocksPort)
         val encryption = profileEncryption.selectedItem.toString() // May need to get from values array if entries are different
         val proxyRule = getSpinnerValue(profileProxyRule, R.array.easyss_proxyrule_list_value)
         val outbound = getSpinnerValue(profileOutbound, R.array.easyss_outbound_list_value)
-        val serverNameIndication = profileServerNameIndication.text.toString()
-        val customCa = profileCustomCa.text.toString()
-        val directFile = profileDirectFile.text.toString()
-        val proxyFile = profileProxyFile.text.toString()
+        val serverNameIndication = trimmedText(profileServerNameIndication)
+        val customCa = trimmedText(profileCustomCa)
+        val directFile = trimmedText(profileDirectFile)
+        val proxyFile = trimmedText(profileProxyFile)
         val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
         val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value)
         val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
-        val timeout = profileTimeout.text.toString()
+        val timeout = trimmedText(profileTimeout)
 
 
         if (server.isBlank() || serverPort.isBlank() || password.isBlank()) {
