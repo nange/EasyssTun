@@ -273,8 +273,11 @@ class EasyssVpnService : VpnService() {
         val proxyFile = File(cacheDir, Pref.TPROXY_FILE)
         try {
             proxyFile.createNewFile()
+            // TCP idle timeout: hev-socks5-tunnel defaults to 300000ms (5min);
+            // raise it to 480000ms (8min) so idle-but-alive TCP sessions
+            // (long polls, keep-alive connections) survive longer.
             val tproxyConf = """misc:
-  tcp-read-write-timeout: 300000
+  tcp-read-write-timeout: 480000
   udp-read-write-timeout: 15000
 
 socks5:
