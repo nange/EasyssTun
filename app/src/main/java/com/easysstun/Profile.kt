@@ -25,11 +25,29 @@ data class Profile(
     val customCa: String = "",
     val directFile: String = "",
     val proxyFile: String = "",
-    val socksPort: String = DEFAULT_SOCKS_PORT
+    val socksPort: String = DEFAULT_SOCKS_PORT,
+    val timeout: String = DEFAULT_TIMEOUT
 ) {
     companion object {
         const val DEFAULT_SOCKS_PORT = "2080"
         const val STATS_PORT_OFFSET = 1000
+
+        /**
+         * Base timeout (seconds) prefilled for new profiles and applied when the
+         * profile leaves `timeout` blank. Matches the native default
+         * (`config.DefaultTimeout` in easyss, also the `-t` startup flag default).
+         */
+        const val DEFAULT_TIMEOUT = "30"
+
+        /**
+         * Legal range (seconds) of the native timeout knob: easyss derives every
+         * idle/dial/DNS/rotation timeout from it and documents 15-60 as the
+         * accepted range. The form rejects anything outside it, so a saved profile
+         * always applies exactly what the user typed.
+         */
+        const val MIN_TIMEOUT_SECONDS = 15
+        const val MAX_TIMEOUT_SECONDS = 60
+
         private const val STATS_URL_FORMAT = "http://127.0.0.1:%d/stats"
 
         /**
@@ -52,6 +70,31 @@ data class Profile(
      * for the default SOCKS port 2080.
      */
     fun statsUrl(): String = String.format(Locale.ROOT, STATS_URL_FORMAT, statsPort())
+
+    /**
+     * The base timeout (seconds) handed to the native config, i.e. the equivalent
+     * of the easyss `-t/--timeout` startup flag. Delegates to
+     * [parseTimeoutSeconds]; a blank or (hand-edited) invalid value becomes 0,
+     * which makes libeasyss fall back to its own default instead of pinning a
+     * value the user never chose.
+     */
+    fun timeoutSeconds(): Int = parseTimeoutSeconds(timeout) ?: 0
+}
+
+/**
+ * Parses the timeout field of the profile form (seconds). Surrounding whitespace
+ * is ignored; a blank field means "not configured".
+ *
+ * @return the timeout in seconds, `0` when the field is blank (the native default
+ *         then applies), or `null` when the text is not a whole number within
+ *         [Profile.MIN_TIMEOUT_SECONDS, Profile.MAX_TIMEOUT_SECONDS] and must be
+ *         reported as an input error by the caller.
+ */
+fun parseTimeoutSeconds(raw: String): Int? {
+    val text = raw.trim()
+    if (text.isEmpty()) return 0
+    val seconds = text.toIntOrNull() ?: return null
+    return seconds.takeIf { it in Profile.MIN_TIMEOUT_SECONDS..Profile.MAX_TIMEOUT_SECONDS }
 }
 
 /**
@@ -84,6 +127,10 @@ fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     config.setSN(sni)
 
     config.setLocalPort(socksPort.toLongOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toLong())
+
+    // Same knob as the easyss `-t/--timeout` startup flag: the base timeout all
+    // idle/dial timeouts are derived from. 0 keeps the native default.
+    config.setTimeout(timeoutSeconds().toLong())
 
     if (customCa.isNotBlank()) {
         val customCaFile = File(cacheDir, Pref.CUSTOM_CA_FILE)

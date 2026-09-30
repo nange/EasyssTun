@@ -76,6 +76,9 @@
     <string name="hint_socks_port">本地 SOCKS 端口</string>
     <string name="hint_sni">服务器名称指示 (SNI)</string>
     <string name="hint_custom_ca">自定义 CA（PEM 格式）</string>
+    <string name="hint_timeout">超时时间（秒）</string>
+    <string name="helper_timeout">范围 15–60，默认 30</string>
+    <string name="error_timeout_invalid">超时时间必须是整数秒（%1$d–%2$d）</string>
     <string name="hint_direct_domains">直连域名/IP（每行一个）</string>
     <string name="hint_proxy_domains">代理域名/IP（每行一个）</string>
 

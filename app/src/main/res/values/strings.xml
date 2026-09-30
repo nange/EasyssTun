@@ -77,8 +77,12 @@
     <string name="hint_socks_port">Local SOCKS Port</string>
     <string name="default_server_port" translatable="false">443</string>
     <string name="default_socks_port" translatable="false">2080</string>
+    <string name="default_timeout" translatable="false">30</string>
     <string name="hint_sni">Server Name Indication (SNI)</string>
     <string name="hint_custom_ca">Custom CA (PEM format)</string>
+    <string name="hint_timeout">Timeout (seconds)</string>
+    <string name="helper_timeout">Range 15–60, default 30</string>
+    <string name="error_timeout_invalid">Timeout must be a whole number of seconds (%1$d–%2$d)</string>
     <string name="hint_direct_domains">Direct Domains/IPs (one per line)</string>
     <string name="hint_proxy_domains">Proxy Domains/IPs (one per line)</string>
 
