@@ -202,4 +202,78 @@ class ProfileTest {
     fun defaultStatsUrl_pointsToDefaultStatsPort() {
         assertEquals("http://127.0.0.1:3080/stats", Profile.defaultStatsUrl())
     }
+
+    // ── Timeout (native `-t/--timeout` knob) ────────────────────────────
+
+    @Test
+    fun defaultTimeout_isNativeDefault() {
+        assertEquals("30", Profile.DEFAULT_TIMEOUT)
+        assertEquals("Default timeout should be 30 seconds", Profile.DEFAULT_TIMEOUT, minimalProfile().timeout)
+    }
+
+    @Test
+    fun parseTimeoutSeconds_acceptsWholeNumbersWithinRange() {
+        assertEquals(Profile.MIN_TIMEOUT_SECONDS, parseTimeoutSeconds("15"))
+        assertEquals(Profile.MAX_TIMEOUT_SECONDS, parseTimeoutSeconds("60"))
+        assertEquals(45, parseTimeoutSeconds("45"))
+        assertEquals("Surrounding whitespace must be ignored", 45, parseTimeoutSeconds("  45\t"))
+    }
+
+    @Test
+    fun parseTimeoutSeconds_blankMeansNativeDefault() {
+        assertEquals("Blank timeout means \"let the native default apply\"", 0, parseTimeoutSeconds(""))
+        assertEquals(0, parseTimeoutSeconds("   "))
+    }
+
+    @Test
+    fun parseTimeoutSeconds_rejectsOutOfRangeAndNonNumericValues() {
+        assertNull("Below the native range", parseTimeoutSeconds("14"))
+        assertNull("Above the native range", parseTimeoutSeconds("61"))
+        assertNull(parseTimeoutSeconds("0"))
+        assertNull(parseTimeoutSeconds("-30"))
+        assertNull(parseTimeoutSeconds("abc"))
+        assertNull(parseTimeoutSeconds("30s"))
+        assertNull(parseTimeoutSeconds("30.5"))
+    }
+
+    @Test
+    fun timeoutSeconds_mapsFieldOntoNativeValue() {
+        assertEquals(0, minimalProfile().copy(timeout = "").timeoutSeconds())
+        assertEquals(45, minimalProfile().copy(timeout = " 45 ").timeoutSeconds())
+        assertEquals("A hand-edited out-of-range value falls back to the native default", 0, minimalProfile().copy(timeout = "999").timeoutSeconds())
+    }
+
+    @Test
+    fun jsonWithoutTimeoutKey_fallsBackToDefaultTimeout() {
+        // Profiles stored before the timeout option existed carry no key; they must
+        // decode to the native default instead of failing or serializing to null.
+        val legacyJson = """
+            {
+                "id": "legacy-timeout",
+                "name": "Legacy",
+                "server": "legacy.example.com",
+                "serverPort": "443",
+                "password": "pw"
+            }
+        """.trimIndent()
+
+        assertEquals("30", json.decodeFromString(Profile.serializer(), legacyJson).timeout)
+    }
+
+    @Test
+    fun timeout_survivesSerializationRoundTrip() {
+        val original = createFullProfile().copy(timeout = "45")
+        val decoded = json.decodeFromString(Profile.serializer(), json.encodeToString(Profile.serializer(), original))
+
+        assertEquals("45", decoded.timeout)
+        assertEquals(original, decoded)
+    }
+
+    private fun minimalProfile() = Profile(
+        id = "min-timeout",
+        name = "Min Server",
+        server = "min.example.com",
+        serverPort = "443",
+        password = "pw"
+    )
 }

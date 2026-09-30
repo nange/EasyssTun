@@ -35,6 +35,7 @@ class ServerProfileActivity : AppCompatActivity() {
     private lateinit var profileLogLevel: Spinner
     private lateinit var profileEnableQuic: Spinner
     private lateinit var profileIpv6Rule: Spinner
+    private lateinit var profileTimeout: EditText
     private lateinit var saveProfileButton: Button
     private lateinit var deleteProfileButton: Button // Added delete button
 
@@ -61,6 +62,7 @@ class ServerProfileActivity : AppCompatActivity() {
         profileLogLevel = findViewById(R.id.profile_log_level)
         profileEnableQuic = findViewById(R.id.profile_enable_quic)
         profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
+        profileTimeout = findViewById(R.id.profile_timeout)
         saveProfileButton = findViewById(R.id.save_profile_button)
         deleteProfileButton = findViewById(R.id.delete_profile_button) // Initialize delete button
 
@@ -122,6 +124,7 @@ class ServerProfileActivity : AppCompatActivity() {
                 profileCustomCa.setText(it.customCa)
                 profileDirectFile.setText(it.directFile)
                 profileProxyFile.setText(it.proxyFile)
+                profileTimeout.setText(it.timeout)
 
                 // Show delete button if editing an existing profile
                 deleteProfileButton.visibility = View.VISIBLE
@@ -211,10 +214,26 @@ class ServerProfileActivity : AppCompatActivity() {
         val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
         val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value)
         val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
+        val timeout = profileTimeout.text.toString()
 
 
         if (server.isBlank() || serverPort.isBlank() || password.isBlank()) {
             Toast.makeText(this, "Server, Port, and Password cannot be empty", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Blank means "use the native default"; anything else must be a whole
+        // number of seconds in the range the native timeout knob accepts.
+        if (parseTimeoutSeconds(timeout) == null) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.error_timeout_invalid,
+                    Profile.MIN_TIMEOUT_SECONDS,
+                    Profile.MAX_TIMEOUT_SECONDS
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
 
@@ -234,7 +253,8 @@ class ServerProfileActivity : AppCompatActivity() {
             customCa = customCa,
             directFile = directFile,
             proxyFile = proxyFile,
-            socksPort = socksPort
+            socksPort = socksPort,
+            timeout = timeout
         )
 
         if (profileId == null) { // A new profile is being added
