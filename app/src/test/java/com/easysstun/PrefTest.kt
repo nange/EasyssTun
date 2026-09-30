@@ -2,6 +2,7 @@ package com.easysstun
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,7 +16,9 @@ import java.util.UUID
 
 // Use Robolectric to allow PreferenceManager.getDefaultSharedPreferences to work in unit tests
 @RunWith(AndroidJUnit4::class)
-@Config(manifest=Config.NONE) // We don't need a manifest for these unit tests
+// The sdk must be pinned explicitly: Robolectric reads the app manifest (binary
+// resources are enabled) and rejects the unsupported targetSdk 37 otherwise.
+@Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class PrefTest {
 
     private lateinit var context: Context

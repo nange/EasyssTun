@@ -81,6 +81,13 @@ android {
         textReport = true
     }
 
+    // 表单测试（ServerProfileActivityTest）需要 Robolectric 能加载真实的 Android 资源
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
+
     buildTypes {
         debug {
             resValue "string", "app_name", "EasyssTun (Debug)"
