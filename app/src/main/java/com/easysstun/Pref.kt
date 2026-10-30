@@ -25,6 +25,9 @@ class Pref(private val ctx: Context) {
         const val PROXY_MODE_BYPASS = "bypass"
         const val PROXY_MODE_PROXY_ONLY = "proxy_only"
         const val SHOW_SYSTEM_APPS = "show_system_apps"
+        const val UPDATE_AUTO_CHECK = "update_auto_check"
+        const val UPDATE_LAST_CHECK_AT = "update_last_check_at"
+        const val UPDATE_DISMISSED_VERSION_CODE = "update_dismissed_version_code"
         const val PREFS_UPDATED = "prefs_updated"
         const val CUSTOM_CA_FILE = "easyss_custom_ca.conf"
         const val DIRECT_FILE = "easyss_direct.conf"
@@ -54,6 +57,27 @@ class Pref(private val ctx: Context) {
         get() = prefs.getBoolean(SHOW_SYSTEM_APPS, true)
         set(value) {
             prefs.edit { putBoolean(SHOW_SYSTEM_APPS, value) }
+        }
+
+    /** Whether a release check runs once per [AUTO_CHECK_INTERVAL_MS] on app start. */
+    var updateAutoCheck: Boolean
+        get() = prefs.getBoolean(UPDATE_AUTO_CHECK, true)
+        set(value) {
+            prefs.edit { putBoolean(UPDATE_AUTO_CHECK, value) }
+        }
+
+    /** Timestamp of the last successful release check; 0 means "never checked". */
+    var updateLastCheckAt: Long
+        get() = prefs.getLong(UPDATE_LAST_CHECK_AT, 0L)
+        set(value) {
+            prefs.edit { putLong(UPDATE_LAST_CHECK_AT, value) }
+        }
+
+    /** versionCode the user chose to skip; 0 means "nothing skipped". */
+    var updateDismissedVersionCode: Int
+        get() = prefs.getInt(UPDATE_DISMISSED_VERSION_CODE, 0)
+        set(value) {
+            prefs.edit { putInt(UPDATE_DISMISSED_VERSION_CODE, value) }
         }
 
     fun getApps(): Set<String> {

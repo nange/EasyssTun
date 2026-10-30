@@ -11,53 +11,58 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import com.google.android.material.button.MaterialButton
+import com.easysstun.databinding.FragmentSettingsBinding
 import com.google.android.material.card.MaterialCardView
 
 
 class SettingsFragment : Fragment() {
 
+    private var _binding: FragmentSettingsBinding? = null
+    private val binding get() = requireNotNull(_binding)
+
     private lateinit var pref: Pref
-    private lateinit var serverProfilesContainer: LinearLayout
-    private lateinit var addServerButton: MaterialButton
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        return inflater.inflate(R.layout.fragment_settings, container, false)
+        _binding = FragmentSettingsBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
         pref = Pref(requireContext())
-        serverProfilesContainer = view.findViewById(R.id.server_profiles_container)
-        addServerButton = view.findViewById(R.id.add_server_button)
-
-        addServerButton.setOnClickListener {
+        binding.addServerButton.setOnClickListener {
             startActivity(Intent(context, ServerProfileActivity::class.java))
         }
 
         refreshServerList()
     }
 
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
     override fun onResume() {
         super.onResume()
-        if (::pref.isInitialized && ::serverProfilesContainer.isInitialized) {
+        if (_binding != null && ::pref.isInitialized) {
             refreshServerList()
         }
     }
 
     private fun refreshServerList() {
-        serverProfilesContainer.removeAllViews()
+        val container = binding.serverProfilesContainer
+        container.removeAllViews()
 
         val profiles = pref.getProfiles()
         val activeProfileId = pref.getActiveProfile()?.id
 
         profiles.forEachIndexed { index, profile ->
-            val cardView = buildServerCard(profile, profile.id == activeProfileId)
+            val cardView = buildServerCard(profile, profile.id == activeProfileId, container)
 
             // Add top margin for cards after the first one (10dp spacing)
             if (index > 0) {
@@ -71,18 +76,19 @@ class SettingsFragment : Fragment() {
                 cardView.layoutParams = params
             }
 
-            serverProfilesContainer.addView(cardView)
+            container.addView(cardView)
         }
     }
 
     private fun buildServerCard(
         profile: Profile,
-        isActive: Boolean
+        isActive: Boolean,
+        container: LinearLayout
     ): MaterialCardView {
         val inflater = LayoutInflater.from(requireContext())
         val card = inflater.inflate(
             R.layout.item_server_profile,
-            serverProfilesContainer,
+            container,
             false
         ) as MaterialCardView
 

@@ -65,13 +65,18 @@ app/src/main/java/com/easysstun/
   Pref.kt                     # SharedPreferences 封装（设置持久化）
   AppListFragment.kt / AppListAdapter.kt  # 分应用代理选择列表
   LogFragment.kt              # 运行日志查看
-  SettingsFragment.kt         # 偏好设置页
+  SettingsFragment.kt         # 偏好设置页（服务器配置）
+  UpdateManager.kt / UpdateSource.kt      # ★ 应用内更新：节流检查、下载状态机、GitHub API 与本地代理回退
+  UpdateRelease.kt / UpdateVersion.kt     # Release 解析/选包、版本比较（rc 数字按数值比较）
+  UpdateInstaller.kt / UpdateDialogs.kt   # 签名校验、FileProvider 安装 intent、更新弹窗
+  UpdateCardView.kt           # 首页统计卡片下方的「软件更新」卡片（版本号、自动检查开关、检查/下载）
   ServiceReceiver.kt          # 开机自启广播接收
   AppState.kt / FormatUtils.kt / EasyssTunApplication.kt  # 辅助类
+app/src/main/res/xml/file_paths.xml     # FileProvider 路径（cacheDir/updates）
 app/libs/                     # ★ 本地 AAR 依赖（均不入库，首次构建自动下载）
   libeasyss.aar               #   easyss 代理原生库
   hev-socks5-tunnel.aar       #   tun2socks 实现（上游 heiher/hev-socks5-tunnel 预编译，含 4 ABI .so + 自带绑定类的 classes.jar）
-app/src/test/                 # Robolectric 单元测试
+app/src/test/                 # Robolectric 单元测试（含 Update* 版本/选包/状态机/安装校验测试）
 .github/workflows/
   ci.yml                      # push/PR 到 easyss 分支时跑 make check
   release.yml                 # 打 v* 标签时构建签名 APK 并发布 GitHub Release
@@ -84,6 +89,14 @@ app/src/test/                 # Robolectric 单元测试
 - **签名**：优先读本地 `keystore.properties`；CI 走 `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` 环境变量。两者都没有时 release 构建产出未签名 APK。
 - **debug 变体**：包名后缀 `.debug`，应用名带 "(Debug)"，可与正式版共存。
 - **APK 命名**：`EasyssTun_v{versionName}_{versionCode}_{abi}_{variant}_{yyyyMMdd}.apk`。
+- **应用内更新（勿破坏的对外契约）**：App 通过 `https://api.github.com/repos/nange/EasyssTun/releases/latest` 检查更新（`UpdateRelease.kt`），依赖以下约定：
+  1. APK 命名必须保持上面的格式，解析正则见 `UpdateRelease.kt`；只接受 `release` 变体与设备支持的 ABI，`{versionName}` 必须等于 release tag 去掉前缀 `v`。
+  2. `versionCode` 必须单调递增，且与 `versionName` 同时更新：更新器要求两者都比当前安装版本新，否则按「发布信息不一致」拒绝安装。
+  3. Release **不可**标记为 pre-release 或 draft，否则 `/releases/latest` 会跳过它，自动更新停在旧版本。
+  4. 升级必须使用同一签名 key（CI 的 `KEYSTORE_*`）；换 key 后用户只能手动卸载重装。
+  5. 下载经 `cacheDir/updates` + FileProvider（authority `${applicationId}.fileprovider`）交给系统安装器，需要 `REQUEST_INSTALL_PACKAGES` 且用户允许「安装未知应用」。
+  6. VPN 运行时检查/下载优先走 libeasyss 本地 HTTP 代理 `127.0.0.1:{socksPort+1000}`，失败回退直连（App 自身流量被 VPN 排除，无法依赖 TUN）；debug 构建禁用更新。
+  修改资产命名或发布方式时，必须同步更新 `UpdateRelease.kt` 的正则、`UpdateReleaseTest.kt` 与本段文档。
 - **Gradle wrapper 升级**：`gradlew`、`gradlew.bat`、`gradle/wrapper/gradle-wrapper.jar`、`gradle/wrapper/gradle-wrapper.properties` 四个文件必须同版本、**一起提交**（wrapper jar 入库是 Gradle 官方要求；勿在 `.gitignore` 里加裸 `wrapper` 规则，它会匹配 `gradle/wrapper/` 并让 `git add` 直接报错退出）。升级必须跑**两次** wrapper 任务：先 `./gradlew wrapper --gradle-version <新版本>`（由当前版本执行，只改 properties），再执行一次 `./gradlew wrapper`（此时由新版本执行，刷新 jar；脚本是否变化取决于上游模板）。脚本/jar 到底变没变一律以 `git diff` 为准，有变化就与 properties 一起提交——模板未变时脚本可以一字不动（如 9.6.1→9.7.1），模板变了则必须重新生成（如 9.5.1→9.6.1 改动了 `gradlew`/`gradlew.bat`）。收尾校验：`./gradlew --version`，并将 `shasum -a 256 gradle/wrapper/gradle-wrapper.jar` 与 `https://services.gradle.org/distributions/gradle-<版本>-wrapper.jar.sha256` 比对。**切勿合并外部 PR 提交的 wrapper jar**，务必用可信发行版按上述步骤本地重新生成。
 
 ## 编码规范
@@ -100,6 +113,7 @@ app/src/test/                 # Robolectric 单元测试
 
 - 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
 - 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
+- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（新增偏好项）。
 
 ## Git 提交与 PR 规范
 

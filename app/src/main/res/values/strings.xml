@@ -60,8 +60,6 @@
     <string name="easyss_need_config">Easyss Server Not Configured</string>
     <string name="start_failed_title">Start Failed</string>
 
-    <!-- Version info -->
-    <string name="version_info">%1$s | EasyssTun: v%2$s</string>
 
     <!-- Server profile form -->
     <string name="section_basic">Basic</string>
@@ -109,4 +107,47 @@
     <string name="delete_confirm_positive">Delete</string>
     <string name="delete_confirm_negative">Cancel</string>
     <string name="delete_success">Profile deleted</string>
+
+    <!-- In-app update (GitHub release) -->
+    <string name="update_section_title">Updates</string>
+    <string name="update_current_version">Current version: v%1$s (%2$d)</string>
+    <string name="update_auto_check">Check for updates on startup</string>
+    <string name="update_check_button">Check for updates</string>
+    <string name="update_download_button">Download and install</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You are on the latest version (v%1$s)</string>
+    <string name="update_available">Version %1$s is available (%2$s)</string>
+    <string name="update_downloading_status">Downloading… %1$d%%</string>
+    <string name="update_ready_status">Opening the installer…</string>
+    <string name="update_debug_disabled">In-app updates are disabled in debug builds.</string>
+    <string name="update_dialog_title">Update available</string>
+    <string name="update_dialog_version">Version %1$s (%2$d)</string>
+    <string name="update_dialog_warning">Installing the update closes the app and disconnects the current VPN session. Reopen the app afterwards.</string>
+    <string name="update_dialog_no_notes">No release notes.</string>
+    <string name="update_dialog_view_notes">View release notes</string>
+    <string name="update_dialog_update">Download and install</string>
+    <string name="update_dialog_later">Later</string>
+    <string name="update_dialog_skip">Skip this version</string>
+    <string name="update_progress_title">Downloading update</string>
+    <string name="update_progress_starting">Starting the download…</string>
+    <string name="update_progress_percent">%1$d%% · %2$s / %3$s</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_retry">Retry</string>
+    <string name="update_open_releases">Download page</string>
+    <string name="update_unknown_sources_title">Allow installing updates</string>
+    <string name="update_unknown_sources_message">Android requires permission to install updates from EasyssTun. Enable “Allow from this source”, then return to the app.</string>
+    <string name="update_unknown_sources_settings">Open settings</string>
+    <string name="update_failed_title">Update failed</string>
+    <string name="update_install_failed">Could not open the system installer. Download the update manually from the download page.</string>
+    <string name="update_error_network">Network unavailable. Check your connection and try again.</string>
+    <string name="update_error_http">The update server returned HTTP %1$d.</string>
+    <string name="update_error_rate_limited">GitHub API rate limit reached. Try again later.</string>
+    <string name="update_error_no_asset">This release has no build for this device.</string>
+    <string name="update_error_metadata">Release metadata is inconsistent. Please install manually from the download page.</string>
+    <string name="update_error_checksum">The downloaded file was corrupted and has been deleted.</string>
+    <string name="update_error_storage">Not enough storage space for the update.</string>
+    <string name="update_error_invalid_apk">The downloaded file is not a valid APK.</string>
+    <string name="update_error_signature">The update is signed with a different key than the installed app. Please install it manually from the download page.</string>
+    <string name="update_error_io">Update failed: %1$s</string>
+    <string name="update_error_unknown">Update failed. Please try again.</string>
 </resources>

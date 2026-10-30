@@ -38,7 +38,6 @@ import androidx.navigation.fragment.findNavController
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import io.github.nange.easyss.mobile.Mobile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -58,6 +57,10 @@ import org.json.JSONObject
 class MainFragment : Fragment() {
     companion object {
         private const val TAG = "MainFragment"
+
+        // Process-level guard: the version banner is a startup line, not a
+        // per-view one (the home fragment view is re-created on navigation).
+        private var versionLogged = false
     }
 
     private lateinit var mContext: Context
@@ -260,7 +263,8 @@ class MainFragment : Fragment() {
             }
         }, viewLifecycleOwner)
         updateServiceStatu(view)
-        updateVersionInfo(view)
+        bindUpdateCard(view)
+        logVersionOnce()
 
         // Ensure spinner is enabled when view is created
         view.findViewById<Spinner>(R.id.server_spinner)?.isEnabled = true
@@ -592,32 +596,24 @@ class MainFragment : Fragment() {
         }
     }
 
-    private fun updateVersionInfo(view: View) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            val gitTag = withContext(Dispatchers.IO) {
-                // Version banner for the in-app log viewer. Logged from the IO
-                // thread because reading the libeasyss version loads the
-                // native library on first use.
-                logVersionBanner()
-                fetchGitTag(requireContext())
-            }
-            val versionPlaceholder = view.findViewById<TextView>(R.id.version_placeholder)
-            val appVersion = BuildConfig.VERSION_NAME
-            versionPlaceholder.text = getString(R.string.version_info, gitTag, appVersion)
-        }
+    private fun bindUpdateCard(view: View) {
+        view.findViewById<UpdateCardView>(R.id.update_card)?.bind(
+                (requireActivity().application as EasyssTunApplication).updateManager,
+                pref,
+                viewLifecycleOwner
+        )
     }
 
-    private fun fetchGitTag(context: Context): String {
-        return try {
-            val version = Mobile.version()
-            if (version.isNotBlank()) {
-                "Easyss: $version"
-            } else {
-                "Easyss"
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching version via Mobile.version()", e)
-            "Easyss"
+    /**
+     * Logs the app/libeasyss version banner once per process. The banner used to
+     * be rendered below the statistics card; the home update card now shows the
+     * app version, while the libeasyss build stays visible in the log viewer.
+     */
+    private fun logVersionOnce() {
+        if (versionLogged) return
+        versionLogged = true
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            logVersionBanner()
         }
     }
 

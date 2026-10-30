@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Downloaded update APKs live in cacheDir/updates and are exposed to the
+         system installer through FileProvider (see AndroidManifest.xml). -->
+    <cache-path name="updates" path="updates/" />
+</paths>
