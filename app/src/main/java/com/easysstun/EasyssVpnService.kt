@@ -109,6 +109,9 @@ class EasyssVpnService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // The proxy dies with the service; actualFinalizeStop() already clears
+        // this on the normal path, but a system-initiated destroy may skip it.
+        TunnelState.update(false)
         unregisterReceiver(prefsUpdatedReceiver)
         Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel()
@@ -418,6 +421,9 @@ socks5:
      */
     internal fun notifyServiceStarted() {
         Log.i(TAG, "Broadcasting $ACTION_SERVICE_STARTED")
+        // Reached only after waitForSocksReady() proved the SOCKS5 listener is
+        // serving, so this is the earliest moment the local proxy can be used.
+        TunnelState.update(true)
         val broadcastIntent = Intent(ACTION_SERVICE_STARTED)
         broadcastIntent.setPackage(packageName)
         sendBroadcast(broadcastIntent)
@@ -606,6 +612,9 @@ socks5:
 
     private fun actualFinalizeStop() {
         Log.d(TAG, "actualFinalizeStop: Finalizing service stop.")
+        // Cleared before the teardown so nothing routes through a proxy that is
+        // about to disappear.
+        TunnelState.update(false)
         try {
             Log.d(TAG, "actualFinalizeStop: Attempting to close tunFd: ${tunFd?.fd}.")
             tunFd?.close()

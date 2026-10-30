@@ -9,6 +9,9 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -104,6 +107,7 @@ class UpdateManagerTest {
         source: UpdateSource,
         scope: CoroutineScope,
         isDebug: Boolean = false,
+        tunnelReady: StateFlow<Boolean> = MutableStateFlow(true),
         verifier: (File, Int) -> InstallCheck = { _, _ -> InstallCheck.Ok },
     ): UpdateManager = UpdateManager(
         context = context,
@@ -116,6 +120,7 @@ class UpdateManagerTest {
         currentVersionCode = 169,
         currentVersionName = "3.0.0-rc19.4",
         supportedAbis = listOf("arm64-v8a"),
+        tunnelReady = tunnelReady,
     )
 
     @Test
@@ -171,6 +176,97 @@ class UpdateManagerTest {
 
         manager.autoCheck()
         advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+    }
+
+    @Test
+    fun autoCheckWaitsForTheTunnelInsteadOfGoingDirect() = runTest {
+        val source = FakeSource(release = release())
+        // backgroundScope: the pending grace-period job must be dropped at the
+        // end of the test instead of being awaited.
+        val manager = manager(source, backgroundScope, tunnelReady = MutableStateFlow(false))
+
+        manager.autoCheck()
+        runCurrent()
+
+        assertEquals("a cold start must not probe a blocked network directly", 0, source.fetchCount)
+        assertEquals(UpdateState.Idle, manager.state.value)
+    }
+
+    @Test
+    fun autoCheckFallsBackToDirectWhenTheTunnelNeverComesUp() = runTest {
+        val source = FakeSource(release = release())
+        val manager = manager(source, this, tunnelReady = MutableStateFlow(false))
+
+        manager.autoCheck()
+        runCurrent()
+        assertEquals(0, source.fetchCount)
+
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        advanceUntilIdle()
+
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun tunnelReadinessRunsTheDeferredCheck() = runTest {
+        val source = FakeSource(release = release())
+        val manager = manager(source, this, tunnelReady = MutableStateFlow(false))
+
+        manager.autoCheck()
+        runCurrent()
+        assertEquals(0, source.fetchCount)
+
+        manager.onTunnelReady()
+        advanceUntilIdle()
+
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+
+        // The grace-period fallback was superseded and must not check again.
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+    }
+
+    @Test
+    fun tunnelReadinessBypassesTheFailureRetryThrottle() = runTest {
+        val source = FakeSource(fetchError = UpdateException(UpdateError.Network))
+        val manager = manager(source, this)
+
+        manager.autoCheck()
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Failed)
+
+        // A second launch-time check is still rate-limited...
+        manager.autoCheck()
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+
+        // ...but the tunnel coming up retries right away through the proxy.
+        source.fetchError = null
+        source.release = release()
+        manager.onTunnelReady()
+        advanceUntilIdle()
+
+        assertEquals(2, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun tunnelReadinessDoesNotRecheckWithinADay() = runTest {
+        val source = FakeSource(release = release())
+        val manager = manager(source, this)
+
+        manager.autoCheck()
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+
+        manager.onTunnelReady()
+        advanceUntilIdle()
+
         assertEquals(1, source.fetchCount)
     }
 

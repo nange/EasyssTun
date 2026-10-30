@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +24,12 @@ internal const val AUTO_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
 
 /** After a failed automatic check, do not retry on every Activity recreation. */
 internal const val AUTO_CHECK_RETRY_INTERVAL_MS = 10L * 60 * 1000
+
+/**
+ * How long a launch-time check waits for the tunnel to come up before falling
+ * back to a direct connection. Covers users who never start the VPN at all.
+ */
+internal const val LAUNCH_FALLBACK_DELAY_MS = 60L * 1000
 
 internal const val CHECK_TIMEOUT_MS = 15_000L
 internal const val DOWNLOAD_TIMEOUT_MS = 10L * 60 * 1000
@@ -73,6 +80,11 @@ internal sealed interface UpdateState {
  * release API, download + verification, and exposure of the progress as a
  * [StateFlow] so an Activity/Fragment can render it and survive rotation.
  *
+ * Automatic checks are tunnel-aware: the request goes through the local
+ * libeasyss HTTP proxy, so when the tunnel is not serving yet the check waits
+ * for [TunnelState.ready] instead of racing a possibly censored direct
+ * connection at cold start.
+ *
  * Every dependency is injectable for unit tests; production code builds an
  * instance through [create] from [EasyssTunApplication].
  */
@@ -87,11 +99,13 @@ internal class UpdateManager internal constructor(
     private val currentVersionCode: Int,
     private val currentVersionName: String,
     private val supportedAbis: List<String>,
+    private val tunnelReady: StateFlow<Boolean>,
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
     private var job: Job? = null
+    private var fallbackJob: Job? = null
     @Volatile
     private var availableRelease: AvailableRelease? = null
     private var promptedVersionCode = 0
@@ -104,7 +118,7 @@ internal class UpdateManager internal constructor(
         fun create(context: Context): UpdateManager {
             val appContext = context.applicationContext
             val pref = Pref(appContext)
-            return UpdateManager(
+            val manager = UpdateManager(
                 context = appContext,
                 pref = pref,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
@@ -115,7 +129,15 @@ internal class UpdateManager internal constructor(
                 currentVersionCode = BuildConfig.VERSION_CODE,
                 currentVersionName = BuildConfig.VERSION_NAME,
                 supportedAbis = Build.SUPPORTED_ABIS.toList(),
+                tunnelReady = TunnelState.ready,
             )
+            // The updater outlives any Activity, so it cannot rely on the
+            // receivers MainFragment registers: watch the process-wide tunnel
+            // state instead and run the deferred check the moment it is up.
+            manager.scope.launch {
+                manager.tunnelReady.collect { ready -> if (ready) manager.onTunnelReady() }
+            }
+            return manager
         }
     }
 
@@ -123,19 +145,53 @@ internal class UpdateManager internal constructor(
      * Silent launch-time check. Skipped in debug builds, when the user turned
      * automatic checks off, while another check/download is running, or when
      * the last successful check is younger than [AUTO_CHECK_INTERVAL_MS].
+     *
+     * When the tunnel is already serving the check runs immediately through the
+     * local proxy. Otherwise it is deferred to [onTunnelReady] so the request
+     * does not race a blocked direct connection at cold start; a direct attempt
+     * still happens after [LAUNCH_FALLBACK_DELAY_MS] for users who never start
+     * the VPN.
      */
     fun autoCheck() {
         if (isDebugBuild) return
         if (!pref.updateAutoCheck) return
         if (isBusy()) return
-        val now = clock()
-        val lastCheck = pref.updateLastCheckAt
-        if (lastCheck > 0 && now - lastCheck < AUTO_CHECK_INTERVAL_MS) return
-        // A failed check (offline, proxy down) leaves updateLastCheckAt untouched;
-        // rate-limit the retry instead of hitting the network on every rotation.
-        if (now - lastAutoAttemptAt < AUTO_CHECK_RETRY_INTERVAL_MS) return
-        lastAutoAttemptAt = now
-        Log.i(TAG, "auto update check (last check $lastCheck)")
+        if (!checkDue()) return
+        if (tunnelReady.value) {
+            if (isRetryThrottled()) return
+            lastAutoAttemptAt = clock()
+            Log.i(TAG, "auto update check (tunnel up, last check ${pref.updateLastCheckAt})")
+            startCheck(manual = false)
+            return
+        }
+        // Already waiting for the tunnel: an Activity recreation must not
+        // restart the grace period.
+        if (fallbackJob?.isActive == true) return
+        Log.i(TAG, "auto update check deferred until the tunnel is up")
+        fallbackJob = scope.launch {
+            delay(LAUNCH_FALLBACK_DELAY_MS)
+            if (tunnelReady.value || isDebugBuild || !pref.updateAutoCheck) return@launch
+            if (isBusy() || !checkDue() || isRetryThrottled()) return@launch
+            lastAutoAttemptAt = clock()
+            Log.i(TAG, "auto update check falling back to a direct connection")
+            startCheck(manual = false)
+        }
+    }
+
+    /**
+     * Runs the deferred automatic check once the tunnel is serving.
+     *
+     * This is the moment the proxy route is known to work, so it supersedes the
+     * grace period in [autoCheck] and bypasses [isRetryThrottled]: a direct
+     * launch-time attempt that just failed must not block the retry that now has
+     * a working route.
+     */
+    internal fun onTunnelReady() {
+        if (isDebugBuild || !pref.updateAutoCheck || isBusy() || !checkDue()) return
+        fallbackJob?.cancel()
+        fallbackJob = null
+        lastAutoAttemptAt = clock()
+        Log.i(TAG, "auto update check triggered by tunnel readiness")
         startCheck(manual = false)
     }
 
@@ -143,6 +199,8 @@ internal class UpdateManager internal constructor(
     fun checkNow() {
         if (isDebugBuild) return
         if (isBusy()) return
+        fallbackJob?.cancel()
+        fallbackJob = null
         promptedVersionCode = 0
         startCheck(manual = true)
     }
@@ -239,7 +297,25 @@ internal class UpdateManager internal constructor(
 
     private fun isBusy(): Boolean = job?.isActive == true
 
+    /** True once [AUTO_CHECK_INTERVAL_MS] has elapsed since the last successful check. */
+    private fun checkDue(): Boolean {
+        val lastCheck = pref.updateLastCheckAt
+        return lastCheck <= 0 || clock() - lastCheck >= AUTO_CHECK_INTERVAL_MS
+    }
+
+    /**
+     * A failed check (offline, proxy down) leaves [Pref.updateLastCheckAt]
+     * untouched, so rate-limit the retry instead of hitting the network on every
+     * Activity recreation.
+     */
+    private fun isRetryThrottled(): Boolean {
+        if (lastAutoAttemptAt == 0L) return false
+        return clock() - lastAutoAttemptAt < AUTO_CHECK_RETRY_INTERVAL_MS
+    }
+
+    @Synchronized
     private fun startCheck(manual: Boolean) {
+        if (isBusy()) return
         _state.value = UpdateState.Checking
         job = scope.launch {
             val selfJob = coroutineContext[Job]

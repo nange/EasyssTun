@@ -45,11 +45,16 @@ internal interface UpdateSource {
  * local HTTP proxy on `127.0.0.1:<socksPort+1000>` is tried first and a direct
  * connection is the fallback. The app's own traffic is excluded from the TUN,
  * so without this fallback a blocked network could never fetch an update.
+ *
+ * The proxy route is gated on [TunnelState.ready] rather than
+ * `Pref.isServiceEnabled`: the latter records the user's intent and is set
+ * before `Mobile.start()` runs, so it would advertise a port that is not
+ * listening yet.
  */
 internal class GitHubUpdateSource(
     private val pref: Pref,
     private val proxyPortProvider: () -> Int? = {
-        if (pref.isServiceEnabled) pref.getActiveProfile()?.statsPort() else null
+        if (TunnelState.ready.value) pref.getActiveProfile()?.statsPort() else null
     },
 ) : UpdateSource {
 
