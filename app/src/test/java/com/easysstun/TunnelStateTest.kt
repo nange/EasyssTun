@@ -25,7 +25,9 @@ class TunnelStateTest {
     }
 
     @Test
-    fun defaultsToNotReady() {
+    fun updateFalseIsNotReady() {
+        // The singleton cannot be observed in its pristine state once another
+        // test ran, so this asserts the transition rather than the default.
         TunnelState.update(false)
 
         assertFalse(TunnelState.ready.value)
