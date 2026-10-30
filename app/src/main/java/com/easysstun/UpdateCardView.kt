@@ -62,6 +62,10 @@ class UpdateCardView @JvmOverloads constructor(
         binding.updateAutoCheckSwitch.setOnCheckedChangeListener { _, checked ->
             pref.updateAutoCheck = checked
         }
+        // Let taps on the label toggle the switch as well.
+        binding.updateAutoCheckRow.setOnClickListener {
+            binding.updateAutoCheckSwitch.toggle()
+        }
         binding.updateCheckButton.setOnClickListener { manager.checkNow() }
         binding.updateDownloadButton.setOnClickListener { manager.downloadAndInstall() }
 

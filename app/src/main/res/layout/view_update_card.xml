@@ -36,17 +36,40 @@
             </LinearLayout>
         </LinearLayout>
 
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/update_auto_check_switch"
+        <LinearLayout
+            android:id="@+id/update_auto_check_row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/update_auto_check" />
+            android:layout_marginTop="4dp"
+            android:background="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:importantForAccessibility="no"
+            android:orientation="horizontal"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:labelFor="@id/update_auto_check_switch"
+                android:text="@string/update_auto_check"
+                android:textAppearance="?textAppearanceBodyMedium" />
+
+            <!-- Compact 48x24dp toggle, sized via the mtrl_switch_* dimens
+                 in values/dimens.xml. -->
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/update_auto_check_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minHeight="0dp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton

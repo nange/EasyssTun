@@ -1,1 +1,10 @@
-<resources />
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Home update card switch: a compact 48x24dp toggle. These library
+         dimens are only consumed by MaterialSwitch, and it is the app's
+         only switch. -->
+    <dimen name="mtrl_switch_thumb_size" tools:ignore="UnusedResources" tools:override="true">24dp</dimen>
+    <dimen name="mtrl_switch_track_height" tools:ignore="UnusedResources" tools:override="true">24dp</dimen>
+    <dimen name="mtrl_switch_track_width" tools:ignore="UnusedResources" tools:override="true">48dp</dimen>
+
+</resources>
