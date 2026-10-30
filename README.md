@@ -1,6 +1,6 @@
 # EasyssTun
 
-> **Note:** 此仓库 fork 自 [bingooo/EasyssTun](https://github.com/bingooo/EasyssTun)。
+> **Note:** 此仓库原始版本 fork 自 [bingooo/EasyssTun](https://github.com/bingooo/EasyssTun)。现已完成大量重构。
 
 基于 [easyss](https://github.com/nange/easyss) 代理的轻量级 Android VPN，底层使用高性能、低开销的 [tun2socks](https://github.com/heiher/hev-socks5-tunnel) 实现。
 
@@ -9,13 +9,9 @@
 <div align="center">
   <img src="assets/app1.jpg" width="30%" alt="App Screenshot 1" />
   &nbsp;&nbsp;
-  <img src="assets/app1_1.jpg" width="30%" alt="App Screenshot 2" />
-  &nbsp;&nbsp;
   <img src="assets/app2.jpg" width="30%" alt="App Screenshot 3" />
 </div>
 <div align="center">
-  <img src="assets/app3.jpg" width="30%" alt="App Screenshot 4" />
-  &nbsp;&nbsp;
   <img src="assets/app4.jpg" width="30%" alt="App Screenshot 5" />
   &nbsp;&nbsp;
   <img src="assets/app5.jpg" width="30%" alt="App Screenshot 6" />
