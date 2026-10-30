@@ -7,6 +7,12 @@ import androidx.lifecycle.ProcessLifecycleOwner
 
 class EasyssTunApplication : Application() {
 
+    /**
+     * Process-scoped updater: the download survives Activity recreation and
+     * the UI observes its state through [UpdateManager.state].
+     */
+    internal val updateManager: UpdateManager by lazy { UpdateManager.create(this) }
+
     override fun onCreate() {
         super.onCreate()
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {

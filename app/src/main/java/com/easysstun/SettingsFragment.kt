@@ -11,53 +11,110 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import com.google.android.material.button.MaterialButton
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.easysstun.databinding.FragmentSettingsBinding
 import com.google.android.material.card.MaterialCardView
+import kotlinx.coroutines.launch
 
 
 class SettingsFragment : Fragment() {
 
+    private var _binding: FragmentSettingsBinding? = null
+    private val binding get() = requireNotNull(_binding)
+
     private lateinit var pref: Pref
-    private lateinit var serverProfilesContainer: LinearLayout
-    private lateinit var addServerButton: MaterialButton
+    private lateinit var updateManager: UpdateManager
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        return inflater.inflate(R.layout.fragment_settings, container, false)
+        _binding = FragmentSettingsBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
         pref = Pref(requireContext())
-        serverProfilesContainer = view.findViewById(R.id.server_profiles_container)
-        addServerButton = view.findViewById(R.id.add_server_button)
+        updateManager = (requireActivity().application as EasyssTunApplication).updateManager
 
-        addServerButton.setOnClickListener {
+        binding.addServerButton.setOnClickListener {
             startActivity(Intent(context, ServerProfileActivity::class.java))
         }
 
+        setupUpdateCard()
         refreshServerList()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 
     override fun onResume() {
         super.onResume()
-        if (::pref.isInitialized && ::serverProfilesContainer.isInitialized) {
+        if (_binding != null && ::pref.isInitialized) {
             refreshServerList()
         }
     }
 
+    private fun setupUpdateCard() {
+        val b = binding
+        b.updateCurrentVersion.text = getString(
+            R.string.update_current_version,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE,
+        )
+
+        if (BuildConfig.DEBUG) {
+            // The release APK has a different applicationId/signature, so an
+            // in-app update can never apply to a debug build.
+            b.updateAutoCheckSwitch.isEnabled = false
+            b.updateCheckButton.isEnabled = false
+            b.updateDownloadButton.visibility = View.GONE
+            b.updateStatus.visibility = View.VISIBLE
+            b.updateStatus.text = getString(R.string.update_debug_disabled)
+            return
+        }
+
+        b.updateAutoCheckSwitch.isChecked = pref.updateAutoCheck
+        b.updateAutoCheckSwitch.setOnCheckedChangeListener { _, checked ->
+            pref.updateAutoCheck = checked
+        }
+        b.updateCheckButton.setOnClickListener { updateManager.checkNow() }
+        b.updateDownloadButton.setOnClickListener { updateManager.downloadAndInstall() }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                updateManager.state.collect { renderUpdateState(it) }
+            }
+        }
+    }
+
+    private fun renderUpdateState(state: UpdateState) {
+        val b = _binding ?: return
+        val status = updateStatusText(requireContext(), state)
+        b.updateStatus.text = status
+        b.updateStatus.visibility = if (status.isNullOrBlank()) View.GONE else View.VISIBLE
+        b.updateDownloadButton.visibility =
+            if (state is UpdateState.Available) View.VISIBLE else View.GONE
+        b.updateCheckButton.isEnabled =
+            state !is UpdateState.Checking && state !is UpdateState.Downloading
+    }
+
     private fun refreshServerList() {
-        serverProfilesContainer.removeAllViews()
+        val container = binding.serverProfilesContainer
+        container.removeAllViews()
 
         val profiles = pref.getProfiles()
         val activeProfileId = pref.getActiveProfile()?.id
 
         profiles.forEachIndexed { index, profile ->
-            val cardView = buildServerCard(profile, profile.id == activeProfileId)
+            val cardView = buildServerCard(profile, profile.id == activeProfileId, container)
 
             // Add top margin for cards after the first one (10dp spacing)
             if (index > 0) {
@@ -71,18 +128,19 @@ class SettingsFragment : Fragment() {
                 cardView.layoutParams = params
             }
 
-            serverProfilesContainer.addView(cardView)
+            container.addView(cardView)
         }
     }
 
     private fun buildServerCard(
         profile: Profile,
-        isActive: Boolean
+        isActive: Boolean,
+        container: LinearLayout
     ): MaterialCardView {
         val inflater = LayoutInflater.from(requireContext())
         val card = inflater.inflate(
             R.layout.item_server_profile,
-            serverProfilesContainer,
+            container,
             false
         ) as MaterialCardView
 

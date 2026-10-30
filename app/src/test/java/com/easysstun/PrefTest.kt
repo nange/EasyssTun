@@ -289,4 +289,28 @@ class PrefTest {
         assertTrue("Original still present", profiles.contains(original))
         assertTrue("Duplicate also present", profiles.contains(duplicate))
     }
+
+    @Test
+    fun updatePreferences_haveStableDefaults() {
+        assertTrue("Automatic update checks default to enabled", pref.updateAutoCheck)
+        assertEquals("No check recorded yet", 0L, pref.updateLastCheckAt)
+        assertEquals("Nothing skipped yet", 0, pref.updateDismissedVersionCode)
+    }
+
+    @Test
+    fun updatePreferences_roundTrip() {
+        pref.updateAutoCheck = false
+        pref.updateLastCheckAt = 1_700_000_000_000L
+        pref.updateDismissedVersionCode = 170
+
+        assertEquals(false, pref.updateAutoCheck)
+        assertEquals(1_700_000_000_000L, pref.updateLastCheckAt)
+        assertEquals(170, pref.updateDismissedVersionCode)
+
+        // New Pref instance reads the same default SharedPreferences.
+        val reloaded = Pref(context)
+        assertEquals(false, reloaded.updateAutoCheck)
+        assertEquals(1_700_000_000_000L, reloaded.updateLastCheckAt)
+        assertEquals(170, reloaded.updateDismissedVersionCode)
+    }
 }
