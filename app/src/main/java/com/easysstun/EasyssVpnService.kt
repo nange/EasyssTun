@@ -373,6 +373,9 @@ socks5:
                 createNotification(channelName, loadedProfile.name)
                 startNotificationUpdater(channelName, loadedProfile.name, loadedProfile.statsUrl())
                 Log.i(TAG, "startup: service fully started, t+${startupElapsed()}ms")
+                // waitForSocksReady() proved the SOCKS5 listener is serving and
+                // TProxy is now running, so the local proxy is usable from here.
+                TunnelState.update(true)
                 notifyServiceStarted()
             } catch (e: CancellationException) {
                 // User stopped the service while startup was in flight; the
@@ -421,9 +424,6 @@ socks5:
      */
     internal fun notifyServiceStarted() {
         Log.i(TAG, "Broadcasting $ACTION_SERVICE_STARTED")
-        // Reached only after waitForSocksReady() proved the SOCKS5 listener is
-        // serving, so this is the earliest moment the local proxy can be used.
-        TunnelState.update(true)
         val broadcastIntent = Intent(ACTION_SERVICE_STARTED)
         broadcastIntent.setPackage(packageName)
         sendBroadcast(broadcastIntent)
@@ -540,6 +540,11 @@ socks5:
      * [onShutdownComplete] on the main thread.
      */
     private fun shutdownTunnel(onShutdownComplete: () -> Unit) {
+        // Stop and restart share this entry point: mark the proxy unusable before
+        // the first native teardown step, otherwise a restart leaves the flag
+        // true for the whole window (and the post-restart update(true) is then
+        // deduplicated, so no readiness event would ever fire again).
+        TunnelState.update(false)
         notificationUpdaterJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
 
@@ -612,8 +617,9 @@ socks5:
 
     private fun actualFinalizeStop() {
         Log.d(TAG, "actualFinalizeStop: Finalizing service stop.")
-        // Cleared before the teardown so nothing routes through a proxy that is
-        // about to disappear.
+        // shutdownTunnel() clears this before the teardown; repeating it here is
+        // the idempotent safety net for the startup-failure path, which reaches
+        // finalize without going through shutdownTunnel().
         TunnelState.update(false)
         try {
             Log.d(TAG, "actualFinalizeStop: Attempting to close tunFd: ${tunFd?.fd}.")
