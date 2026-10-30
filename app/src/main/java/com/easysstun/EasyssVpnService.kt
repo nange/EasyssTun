@@ -109,6 +109,9 @@ class EasyssVpnService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // The proxy dies with the service; actualFinalizeStop() already clears
+        // this on the normal path, but a system-initiated destroy may skip it.
+        TunnelState.update(false)
         unregisterReceiver(prefsUpdatedReceiver)
         Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel()
@@ -370,6 +373,9 @@ socks5:
                 createNotification(channelName, loadedProfile.name)
                 startNotificationUpdater(channelName, loadedProfile.name, loadedProfile.statsUrl())
                 Log.i(TAG, "startup: service fully started, t+${startupElapsed()}ms")
+                // waitForSocksReady() proved the SOCKS5 listener is serving and
+                // TProxy is now running, so the local proxy is usable from here.
+                TunnelState.update(true)
                 notifyServiceStarted()
             } catch (e: CancellationException) {
                 // User stopped the service while startup was in flight; the
@@ -534,6 +540,11 @@ socks5:
      * [onShutdownComplete] on the main thread.
      */
     private fun shutdownTunnel(onShutdownComplete: () -> Unit) {
+        // Stop and restart share this entry point: mark the proxy unusable before
+        // the first native teardown step, otherwise a restart leaves the flag
+        // true for the whole window (and the post-restart update(true) is then
+        // deduplicated, so no readiness event would ever fire again).
+        TunnelState.update(false)
         notificationUpdaterJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
 
@@ -606,6 +617,10 @@ socks5:
 
     private fun actualFinalizeStop() {
         Log.d(TAG, "actualFinalizeStop: Finalizing service stop.")
+        // shutdownTunnel() clears this before the teardown; repeating it here is
+        // the idempotent safety net for the startup-failure path, which reaches
+        // finalize without going through shutdownTunnel().
+        TunnelState.update(false)
         try {
             Log.d(TAG, "actualFinalizeStop: Attempting to close tunFd: ${tunFd?.fd}.")
             tunFd?.close()

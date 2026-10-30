@@ -9,6 +9,9 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -76,13 +79,20 @@ class UpdateManagerTest {
         var downloadError: UpdateException? = null,
         var downloadBytes: ByteArray = ByteArray(16),
         val gate: CompletableDeferred<Unit>? = null,
+        /** Suspends the next fetch so a test can act while a check is in flight. */
+        var fetchGate: CompletableDeferred<Unit>? = null,
     ) : UpdateSource {
         var fetchCount = 0
         var downloadCount = 0
 
         override suspend fun fetchLatestRelease(): Release {
             fetchCount++
-            fetchError?.let { throw it }
+            // Capture the outcome before suspending: a test may flip
+            // [fetchError] while this call is parked on the gate.
+            val error = fetchError
+            val gate = fetchGate.also { fetchGate = null }
+            gate?.await()
+            error?.let { throw it }
             return release ?: throw UpdateException(UpdateError.Network)
         }
 
@@ -104,6 +114,7 @@ class UpdateManagerTest {
         source: UpdateSource,
         scope: CoroutineScope,
         isDebug: Boolean = false,
+        tunnelReady: StateFlow<Boolean> = MutableStateFlow(true),
         verifier: (File, Int) -> InstallCheck = { _, _ -> InstallCheck.Ok },
     ): UpdateManager = UpdateManager(
         context = context,
@@ -116,6 +127,7 @@ class UpdateManagerTest {
         currentVersionCode = 169,
         currentVersionName = "3.0.0-rc19.4",
         supportedAbis = listOf("arm64-v8a"),
+        tunnelReady = tunnelReady,
     )
 
     @Test
@@ -171,6 +183,175 @@ class UpdateManagerTest {
 
         manager.autoCheck()
         advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+    }
+
+    @Test
+    fun autoCheckWaitsForTheTunnelInsteadOfGoingDirect() = runTest {
+        val source = FakeSource(release = release())
+        // backgroundScope: the pending grace-period job must be dropped at the
+        // end of the test instead of being awaited.
+        val manager = manager(source, backgroundScope, tunnelReady = MutableStateFlow(false))
+
+        manager.autoCheck()
+        runCurrent()
+
+        assertEquals("a cold start must not probe a blocked network directly", 0, source.fetchCount)
+        assertEquals(UpdateState.Idle, manager.state.value)
+    }
+
+    @Test
+    fun autoCheckFallsBackToDirectWhenTheTunnelNeverComesUp() = runTest {
+        val source = FakeSource(release = release())
+        val manager = manager(source, this, tunnelReady = MutableStateFlow(false))
+
+        manager.autoCheck()
+        runCurrent()
+        assertEquals(0, source.fetchCount)
+
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        advanceUntilIdle()
+
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun tunnelReadinessRunsTheDeferredCheck() = runTest {
+        val source = FakeSource(release = release())
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
+
+        manager.autoCheck()
+        runCurrent()
+        assertEquals(0, source.fetchCount)
+
+        tunnelReady.value = true
+        manager.onTunnelReady()
+        advanceUntilIdle()
+
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+
+        // The grace-period fallback was superseded and must not check again.
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+    }
+
+    @Test
+    fun tunnelReadinessBypassesTheFailureRetryThrottle() = runTest {
+        val source = FakeSource(fetchError = UpdateException(UpdateError.Network))
+        val manager = manager(source, this)
+
+        manager.autoCheck()
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Failed)
+
+        // A second launch-time check is still rate-limited...
+        manager.autoCheck()
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+
+        // ...but the tunnel coming up retries right away through the proxy.
+        source.fetchError = null
+        source.release = release()
+        manager.onTunnelReady()
+        advanceUntilIdle()
+
+        assertEquals(2, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun tunnelReadinessDuringAnInFlightCheckRetriesAfterwards() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeSource(
+            release = release(),
+            fetchError = UpdateException(UpdateError.Network),
+            fetchGate = gate,
+        )
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
+
+        // The grace period fires a direct check that is still in flight when the
+        // tunnel comes up; that readiness event must not be dropped.
+        manager.autoCheck()
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        runCurrent()
+        assertEquals(1, source.fetchCount)
+
+        tunnelReady.value = true
+        manager.onTunnelReady()
+        source.fetchError = null
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(2, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun queuedRetryIsDroppedWhenTheTunnelGoesAway() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeSource(
+            release = release(),
+            fetchError = UpdateException(UpdateError.Network),
+            fetchGate = gate,
+        )
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
+
+        manager.autoCheck()
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        runCurrent()
+        assertEquals(1, source.fetchCount)
+
+        tunnelReady.value = true
+        manager.onTunnelReady()
+        // The VPN is dropped again before the in-flight check finishes, so the
+        // queued retry would be a proxy-less check that bypasses the throttle.
+        tunnelReady.value = false
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals("no direct retry once the tunnel is gone", 1, source.fetchCount)
+    }
+
+    @Test
+    fun observeTunnelRunsTheDeferredCheck() = runTest {
+        val source = FakeSource(release = release())
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
+        val watcher = manager.observeTunnel()
+
+        manager.autoCheck()
+        runCurrent()
+        assertEquals(0, source.fetchCount)
+
+        tunnelReady.value = true
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.Available)
+
+        watcher.cancel()
+    }
+
+    @Test
+    fun tunnelReadinessDoesNotRecheckWithinADay() = runTest {
+        val source = FakeSource(release = release())
+        val manager = manager(source, this)
+
+        manager.autoCheck()
+        advanceUntilIdle()
+        assertEquals(1, source.fetchCount)
+
+        manager.onTunnelReady()
+        advanceUntilIdle()
+
         assertEquals(1, source.fetchCount)
     }
 
