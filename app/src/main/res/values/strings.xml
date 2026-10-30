@@ -51,11 +51,11 @@
     <string name="mode_proxy_only_desc">Only checked apps will go through the proxy. All other apps bypass.</string>
     <string name="proxied_app_list">Proxy %s Applications</string>
     <string name="choose_app_to_proxy">Tap to select PROXY applications.</string>
-    <string name="route_desc_proxy_only">Only the apps selected above will go through Easyss proxy.\n\nAll other apps will connect directly.</string>
+    <string name="route_desc_proxy_only">Only the apps selected above will go through Easyss proxy.\nAll other apps will connect directly.</string>
     <string name="clear_all_selected">Clear All</string>
     <string name="show_system_apps">Show system apps</string>
     <string name="easyss_configure_title">Easyss Configure</string>
-    <string name="route_desc">EasyssTun will skip LAN traffic, and the apps selected above will also be skipped.\n\nOther traffic will be taken over by Easyss.</string>
+    <string name="route_desc">EasyssTun will skip LAN traffic, and the apps selected above will also be skipped.\nOther traffic will be taken over by Easyss.</string>
     <string name="app_name_placeholder">PackageName</string>
     <string name="easyss_need_config">Easyss Server Not Configured</string>
     <string name="start_failed_title">Start Failed</string>

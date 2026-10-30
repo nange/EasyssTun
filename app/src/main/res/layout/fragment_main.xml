@@ -49,8 +49,7 @@
                             android:id="@+id/server_spinner"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:layout_marginBottom="8dp" />
+                            android:layout_marginTop="8dp" />
 
                     </LinearLayout>
 
@@ -64,7 +63,7 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/service_setting"
                         style="@style/CardButton"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="4dp"
                         android:layout_marginEnd="12dp"
                         android:backgroundTint="@color/button_enable"
                         android:text="@string/easyss_configure"
@@ -73,7 +72,7 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/service_button"
                         style="@style/CardButton"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="4dp"
                         android:text="@string/service_enable"
                         app:icon="@drawable/ic_outline_play_arrow_24" />
                 </LinearLayout>
@@ -126,7 +125,7 @@
                     android:id="@+id/route_desc"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
+                    android:layout_marginTop="8dp"
                     android:layoutDirection="rtl"
                     android:text="@string/route_desc"
                     android:textAlignment="viewEnd" />
