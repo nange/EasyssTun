@@ -85,6 +85,13 @@ internal sealed interface UpdateState {
  * for [TunnelState.ready] instead of racing a possibly censored direct
  * connection at cold start.
  *
+ * Threading: the Activity drives [autoCheck]/[checkNow]/[downloadAndInstall]
+ * from the main thread while the tunnel watcher ([observeTunnel]) calls
+ * [onTunnelReady] from an IO thread, so every entry point that touches
+ * [job]/[fallbackJob]/[lastAutoAttemptAt]/[pendingTunnelCheck] is
+ * `@Synchronized`; helpers that read them must only be called while holding
+ * that monitor.
+ *
  * Every dependency is injectable for unit tests; production code builds an
  * instance through [create] from [EasyssTunApplication].
  */
@@ -106,6 +113,10 @@ internal class UpdateManager internal constructor(
 
     private var job: Job? = null
     private var fallbackJob: Job? = null
+
+    /** Set when the tunnel became ready while another check was still in flight. */
+    private var pendingTunnelCheck = false
+
     @Volatile
     private var availableRelease: AvailableRelease? = null
     private var promptedVersionCode = 0
@@ -134,11 +145,17 @@ internal class UpdateManager internal constructor(
             // The updater outlives any Activity, so it cannot rely on the
             // receivers MainFragment registers: watch the process-wide tunnel
             // state instead and run the deferred check the moment it is up.
-            manager.scope.launch {
-                manager.tunnelReady.collect { ready -> if (ready) manager.onTunnelReady() }
-            }
+            manager.observeTunnel()
             return manager
         }
+    }
+
+    /**
+     * Subscribes to [tunnelReady] and runs the deferred check whenever the
+     * tunnel becomes available. Returns the watcher job so tests can stop it.
+     */
+    internal fun observeTunnel(): Job = scope.launch {
+        tunnelReady.collect { ready -> if (ready) onTunnelReady() }
     }
 
     /**
@@ -152,6 +169,7 @@ internal class UpdateManager internal constructor(
      * still happens after [LAUNCH_FALLBACK_DELAY_MS] for users who never start
      * the VPN.
      */
+    @Synchronized
     fun autoCheck() {
         if (isDebugBuild) return
         if (!pref.updateAutoCheck) return
@@ -164,17 +182,15 @@ internal class UpdateManager internal constructor(
             startCheck(manual = false)
             return
         }
+        // Do not arm a grace period that is already known to end in a no-op.
+        if (isRetryThrottled()) return
         // Already waiting for the tunnel: an Activity recreation must not
         // restart the grace period.
         if (fallbackJob?.isActive == true) return
         Log.i(TAG, "auto update check deferred until the tunnel is up")
         fallbackJob = scope.launch {
             delay(LAUNCH_FALLBACK_DELAY_MS)
-            if (tunnelReady.value || isDebugBuild || !pref.updateAutoCheck) return@launch
-            if (isBusy() || !checkDue() || isRetryThrottled()) return@launch
-            lastAutoAttemptAt = clock()
-            Log.i(TAG, "auto update check falling back to a direct connection")
-            startCheck(manual = false)
+            fireFallbackCheck()
         }
     }
 
@@ -184,18 +200,51 @@ internal class UpdateManager internal constructor(
      * This is the moment the proxy route is known to work, so it supersedes the
      * grace period in [autoCheck] and bypasses [isRetryThrottled]: a direct
      * launch-time attempt that just failed must not block the retry that now has
-     * a working route.
+     * a working route. When another check is still in flight the request is
+     * queued instead of dropped, because that in-flight check is most likely the
+     * doomed direct one started before the tunnel came up.
      */
+    @Synchronized
     internal fun onTunnelReady() {
-        if (isDebugBuild || !pref.updateAutoCheck || isBusy() || !checkDue()) return
+        if (isDebugBuild || !pref.updateAutoCheck) return
+        if (isBusy()) {
+            pendingTunnelCheck = true
+            return
+        }
         fallbackJob?.cancel()
         fallbackJob = null
+        if (!checkDue()) return
         lastAutoAttemptAt = clock()
         Log.i(TAG, "auto update check triggered by tunnel readiness")
         startCheck(manual = false)
     }
 
+    /** The grace period expired without the tunnel: fall back to a direct check. */
+    @Synchronized
+    private fun fireFallbackCheck() {
+        if (tunnelReady.value || isDebugBuild || !pref.updateAutoCheck) return
+        if (isBusy() || !checkDue() || isRetryThrottled()) return
+        lastAutoAttemptAt = clock()
+        Log.i(TAG, "auto update check falling back to a direct connection")
+        startCheck(manual = false)
+    }
+
+    /**
+     * Clears [job] and runs the tunnel-readiness retry that arrived while a check
+     * was in flight. The flag is consumed before re-entering so it cannot loop,
+     * and [onTunnelReady] re-checks [checkDue] so a successful in-flight check
+     * makes the retry a no-op.
+     */
+    @Synchronized
+    private fun onJobFinished(finished: Job?) {
+        if (job === finished) job = null
+        if (!pendingTunnelCheck) return
+        pendingTunnelCheck = false
+        onTunnelReady()
+    }
+
     /** User-triggered check; bypasses the throttle and the "already prompted" guard. */
+    @Synchronized
     fun checkNow() {
         if (isDebugBuild) return
         if (isBusy()) return
@@ -206,6 +255,7 @@ internal class UpdateManager internal constructor(
     }
 
     /** Downloads the release found by the last check, verifies it and hands it to the UI. */
+    @Synchronized
     fun downloadAndInstall() {
         val release = availableRelease ?: return
         if (isBusy()) return
@@ -246,7 +296,7 @@ internal class UpdateManager internal constructor(
                 failDownload(UpdateError.Io(e.message), release)
             } finally {
                 if (!keepFile) dest.delete()
-                if (job === selfJob) job = null
+                onJobFinished(selfJob)
             }
         }
     }
@@ -263,6 +313,7 @@ internal class UpdateManager internal constructor(
     }
 
     /** Cancels an in-flight download and removes the partial file. */
+    @Synchronized
     fun cancelDownload() {
         job?.cancel()
         job = null
@@ -295,9 +346,13 @@ internal class UpdateManager internal constructor(
         }
     }
 
+    /** Only called while holding this instance's monitor (see the class KDoc). */
     private fun isBusy(): Boolean = job?.isActive == true
 
-    /** True once [AUTO_CHECK_INTERVAL_MS] has elapsed since the last successful check. */
+    /**
+     * True once [AUTO_CHECK_INTERVAL_MS] has elapsed since the last successful
+     * check. Only called while holding this instance's monitor (see the class KDoc).
+     */
     private fun checkDue(): Boolean {
         val lastCheck = pref.updateLastCheckAt
         return lastCheck <= 0 || clock() - lastCheck >= AUTO_CHECK_INTERVAL_MS
@@ -306,7 +361,7 @@ internal class UpdateManager internal constructor(
     /**
      * A failed check (offline, proxy down) leaves [Pref.updateLastCheckAt]
      * untouched, so rate-limit the retry instead of hitting the network on every
-     * Activity recreation.
+     * Activity recreation. Only called while holding this instance's monitor.
      */
     private fun isRetryThrottled(): Boolean {
         if (lastAutoAttemptAt == 0L) return false
@@ -336,7 +391,7 @@ internal class UpdateManager internal constructor(
             } catch (e: Exception) {
                 _state.value = UpdateState.Failed(UpdateAction.CHECK, UpdateError.Io(e.message), manual)
             } finally {
-                if (job === selfJob) job = null
+                onJobFinished(selfJob)
             }
         }
     }
