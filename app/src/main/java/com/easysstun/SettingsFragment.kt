@@ -11,12 +11,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import com.easysstun.databinding.FragmentSettingsBinding
 import com.google.android.material.card.MaterialCardView
-import kotlinx.coroutines.launch
 
 
 class SettingsFragment : Fragment() {
@@ -25,7 +21,6 @@ class SettingsFragment : Fragment() {
     private val binding get() = requireNotNull(_binding)
 
     private lateinit var pref: Pref
-    private lateinit var updateManager: UpdateManager
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,13 +35,10 @@ class SettingsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         pref = Pref(requireContext())
-        updateManager = (requireActivity().application as EasyssTunApplication).updateManager
-
         binding.addServerButton.setOnClickListener {
             startActivity(Intent(context, ServerProfileActivity::class.java))
         }
 
-        setupUpdateCard()
         refreshServerList()
     }
 
@@ -60,50 +52,6 @@ class SettingsFragment : Fragment() {
         if (_binding != null && ::pref.isInitialized) {
             refreshServerList()
         }
-    }
-
-    private fun setupUpdateCard() {
-        val b = binding
-        b.updateCurrentVersion.text = getString(
-            R.string.update_current_version,
-            BuildConfig.VERSION_NAME,
-            BuildConfig.VERSION_CODE,
-        )
-
-        if (BuildConfig.DEBUG) {
-            // The release APK has a different applicationId/signature, so an
-            // in-app update can never apply to a debug build.
-            b.updateAutoCheckSwitch.isEnabled = false
-            b.updateCheckButton.isEnabled = false
-            b.updateDownloadButton.visibility = View.GONE
-            b.updateStatus.visibility = View.VISIBLE
-            b.updateStatus.text = getString(R.string.update_debug_disabled)
-            return
-        }
-
-        b.updateAutoCheckSwitch.isChecked = pref.updateAutoCheck
-        b.updateAutoCheckSwitch.setOnCheckedChangeListener { _, checked ->
-            pref.updateAutoCheck = checked
-        }
-        b.updateCheckButton.setOnClickListener { updateManager.checkNow() }
-        b.updateDownloadButton.setOnClickListener { updateManager.downloadAndInstall() }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                updateManager.state.collect { renderUpdateState(it) }
-            }
-        }
-    }
-
-    private fun renderUpdateState(state: UpdateState) {
-        val b = _binding ?: return
-        val status = updateStatusText(requireContext(), state)
-        b.updateStatus.text = status
-        b.updateStatus.visibility = if (status.isNullOrBlank()) View.GONE else View.VISIBLE
-        b.updateDownloadButton.visibility =
-            if (state is UpdateState.Available) View.VISIBLE else View.GONE
-        b.updateCheckButton.isEnabled =
-            state !is UpdateState.Checking && state !is UpdateState.Downloading
     }
 
     private fun refreshServerList() {

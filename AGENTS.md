@@ -65,10 +65,11 @@ app/src/main/java/com/easysstun/
   Pref.kt                     # SharedPreferences 封装（设置持久化）
   AppListFragment.kt / AppListAdapter.kt  # 分应用代理选择列表
   LogFragment.kt              # 运行日志查看
-  SettingsFragment.kt         # 偏好设置页（含「软件更新」卡片）
+  SettingsFragment.kt         # 偏好设置页（服务器配置）
   UpdateManager.kt / UpdateSource.kt      # ★ 应用内更新：节流检查、下载状态机、GitHub API 与本地代理回退
   UpdateRelease.kt / UpdateVersion.kt     # Release 解析/选包、版本比较（rc 数字按数值比较）
   UpdateInstaller.kt / UpdateDialogs.kt   # 签名校验、FileProvider 安装 intent、更新弹窗
+  UpdateCardView.kt           # 首页统计卡片下方的「软件更新」卡片（版本号、自动检查开关、检查/下载）
   ServiceReceiver.kt          # 开机自启广播接收
   AppState.kt / FormatUtils.kt / EasyssTunApplication.kt  # 辅助类
 app/src/main/res/xml/file_paths.xml     # FileProvider 路径（cacheDir/updates）
@@ -112,7 +113,7 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 
 - 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
 - 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
-- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`PrefTest`（新增偏好项）。
+- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（新增偏好项）。
 
 ## Git 提交与 PR 规范
 
