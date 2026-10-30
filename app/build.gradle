@@ -6,13 +6,47 @@ plugins {
 }
 
 // 签名配置：优先读本地 keystore.properties，其次读 CI 环境变量
+//
+// 注意：keystore.properties.example 里的 storeFile 是 /path/to/your.keystore.jks 占位值。
+// 若把模板直接复制成 keystore.properties 却没填真实信息，旧逻辑仍会注册 release 签名配置，
+// 构建要到 :app:validateSigningRelease 才报 "Keystore file '/path/to/your.keystore.jks'
+// not found for signing config 'release'"，容易被误判成环境/工具链问题。因此这里区分三种情况：
+//   1) 文件不存在                       → 未配置，产出未签名 APK（CI 则走环境变量，见下）
+//   2) 存在但 storeFile 仍是占位值/为空 → 视为未配置，warn 后产出未签名 APK
+//   3) 存在且填了真实路径               → 正常签名；路径不存在则在配置阶段直接给出明确报错
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
-def useLocalKeystore = keystorePropertiesFile.exists()
+def localStoreFile = null
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    localStoreFile = keystoreProperties.getProperty('storeFile', '').trim()
+}
+
+// 模板占位值，以及空值，一律视为“未配置本地签名”
+def placeholderStoreFiles = ['', 'path/to/your.keystore.jks', '/path/to/your.keystore.jks']
+def localKeystoreConfigured = localStoreFile != null && !placeholderStoreFiles.contains(localStoreFile)
+
+def useLocalKeystore = localKeystoreConfigured
 def useCiKeystore = System.getenv("KEYSTORE_PASSWORD") != null
 
-if (useLocalKeystore) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+if (useLocalKeystore && !file(localStoreFile).exists()) {
+    throw new GradleException(
+        "keystore.properties 中的 storeFile 指向的文件不存在：${file(localStoreFile)}\n" +
+        "请修正 keystore.properties，或删除该文件（构建将产出未签名 APK）。"
+    )
+}
+if (keystorePropertiesFile.exists() && !localKeystoreConfigured && !useCiKeystore) {
+    logger.warn("keystore.properties 仍是模板占位值（storeFile=${localStoreFile}），release 构建将产出【未签名】APK；" +
+        "如需签名请按 keystore.properties.example 填写真实 keystore 信息。")
+}
+if (useCiKeystore && !useLocalKeystore) {
+    def ciStoreFile = rootProject.file(System.getenv("KEYSTORE_FILE") ?: "ci-keystore.jks")
+    if (!ciStoreFile.exists()) {
+        throw new GradleException(
+            "已设置环境变量 KEYSTORE_PASSWORD（启用 CI 签名），但 keystore 文件不存在：${ciStoreFile}"
+        )
+    }
 }
 
 // 版本号（手动维护 version.properties）
