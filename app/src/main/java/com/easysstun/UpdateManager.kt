@@ -207,13 +207,15 @@ internal class UpdateManager internal constructor(
     @Synchronized
     internal fun onTunnelReady() {
         if (isDebugBuild || !pref.updateAutoCheck) return
+        if (!checkDue()) return
         if (isBusy()) {
+            // An in-flight check started before the tunnel came up is probably
+            // the doomed direct one; queue a proxy retry for when it finishes.
             pendingTunnelCheck = true
             return
         }
         fallbackJob?.cancel()
         fallbackJob = null
-        if (!checkDue()) return
         lastAutoAttemptAt = clock()
         Log.i(TAG, "auto update check triggered by tunnel readiness")
         startCheck(manual = false)
@@ -240,6 +242,12 @@ internal class UpdateManager internal constructor(
         if (job === finished) job = null
         if (!pendingTunnelCheck) return
         pendingTunnelCheck = false
+        // The tunnel may have gone away while the check was in flight; retrying
+        // now would silently fall back to a direct, throttle-bypassing check.
+        if (!tunnelReady.value) return
+        // A verified APK owns the UI state: a retry must not replace it with
+        // Checking (only reachable if checkDue() flipped during a long download).
+        if (_state.value is UpdateState.ReadyToInstall) return
         onTunnelReady()
     }
 

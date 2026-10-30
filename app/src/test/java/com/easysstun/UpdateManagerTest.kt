@@ -219,12 +219,14 @@ class UpdateManagerTest {
     @Test
     fun tunnelReadinessRunsTheDeferredCheck() = runTest {
         val source = FakeSource(release = release())
-        val manager = manager(source, this, tunnelReady = MutableStateFlow(false))
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
 
         manager.autoCheck()
         runCurrent()
         assertEquals(0, source.fetchCount)
 
+        tunnelReady.value = true
         manager.onTunnelReady()
         advanceUntilIdle()
 
@@ -270,7 +272,8 @@ class UpdateManagerTest {
             fetchError = UpdateException(UpdateError.Network),
             fetchGate = gate,
         )
-        val manager = manager(source, this, tunnelReady = MutableStateFlow(false))
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
 
         // The grace period fires a direct check that is still in flight when the
         // tunnel comes up; that readiness event must not be dropped.
@@ -279,6 +282,7 @@ class UpdateManagerTest {
         runCurrent()
         assertEquals(1, source.fetchCount)
 
+        tunnelReady.value = true
         manager.onTunnelReady()
         source.fetchError = null
         gate.complete(Unit)
@@ -286,6 +290,33 @@ class UpdateManagerTest {
 
         assertEquals(2, source.fetchCount)
         assertTrue(manager.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun queuedRetryIsDroppedWhenTheTunnelGoesAway() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeSource(
+            release = release(),
+            fetchError = UpdateException(UpdateError.Network),
+            fetchGate = gate,
+        )
+        val tunnelReady = MutableStateFlow(false)
+        val manager = manager(source, this, tunnelReady = tunnelReady)
+
+        manager.autoCheck()
+        advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
+        runCurrent()
+        assertEquals(1, source.fetchCount)
+
+        tunnelReady.value = true
+        manager.onTunnelReady()
+        // The VPN is dropped again before the in-flight check finishes, so the
+        // queued retry would be a proxy-less check that bypasses the throttle.
+        tunnelReady.value = false
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals("no direct retry once the tunnel is gone", 1, source.fetchCount)
     }
 
     @Test
