@@ -1,5 +1,6 @@
 package com.easysstun
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -11,14 +12,17 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowVpnService
 
 /**
  * Tests for ServiceReceiver: boot-completed auto-start logic.
  *
  * Since VpnService.prepare() and startForegroundService() require a real Android
  * environment, we focus on verifying the branching logic:
- *   - BOOT_COMPLETED + isServiceEnabled=true  → tries to start
+ *   - BOOT_COMPLETED + isServiceEnabled=true + active profile → tries to start
+ *   - BOOT_COMPLETED + isServiceEnabled=true + no active profile → does not start
  *   - BOOT_COMPLETED + isServiceEnabled=false → does nothing
  *   - Non-BOOT_COMPLETED action               → does nothing
  */
@@ -33,14 +37,15 @@ class ServiceReceiverTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        sharedPreferences = context.getSharedPreferences("test_easysstun_prefs", Context.MODE_PRIVATE)
-        sharedPreferences.edit().clear().apply()
         pref = Pref(context)
+        sharedPreferences = pref.prefs
+        sharedPreferences.edit().clear().commit()
     }
 
     @After
     fun tearDown() {
-        sharedPreferences.edit().clear().apply()
+        ShadowVpnService.reset()
+        sharedPreferences.edit().clear().commit()
     }
 
     @Test
@@ -73,20 +78,40 @@ class ServiceReceiverTest {
         pref.setActiveServer(profile.id)
         pref.isServiceEnabled = true
 
+        val application = context as Application
+        shadowOf(application).clearStartedServices()
+        // Force VpnService.prepare() to report that permission is already granted,
+        // so the receiver takes the direct startForegroundService() branch.
+        ShadowVpnService.setPrepareResult(null)
+
         val receiver = ServiceReceiver()
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(context, intent)
 
-        // In Robolectric, VpnService.prepare() returns null (already prepared),
-        // so this will attempt to start the service. The actual start may fail
-        // gracefully in Robolectric (no real VPN), but the branching logic is tested.
-        try {
-            receiver.onReceive(context, intent)
-        } catch (_: Exception) {
-            // Expected in Robolectric — EasyssVpnService not fully mockable without native libs
-        }
+        val started = shadowOf(application).nextStartedService
+        assertNotNull("boot auto-start must start the VPN service", started)
+        assertEquals(EasyssVpnService.ACTION_CONNECT, started.action)
+        assertNull(
+            "the service must read its configuration from Pref, not the Intent",
+            started.extras
+        )
+    }
 
-        // No assertion on side effects since EasyssVpnService can't fully start,
-        // but the point is that the receiver entered the branch for boot+enabled.
+    @Test
+    fun onReceive_bootCompleted_enabledButNoProfile_doesNotStartAndClearsFlag() {
+        pref.isServiceEnabled = true
+
+        val application = context as Application
+        shadowOf(application).clearStartedServices()
+
+        val receiver = ServiceReceiver()
+        receiver.onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+
+        assertNull(
+            "boot auto-start must not start a foreground service without an active profile",
+            shadowOf(application).nextStartedService
+        )
+        assertFalse("the stale enabled flag must be cleared", pref.isServiceEnabled)
     }
 
     @Test

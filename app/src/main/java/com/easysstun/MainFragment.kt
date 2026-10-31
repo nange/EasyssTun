@@ -41,7 +41,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.encodeToString
 
 class MainFragment : Fragment() {
     companion object {
@@ -132,7 +131,7 @@ class MainFragment : Fragment() {
                                         TAG,
                                         "Calling startVPNService for server switch. ID: $pendingServerProfileId"
                                 )
-                                startVPNService(isCalledFromReceiver = true)
+                                startVPNService()
                                 Log.d(TAG, "Returned from startVPNService call.")
 
                                 pendingServerProfileId = null
@@ -610,12 +609,8 @@ class MainFragment : Fragment() {
         }
     }
 
-    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-    private fun startVPNService(isCalledFromReceiver: Boolean = false) {
-        Log.d(
-                TAG,
-                "startVPNService - Entry. isCalledFromReceiver: $isCalledFromReceiver"
-        )
+    private fun startVPNService() {
+        Log.d(TAG, "startVPNService - Entry.")
         // A server-switch stop sets isServiceEnabled=false (EasyssVpnService.actualFinalizeStop).
         // Mark the service as enabled here so the updateServiceStatu() call right after an
         // auto-restart takes the "running" branch instead of issuing another stop, and so the
@@ -632,96 +627,19 @@ class MainFragment : Fragment() {
             // onActivityResult will call startVPNService() again.
             return
         }
-        Log.d(
-                TAG,
-                "VpnService.prepare returned null (permissions granted). Proceeding to try block."
-        )
 
-        // Permission already granted, proceed to start the service.
         try {
-            Log.d(
-                    TAG,
-                    "startVPNService - Inside try block, attempting to get active profile."
-            )
-            val activeProfile = pref.getActiveProfile() // Get the full profile object
-            val intent2 = Intent(mContext, EasyssVpnService::class.java)
-
-            if (activeProfile != null) {
-                try {
-                    val profileJson = appJson.encodeToString(activeProfile)
-                    intent2.putExtra(
-                            "com.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA",
-                            profileJson
-                    )
-                } catch (e: kotlinx.serialization.SerializationException) {
-                    Log.e(TAG, "Error serializing active profile", e)
-                    // If called from receiver, we must not crash it.
-                    if (isCalledFromReceiver) {
-                        // Log and allow receiver to clean up UI. Service won't start with this
-                        // profile.
-                        Toast.makeText(
-                                        mContext,
-                                        "Error: Could not serialize server profile.",
-                                        Toast.LENGTH_LONG
-                                )
-                                .show()
-                        return // Prevent service start if serialization fails and in receiver
-                        // context
-                    }
-                    // For non-receiver calls, behavior might differ, but for now, let's be
-                    // consistent:
-                    // don't proceed if profile can't be sent.
-                    return
-                }
-            } else {
-                Log.w(TAG, "No active server profile found to start EasyssVpnService.")
-                if (isCalledFromReceiver) {
-                    Toast.makeText(
-                                    mContext,
-                                    "Error: No active server configured.",
-                                    Toast.LENGTH_LONG
-                            )
-                            .show()
-                    return // Prevent service start if no profile and in receiver context
-                }
-                // For non-receiver calls, if no profile, probably shouldn't start.
-                return
-            }
-
-            // Pass proxy mode and selected apps via Intent to avoid multi-process SharedPreferences issues
-            val proxyMode = pref.getProxyMode()
-            val selectedApps = ArrayList(pref.getAppsForMode(proxyMode))
-            intent2.putExtra(EasyssVpnService.EXTRA_PROXY_MODE, proxyMode)
-            intent2.putStringArrayListExtra(EasyssVpnService.EXTRA_SELECTED_APPS, selectedApps)
-            Log.d(TAG, "startVPNService: proxyMode=$proxyMode, selectedApps=$selectedApps")
-
-            mContext.startService(intent2.setAction(EasyssVpnService.ACTION_CONNECT))
+            // The service reads the active profile, proxy mode and app list
+            // from Pref; the Intent only carries the action.
+            mContext.startService(EasyssVpnService.connectIntent(mContext))
         } catch (e: Exception) {
             Log.e(TAG, "Error starting EasyssVpnService", e)
-            if (isCalledFromReceiver) {
-                // IMPORTANT: Do NOT throw RuntimeException if called from serviceStoppedReceiver,
-                // as it would crash the receiver and leave the UI in a stuck state.
-                Toast.makeText(mContext, "Error starting VPN service.", Toast.LENGTH_LONG).show()
-            } else {
-                // For other callers of startVPNService (e.g., direct user action,
-                // onActivityResult),
-                // re-throwing might be acceptable or desired for immediate crash feedback,
-                // but for robustness, it's often better to handle gracefully.
-                // For now, let's be consistent and show a Toast.
-                Toast.makeText(mContext, "Error starting VPN service.", Toast.LENGTH_LONG).show()
-                // If strict crashing is desired for non-receiver contexts:
-                // if (e !is kotlinx.serialization.SerializationException) { // Already handled
-                // above
-                //    throw RuntimeException("Non-receiver context: Error starting EasyssVpnService",
-                // e)
-                // }
-            }
+            Toast.makeText(mContext, "Error starting VPN service.", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun stopVPNService() {
-        val intent2 = Intent(mContext, EasyssVpnService::class.java)
-        mContext.startService(intent2.setAction(EasyssVpnService.ACTION_DISCONNECT))
+        mContext.startService(EasyssVpnService.disconnectIntent(mContext))
     }
 
     /**

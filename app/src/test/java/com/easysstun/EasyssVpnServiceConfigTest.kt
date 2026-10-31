@@ -42,15 +42,19 @@ class EasyssVpnServiceConfigTest {
     }
 
     @Test
-    fun startWithoutProfile_disablesTheService() {
+    fun startWithoutProfile_disablesTheServiceAndStopsIt() {
         val pref = Pref(service)
         pref.isServiceEnabled = true
 
-        service.startService()
+        service.onStartCommand(EasyssVpnService.connectIntent(service), 0, 1)
 
         assertFalse(
             "a start without an active profile must not leave the service enabled",
             pref.isServiceEnabled,
+        )
+        assertTrue(
+            "a start without an active profile must stop the service instance",
+            shadowOf(service).isStoppedBySelf,
         )
     }
 
