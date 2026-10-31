@@ -1,5 +1,6 @@
 package com.easysstun
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -11,7 +12,9 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowVpnService
 
 /**
  * Tests for ServiceReceiver: boot-completed auto-start logic.
@@ -40,6 +43,7 @@ class ServiceReceiverTest {
 
     @After
     fun tearDown() {
+        ShadowVpnService.reset()
         sharedPreferences.edit().clear().apply()
     }
 
@@ -73,20 +77,23 @@ class ServiceReceiverTest {
         pref.setActiveServer(profile.id)
         pref.isServiceEnabled = true
 
+        val application = context as Application
+        shadowOf(application).clearStartedServices()
+        // Force VpnService.prepare() to report that permission is already granted,
+        // so the receiver takes the direct startForegroundService() branch.
+        ShadowVpnService.setPrepareResult(null)
+
         val receiver = ServiceReceiver()
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(context, intent)
 
-        // In Robolectric, VpnService.prepare() returns null (already prepared),
-        // so this will attempt to start the service. The actual start may fail
-        // gracefully in Robolectric (no real VPN), but the branching logic is tested.
-        try {
-            receiver.onReceive(context, intent)
-        } catch (_: Exception) {
-            // Expected in Robolectric — EasyssVpnService not fully mockable without native libs
-        }
-
-        // No assertion on side effects since EasyssVpnService can't fully start,
-        // but the point is that the receiver entered the branch for boot+enabled.
+        val started = shadowOf(application).nextStartedService
+        assertNotNull("boot auto-start must start the VPN service", started)
+        assertEquals(EasyssVpnService.ACTION_CONNECT, started.action)
+        assertNull(
+            "the service must read its configuration from Pref, not the Intent",
+            started.extras
+        )
     }
 
     @Test

@@ -18,10 +18,9 @@ class ServiceReceiver : BroadcastReceiver() {
                     i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     context.startActivity(i)
                 } else {
-                    // Permission already granted, start service directly
-                    val serviceIntent = Intent(context, EasyssVpnService::class.java)
-                        .setAction(EasyssVpnService.ACTION_CONNECT)
-                    context.startForegroundService(serviceIntent)
+                    // Permission already granted, start service directly. The
+                    // service reads the active profile from Pref.
+                    context.startForegroundService(EasyssVpnService.connectIntent(context))
                 }
             }
         }

@@ -38,9 +38,6 @@ import java.util.Locale
 
 class EasyssVpnService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
-    private var receivedProfileJson: String? = null
-    private var receivedProxyMode: String? = null
-    private var receivedSelectedApps: ArrayList<String>? = null
 
     private lateinit var pref: Pref
     private var mobileJob: Job? = null
@@ -58,19 +55,16 @@ class EasyssVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (ACTION_DISCONNECT == intent?.action) {
             Log.i(TAG, "onStartCommand: Received ACTION_DISCONNECT.")
-            receivedProfileJson = null
             stopService()
             return START_NOT_STICKY
         }
 
-        if (intent != null && intent.action == ACTION_CONNECT) {
-            receivedProfileJson = intent.getStringExtra("com.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA")
-            receivedProxyMode = intent.getStringExtra(EXTRA_PROXY_MODE)
-            receivedSelectedApps = intent.getStringArrayListExtra(EXTRA_SELECTED_APPS)
-            Log.i(TAG, "onStartCommand: Received proxyMode=$receivedProxyMode, selectedApps=$receivedSelectedApps via Intent.")
-        } else {
-            Log.w(TAG, "onStartCommand: No profile JSON in Intent or unexpected action. Intent: $intent")
-            receivedProfileJson = null
+        if (intent == null) {
+            // System restart: no Intent is replayed, so the service recovers
+            // the active profile, proxy mode and app list from Pref.
+            Log.i(TAG, "onStartCommand: no Intent (system restart), loading configuration from Pref.")
+        } else if (intent.action != ACTION_CONNECT) {
+            Log.w(TAG, "onStartCommand: unexpected action '${intent.action}', treating it as a connect request.")
         }
 
         try {
@@ -129,63 +123,16 @@ class EasyssVpnService : VpnService() {
 
         pref = Pref(this)
 
-        var loadedProfile: Profile? = null
-        var profileSource = "Unknown"
-
-        val profileJson = receivedProfileJson
-        if (profileJson != null && profileJson.isNotBlank()) {
-            Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
-            try {
-                loadedProfile = appJson.decodeFromString<Profile>(profileJson)
-                profileSource = "Intent JSON"
-                loadedProfile.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
-            } catch (e: kotlinx.serialization.SerializationException) {
-                Log.e(TAG, "Error deserializing profile from Intent JSON: ${e.message}. Falling back.")
-                profileSource = "Intent JSON Deserialization Error -> Fallback"
-            }
-        } else {
-            Log.d(TAG, "No profile JSON in Intent. Falling back to SharedPreferences.")
-            profileSource = "SharedPreferences Fallback"
-        }
-
+        // The service and the UI run in the same process, so the active
+        // profile, proxy mode and app list are read directly from Pref
+        // instead of being serialized through the start Intent.
+        val loadedProfile = pref.getActiveProfile()
         if (loadedProfile == null) {
-            Log.d(TAG, "Executing fallback: Loading profile via SharedPreferences.")
-            val activeIdFromPrefs = pref.prefs.getString(Pref.ACTIVE_SERVER_ID, null)
-            Log.d(TAG, "Fallback: Active Server ID from SharedPreferences: '$activeIdFromPrefs'")
-            if (activeIdFromPrefs != null) {
-                loadedProfile = pref.getProfiles().find { it.id == activeIdFromPrefs }
-                if (loadedProfile != null) {
-                    loadedProfile.let { Log.i(TAG, "Fallback: Successfully loaded profile from SharedPreferences. ID: ${it.id}") }
-                    if (profileSource.startsWith("Intent JSON Deserialization Error")) {
-                        profileSource = "SharedPreferences Fallback (after Deserialization Error)"
-                    }
-                } else {
-                    Log.w(TAG, "Fallback: Profile with ID '$activeIdFromPrefs' not found in SharedPreferences list.")
-                }
-            } else {
-                Log.w(TAG, "Fallback: No Active Server ID found in SharedPreferences.")
-            }
-        }
-
-        if (loadedProfile == null) {
-            Log.w(TAG, "最终: Loaded Profile is null (Source evaluation: $profileSource).")
-        } else {
-            Log.d(TAG, "最终: Loaded Profile (Source: $profileSource) - ID: ${loadedProfile.id}, Name: '${loadedProfile.name}', Server: '${loadedProfile.server}', Port: '${loadedProfile.serverPort}'")
-        }
-
-        val easyssInfo = easyssInfo()
-        if (loadedProfile == null) {
-            easyssInfo.valid = false
-        } else {
-            easyssInfo.valid = true
-            easyssInfo.info = "${loadedProfile.server}:${loadedProfile.serverPort}"
-        }
-
-        if (!easyssInfo.valid) {
-            Log.w(TAG, "Constructed easyssInfo is invalid. Service will not start or will be stopped.")
+            Log.w(TAG, "startService: no active server profile in Pref, not starting.")
             pref.isServiceEnabled = false
             return
         }
+        Log.i(TAG, "startService: loaded active profile '${loadedProfile.name}' (${loadedProfile.id}) from Pref")
 
         /* VPN builder: built now, but establish() is deferred until the
          * easyss SOCKS5 proxy is confirmed ready (see startup sequence
@@ -212,9 +159,9 @@ class EasyssVpnService : VpnService() {
 
         builder.addAddress("2001:0db8:0:f101::1", 64)
 
-        val proxyMode = receivedProxyMode ?: Pref.PROXY_MODE_BYPASS
-        val apps = receivedSelectedApps?.toSet() ?: emptySet()
-        Log.i(TAG, "Per-app routing: mode=$proxyMode (from Intent), selectedApps=$apps")
+        val proxyMode = pref.getProxyMode()
+        val apps = pref.getAppsForMode(proxyMode)
+        Log.i(TAG, "Per-app routing: mode=$proxyMode, selectedApps=$apps")
 
         // VpnService forbids mixing addAllowedApplication and
         // addDisallowedApplication on one builder, so the easyss process's
@@ -264,7 +211,7 @@ class EasyssVpnService : VpnService() {
 
         // Build SimpleConfig and write the TProxy config before establishing
         // the VPN, so everything the native stack needs is on disk first.
-        val config = loadedProfile!!.buildSimpleConfig(cacheDir)
+        val config = loadedProfile.buildSimpleConfig(cacheDir)
         Log.i(TAG, "startService: Starting Mobile proxy - server=${config.getServer()}:${config.getServerPort()}, localPort=${config.getLocalPort()}")
 
         val socksPort = loadedProfile.socksPort.toIntOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toInt()
@@ -508,12 +455,6 @@ socks5:
                 return
             }
             Log.i(TAG, "performRestart: Reloading latest prefs and re-establishing tunnel.")
-            // Force reload of the active profile from SharedPreferences, which
-            // startService() falls back to when receivedProfileJson is null.
-            receivedProfileJson = null
-            val proxyMode = pref.getProxyMode()
-            receivedProxyMode = proxyMode
-            receivedSelectedApps = ArrayList(pref.getAppsForMode(proxyMode))
             startService()
             if (tunFd == null && mobileJob?.isActive != true) {
                 // startService() failed to establish a tunnel (invalid profile,
@@ -717,9 +658,20 @@ socks5:
         const val ACTION_SERVICE_STARTED = "com.easysstun.SERVICE_STARTED"
         const val ACTION_SERVICE_START_FAILED = "com.easysstun.SERVICE_START_FAILED"
         const val EXTRA_START_ERROR = "com.easysstun.START_ERROR_EXTRA"
-        const val EXTRA_PROXY_MODE = "com.easysstun.PROXY_MODE_EXTRA"
-        const val EXTRA_SELECTED_APPS = "com.easysstun.SELECTED_APPS_EXTRA"
         const val NOTIFICATION_ID = 1
         private const val TAG = "EasyssVpnServiceDiag"
+
+        /**
+         * Builds the action-only start Intent. Configuration is never passed
+         * through the Intent: the service reads the active profile, proxy mode
+         * and app list from Pref. Callers differ only in how they start the
+         * service ([Context.startService] from the UI,
+         * [Context.startForegroundService] from [ServiceReceiver]).
+         */
+        fun connectIntent(context: Context): Intent =
+            Intent(context, EasyssVpnService::class.java).setAction(ACTION_CONNECT)
+
+        fun disconnectIntent(context: Context): Intent =
+            Intent(context, EasyssVpnService::class.java).setAction(ACTION_DISCONNECT)
     }
 }
