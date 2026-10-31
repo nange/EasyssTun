@@ -274,12 +274,3 @@ private fun readLimited(input: InputStream): String {
     }
     return output.toString(Charsets.UTF_8.name())
 }
-
-private fun ByteArray.toHex(): String = buildString(size * 2) {
-    for (byte in this@toHex) {
-        append(HEX[byte.toInt() shr 4 and 0x0f])
-        append(HEX[byte.toInt() and 0x0f])
-    }
-}
-
-private val HEX = "0123456789abcdef".toCharArray()

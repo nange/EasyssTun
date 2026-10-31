@@ -145,7 +145,7 @@ internal class UpdateDialogs(
 
         val binding = progressBinding ?: return
         if (state.total > 0L) {
-            val percent = ((state.downloaded * 100) / state.total).toInt().coerceIn(0, 100)
+            val percent = formatPercent(state.downloaded, state.total)
             binding.updateProgressBar.setProgressCompat(percent, true)
             binding.updateProgressText.text = activity.getString(
                 R.string.update_progress_percent,
@@ -258,11 +258,7 @@ internal fun updateStatusText(context: Context, state: UpdateState): String? = w
     )
     is UpdateState.Downloading -> context.getString(
         R.string.update_downloading_status,
-        if (state.total > 0L) {
-            ((state.downloaded * 100) / state.total).toInt().coerceIn(0, 100)
-        } else {
-            0
-        },
+        formatPercent(state.downloaded, state.total),
     )
     is UpdateState.ReadyToInstall -> context.getString(R.string.update_ready_status)
     is UpdateState.Failed -> updateErrorText(context, state.error)

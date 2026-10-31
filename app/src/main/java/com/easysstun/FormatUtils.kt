@@ -32,3 +32,21 @@ internal fun formatDuration(seconds: Double): String {
         append("${s}s")
     }
 }
+
+/**
+ * Download progress as a whole percentage in `0..100`. A non-positive total
+ * means "size unknown" and yields 0, matching the indeterminate progress bar.
+ */
+internal fun formatPercent(downloaded: Long, total: Long): Int =
+    if (total <= 0L) 0 else ((downloaded * 100) / total).toInt().coerceIn(0, 100)
+
+private val HEX_DIGITS = "0123456789abcdef".toCharArray()
+
+/** Lower-case hex encoding, used for SHA-256 digests. */
+internal fun ByteArray.toHex(): String = buildString(size * 2) {
+    for (byte in this@toHex) {
+        val value = byte.toInt() and 0xff
+        append(HEX_DIGITS[value shr 4])
+        append(HEX_DIGITS[value and 0x0f])
+    }
+}
