@@ -14,7 +14,7 @@ import java.util.UUID
 
 class ServerProfileActivity : AppCompatActivity() {
 
-    private lateinit var pref: Pref
+    private lateinit var profiles: ProfileStore
     private lateinit var controller: VpnController
     private var currentProfile: Profile? = null
     private var profileId: String? = null
@@ -62,7 +62,7 @@ class ServerProfileActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_server_profile)
 
-        pref = Pref(this)
+        profiles = ProfileStore.get(this)
         controller = VpnController.get(this)
         profileId = intent.getStringExtra("profileId")
 
@@ -125,7 +125,7 @@ class ServerProfileActivity : AppCompatActivity() {
 
 
         if (profileId != null) {
-            currentProfile = pref.getProfiles().find { it.id == profileId }
+            currentProfile = profileId?.let { profiles.find(it) }
             currentProfile?.let {
                 profileName.setText(it.name)
                 profileServer.setText(it.server)
@@ -163,7 +163,7 @@ class ServerProfileActivity : AppCompatActivity() {
     }
 
     private fun showDeleteConfirmationDialog() {
-        val isActive = profileId != null && profileId == pref.getActiveProfile()?.id
+        val isActive = profileId != null && profileId == profiles.activeId()
         val message = if (isActive && controller.state.value.isEngaged) {
             // Deleting the active profile while the VPN is running will disconnect it.
             getString(R.string.delete_confirm_message_active)
@@ -182,9 +182,9 @@ class ServerProfileActivity : AppCompatActivity() {
 
     private fun deleteProfileAndFinish() {
         profileId?.let {
-            val wasActive = pref.getActiveProfile()?.id == it
+            val wasActive = profiles.activeId() == it
             val wasRunning = controller.state.value.isEngaged
-            pref.deleteProfile(it)
+            profiles.delete(it)
             Toast.makeText(this, getString(R.string.delete_success), Toast.LENGTH_SHORT).show()
             if (wasActive && wasRunning) {
                 // The VPN was running with the profile being deleted. Disconnect it
@@ -313,19 +313,17 @@ class ServerProfileActivity : AppCompatActivity() {
         )
 
         if (profileId == null) { // A new profile is being added
-            pref.addProfile(profileToSave)
+            profiles.add(profileToSave)
             Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
         } else { // An existing profile is being updated
-            pref.updateProfile(profileToSave)
+            profiles.update(profileToSave)
             Toast.makeText(this, "Profile updated", Toast.LENGTH_SHORT).show()
 
-            // Check if the updated profile is the active one
-            if (profileToSave.id == pref.getActiveProfile()?.id) {
-                val intent = android.content.Intent(Pref.PREFS_UPDATED).apply {
-                    // Ensure the broadcast targets only this app's non-exported receiver
-                    setPackage(packageName)
-                }
-                sendBroadcast(intent)
+            // Check if the updated profile is the active one: a running tunnel
+            // must reload it. This is the explicit notification the store
+            // deliberately does not send on its own.
+            if (profileToSave.id == profiles.activeId()) {
+                ConfigChangeNotifier.notifyChanged(this)
             }
         }
         finish()

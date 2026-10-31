@@ -43,8 +43,8 @@ class MainFragment : Fragment() {
 
     private lateinit var mContext: Context
     private lateinit var pref: Pref
+    private lateinit var profiles: ProfileStore
     private lateinit var controller: VpnController
-    private var easyssInfo: easyssInfo = easyssInfo()
 
     private var _binding: FragmentMainBinding? = null
     private val binding: FragmentMainBinding
@@ -77,7 +77,6 @@ class MainFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        easyssInfo = pref.getEasyssInfo()
         statsBinder = StatsBinder(binding, initiallyExpanded = isStatsExpanded) {
             isStatsExpanded = it
         }
@@ -123,14 +122,16 @@ class MainFragment : Fragment() {
         super.onAttach(context)
         mContext = context
         pref = Pref(context)
+        profiles = ProfileStore.get(context)
         controller = VpnController.get(context)
     }
 
     override fun onResume() {
         super.onResume()
-        // Server list and per-app routing can change while this screen is in the
-        // background (profile edit/delete, app list, proxy mode), so refresh the
-        // configuration-dependent parts and re-render the current state.
+        // The server list and the per-app routing can change while this screen
+        // is in the background (profile edit/delete, app list, proxy mode), so
+        // refresh the configuration-dependent parts and re-render the current
+        // state.
         updateServerSpinner()
         updateAppListCard()
         renderState(controller.state.value)
@@ -147,7 +148,7 @@ class MainFragment : Fragment() {
 
     private fun updateServerSpinner() {
         val binding = _binding ?: return
-        val serverProfiles = pref.getProfiles()
+        val serverProfiles = profiles.all()
         val adapter = ArrayAdapter(
             mContext,
             android.R.layout.simple_spinner_item,
@@ -170,7 +171,7 @@ class MainFragment : Fragment() {
 
         // Restore the active server without triggering the listener: selecting a
         // spinner entry programmatically must not be mistaken for a user switch.
-        val activeId = pref.getActiveProfile()?.id ?: return
+        val activeId = profiles.activeId() ?: return
         val activePosition = serverProfiles.indexOfFirst { it.id == activeId }
         if (activePosition != -1) {
             val listener = binding.serverSpinner.onItemSelectedListener
@@ -182,7 +183,7 @@ class MainFragment : Fragment() {
 
     private fun onServerSelected(profile: Profile) {
         val state = controller.state.value
-        if (profile.id == pref.getActiveProfile()?.id && state !is VpnState.Switching) {
+        if (profile.id == profiles.activeId() && state !is VpnState.Switching) {
             Log.d(TAG, "Spinner selected the active server. No change.")
             return
         }
@@ -216,7 +217,7 @@ class MainFragment : Fragment() {
             controller.disconnect()
             return
         }
-        if (!easyssInfo.valid) {
+        if (profiles.active() == null) {
             Toast.makeText(mContext, getString(R.string.easyss_need_config), Toast.LENGTH_SHORT).show()
             return
         }
@@ -235,9 +236,6 @@ class MainFragment : Fragment() {
 
     private fun renderState(state: VpnState) {
         if (_binding == null) return
-        // The profile can be edited/deleted while the tunnel keeps running, so
-        // the "is anything configured" answer is re-read on every render.
-        easyssInfo = pref.getEasyssInfo()
         binding.serverSpinner.isEnabled = when (state) {
             is VpnState.Idle, is VpnState.Failed, is VpnState.Running -> true
             is VpnState.Connecting, is VpnState.Switching, VpnState.Stopping -> false
@@ -253,7 +251,7 @@ class MainFragment : Fragment() {
                     val message = controller.consumeFailure()
                     if (message != null) {
                         val profileName = state.profileId?.let { id ->
-                            pref.getProfiles().firstOrNull { it.id == id }?.name
+                            profiles.find(id)?.name
                         }
                         showStartFailedDialog(message, profileName)
                     }
@@ -271,7 +269,9 @@ class MainFragment : Fragment() {
 
     private fun renderStopped() {
         binding.serviceButton.text = getString(R.string.service_enable)
-        binding.serviceButton.isEnabled = easyssInfo.valid
+        // The active profile can be deleted while the tunnel keeps running, so
+        // "is anything configured" is re-read on every render.
+        binding.serviceButton.isEnabled = profiles.active() != null
         binding.serviceButton.icon = getDrawable(
             mContext, R.drawable.ic_outline_play_arrow_24
         )
@@ -321,8 +321,8 @@ class MainFragment : Fragment() {
 
     private fun updateAppListCard() {
         if (_binding == null) return
-        val proxyMode = pref.getProxyMode()
-        val selectedApps = pref.getAppsForMode(proxyMode)
+        val proxyMode = pref.proxyMode
+        val selectedApps = AppSelectionStore(pref).selected(proxyMode)
         val isProxyOnly = proxyMode == Pref.PROXY_MODE_PROXY_ONLY
 
         binding.text1.text = if (isProxyOnly) {
@@ -420,7 +420,7 @@ class MainFragment : Fragment() {
         // Stats endpoint port follows the active profile's SOCKS port + 1000
         // (e.g. default 4080 -> 5080). Recompute each fetch so a server switch
         // that restarts the service with a new profile is picked up.
-        val statsUrl = pref.getActiveProfile()?.statsUrl() ?: Profile.defaultStatsUrl()
+        val statsUrl = profiles.active()?.statsUrl() ?: Profile.defaultStatsUrl()
         val snapshot = statsClient.fetch(statsUrl)
         withContext(Dispatchers.Main) {
             if (snapshot != null) statsBinder?.render(snapshot) else statsBinder?.renderUnavailable()

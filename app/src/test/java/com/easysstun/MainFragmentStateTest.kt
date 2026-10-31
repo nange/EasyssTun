@@ -47,6 +47,7 @@ class MainFragmentStateTest {
         context = ApplicationProvider.getApplicationContext()
         PreferenceManager.getDefaultSharedPreferences(context).edit().clear().commit()
         VpnController.resetForTests()
+        ProfileStore.resetForTests()
         TunnelState.update(false)
         ShadowVpnService.setPrepareResult(null)
         vpn = VpnController.get(context)
@@ -58,6 +59,7 @@ class MainFragmentStateTest {
     fun tearDown() {
         activityController.destroy()
         VpnController.resetForTests()
+        ProfileStore.resetForTests()
         TunnelState.update(false)
         PreferenceManager.getDefaultSharedPreferences(context).edit().clear().commit()
     }
@@ -99,7 +101,7 @@ class MainFragmentStateTest {
             serverPort = "443",
             password = "secret",
         )
-        Pref(context).addProfile(profile)
+        ProfileStore.get(context).add(profile)
         return profile
     }
 
@@ -113,7 +115,7 @@ class MainFragmentStateTest {
     @Test
     fun start_entersConnectingStateUntilServiceReportsRunning() {
         val profile = addProfile("A")
-        Pref(context).setActiveServer(profile.id)
+        ProfileStore.get(context).select(profile.id)
         // Recreate so the fragment picks up the profile added after launch.
         recreate()
 
@@ -142,7 +144,7 @@ class MainFragmentStateTest {
     @Test
     fun cancelWhileConnecting_returnsToStoppedState() {
         val profile = addProfile("A")
-        Pref(context).setActiveServer(profile.id)
+        ProfileStore.get(context).select(profile.id)
         recreate()
 
         // Start, then cancel through the same button (the real entry point).
@@ -170,7 +172,7 @@ class MainFragmentStateTest {
     @Test
     fun connecting_recoversWhenTheServiceIsDestroyed() {
         val profile = addProfile("A")
-        Pref(context).setActiveServer(profile.id)
+        ProfileStore.get(context).select(profile.id)
         recreate()
 
         button().performClick()
@@ -190,7 +192,7 @@ class MainFragmentStateTest {
     fun switchingServer_activatesTheNewProfileAndRebuildsTheTunnel() {
         val first = addProfile("A")
         val second = addProfile("B")
-        Pref(context).setActiveServer(first.id)
+        ProfileStore.get(context).select(first.id)
         Pref(context).userWantsVpn = true
         vpn.onServiceRunning(first.id)
         recreate()
@@ -205,12 +207,12 @@ class MainFragmentStateTest {
         assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
         assertTrue("a switch can be cancelled", button().isEnabled)
         assertFalse("the spinner is disabled while switching", spinner().isEnabled)
-        assertEquals("B", Pref(context).getActiveProfile()?.name)
+        assertEquals("B", ProfileStore.get(context).active()?.name)
 
         // The old tunnel is gone: the switch continues with the new profile.
         vpn.onServiceStopped()
         idle()
-        assertEquals("B", Pref(context).getActiveProfile()?.name)
+        assertEquals("B", ProfileStore.get(context).active()?.name)
         assertEquals(activity.getString(R.string.service_connecting), serviceTitle())
 
         vpn.onServiceRunning(second.id)
@@ -223,7 +225,7 @@ class MainFragmentStateTest {
     fun rotationDuringSwitch_keepsTheSwitchingState() {
         val first = addProfile("A")
         val second = addProfile("B")
-        Pref(context).setActiveServer(first.id)
+        ProfileStore.get(context).select(first.id)
         Pref(context).userWantsVpn = true
         vpn.onServiceRunning(first.id)
         recreate()
@@ -238,7 +240,7 @@ class MainFragmentStateTest {
 
         vpn.onServiceStopped()
         idle()
-        assertEquals("B", Pref(context).getActiveProfile()?.name)
+        assertEquals("B", ProfileStore.get(context).active()?.name)
 
         vpn.onServiceRunning(second.id)
         idle()
@@ -249,7 +251,7 @@ class MainFragmentStateTest {
     @Test
     fun rotation_whileRunning_keepsRunningUi() {
         val profile = addProfile("A")
-        Pref(context).setActiveServer(profile.id)
+        ProfileStore.get(context).select(profile.id)
         Pref(context).userWantsVpn = true
         vpn.onServiceRunning(profile.id)
         recreate()
@@ -269,7 +271,7 @@ class MainFragmentStateTest {
     @Test
     fun startFailure_showsTheErrorOnceAndReturnsToStopped() {
         val profile = addProfile("A")
-        Pref(context).setActiveServer(profile.id)
+        ProfileStore.get(context).select(profile.id)
         recreate()
 
         button().performClick()

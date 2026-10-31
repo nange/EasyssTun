@@ -39,7 +39,7 @@ class AppListFragment : Fragment() {
         val pref = Pref(requireContext())
 
         adapter = AppListAdapter(requireContext(), lifecycleScope)
-        adapter.setProxyMode(pref.getProxyMode())
+        adapter.setProxyMode(pref.proxyMode)
         // Avoid overly large recycled view pool for a simple item layout
         recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         recyclerView.adapter = adapter
@@ -57,7 +57,7 @@ class AppListFragment : Fragment() {
         val modeDescription = view.findViewById<TextView>(R.id.modeDescription)
 
         // Initialize toggle state WITHOUT triggering the listener
-        val currentMode = pref.getProxyMode()
+        val currentMode = pref.proxyMode
         toggleGroup.clearOnButtonCheckedListeners()
         if (currentMode == Pref.PROXY_MODE_PROXY_ONLY) {
             toggleGroup.check(R.id.btnProxyOnlyMode)
@@ -70,16 +70,18 @@ class AppListFragment : Fragment() {
             if (isChecked) {
                 when (checkedId) {
                     R.id.btnBypassMode -> {
-                        pref.setProxyMode(Pref.PROXY_MODE_BYPASS)
+                        pref.proxyMode = Pref.PROXY_MODE_BYPASS
                         modeDescription.text = getString(R.string.mode_bypass_desc)
                     }
                     R.id.btnProxyOnlyMode -> {
-                        pref.setProxyMode(Pref.PROXY_MODE_PROXY_ONLY)
+                        pref.proxyMode = Pref.PROXY_MODE_PROXY_ONLY
                         modeDescription.text = getString(R.string.mode_proxy_only_desc)
                     }
                 }
+                // The routing configuration changed: let a running tunnel reload it.
+                ConfigChangeNotifier.notifyChanged(requireContext())
                 // Reload the app list with the new mode's selections
-                adapter.setProxyMode(pref.getProxyMode())
+                adapter.setProxyMode(pref.proxyMode)
                 reloadList(requireView())
             }
         }
@@ -125,7 +127,7 @@ class AppListFragment : Fragment() {
         )
 
         val pref = Pref(requireContext())
-        val selectedApps = pref.getApps()
+        val selectedApps = AppSelectionStore(pref).selected(pref.proxyMode)
         val showSystemApps = pref.showSystemApps
 
         var appList = packages

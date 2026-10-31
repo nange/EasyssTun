@@ -67,6 +67,7 @@
     <string name="error_no_active_profile">No server profile configured</string>
     <string name="error_start_service_failed">Could not start the VPN service</string>
     <string name="error_write_tproxy_config">Could not write the tunnel configuration</string>
+    <string name="error_write_profile_config">Could not write the server profile configuration</string>
     <string name="error_socks_not_ready">The local proxy did not start in time</string>
     <string name="error_establish_tun">Could not create the VPN interface</string>
     <string name="error_tproxy_start">The tunnel engine failed to start</string>

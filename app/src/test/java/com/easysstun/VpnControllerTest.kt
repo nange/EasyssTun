@@ -33,6 +33,7 @@ class VpnControllerTest {
 
     private lateinit var context: Context
     private lateinit var pref: Pref
+    private lateinit var profiles: ProfileStore
     private lateinit var controller: VpnController
 
     @Before
@@ -40,15 +41,18 @@ class VpnControllerTest {
         context = ApplicationProvider.getApplicationContext()
         PreferenceManager.getDefaultSharedPreferences(context).edit().clear().commit()
         VpnController.resetForTests()
+        ProfileStore.resetForTests()
         TunnelState.update(false)
         ShadowVpnService.setPrepareResult(null)
         pref = Pref(context)
+        profiles = ProfileStore.get(context)
         controller = VpnController.get(context)
     }
 
     @After
     fun tearDown() {
         VpnController.resetForTests()
+        ProfileStore.resetForTests()
         TunnelState.update(false)
         PreferenceManager.getDefaultSharedPreferences(context).edit().clear().commit()
     }
@@ -61,7 +65,7 @@ class VpnControllerTest {
             serverPort = "443",
             password = "secret",
         )
-        pref.addProfile(profile)
+        profiles.add(profile)
         return profile
     }
 
@@ -89,7 +93,7 @@ class VpnControllerTest {
     @Test
     fun connect_startsTheServiceAndEntersConnecting() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
 
         assertEquals(ConnectRequest.Started, controller.connect())
 
@@ -103,7 +107,7 @@ class VpnControllerTest {
     @Test
     fun connect_whileConnectingOrRunning_isIgnored() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
 
         controller.connect()
         assertEquals(ConnectRequest.AlreadyActive, controller.connect())
@@ -120,7 +124,7 @@ class VpnControllerTest {
     @Test
     fun connect_needsPermission_doesNotStartUntilGranted() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         val permissionIntent = Intent("android.net.vpn.SETUP")
         ShadowVpnService.setPrepareResult(permissionIntent)
 
@@ -138,7 +142,7 @@ class VpnControllerTest {
     @Test
     fun connect_permissionDenied_revertsToIdleAndClearsTheIntent() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         ShadowVpnService.setPrepareResult(Intent("android.net.vpn.SETUP"))
         controller.connect()
 
@@ -151,7 +155,7 @@ class VpnControllerTest {
     @Test
     fun disconnect_whileRunning_entersStoppingAndStopsTheService() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.onServiceRunning(profile.id)
 
@@ -185,7 +189,7 @@ class VpnControllerTest {
     @Test
     fun resumeConnect_recoversADroppedPermissionResult() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         ShadowVpnService.setPrepareResult(Intent("android.net.vpn.SETUP"))
         controller.connect()
         assertTrue(startedServiceIntents().isEmpty())
@@ -202,7 +206,7 @@ class VpnControllerTest {
     @Test
     fun resumeConnect_isANoOpOnceTheStartWasIssued() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
 
         assertEquals(ConnectRequest.AlreadyActive, controller.resume())
@@ -226,7 +230,7 @@ class VpnControllerTest {
     @Test
     fun onServiceRunning_afterAStopRequest_isIgnored() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.disconnect()
 
@@ -297,7 +301,7 @@ class VpnControllerTest {
     @Test
     fun onServiceDestroyed_whileStopping_returnsToIdle() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.disconnect()
         assertEquals(VpnState.Stopping, controller.state.value)
@@ -319,7 +323,7 @@ class VpnControllerTest {
     @Test
     fun onPermissionRevoked_clearsTheIntentAndStops() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.onServiceRunning(profile.id)
 
@@ -333,7 +337,7 @@ class VpnControllerTest {
     fun onServiceStopped_reportsWhetherItStartedAReplacement() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
         controller.connect()
         controller.onServiceRunning(first.id)
         controller.switchTo(second.id)
@@ -351,7 +355,7 @@ class VpnControllerTest {
     @Test
     fun onServiceStarting_duringAStop_isIgnored() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.onServiceRunning(profile.id)
         controller.disconnect()
@@ -365,7 +369,7 @@ class VpnControllerTest {
     fun onServiceStarting_duringASwitch_isIgnored() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
         controller.connect()
         controller.onServiceRunning(first.id)
         controller.switchTo(second.id)
@@ -378,7 +382,7 @@ class VpnControllerTest {
     @Test
     fun onServiceStarting_afterARestart_dropsReadiness() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.onServiceRunning(profile.id)
         assertTrue(TunnelState.ready.value)
@@ -409,7 +413,7 @@ class VpnControllerTest {
     fun switchTo_whileRunning_stopsFirstAndStartsTheNewProfileAfterwards() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
         controller.connect()
         controller.onServiceRunning(first.id)
 
@@ -419,7 +423,7 @@ class VpnControllerTest {
         assertEquals(
             "the target becomes active immediately so a process death resumes on it",
             second.id,
-            pref.getActiveProfile()?.id
+            profiles.active()?.id
         )
         assertEquals(EasyssVpnService.ACTION_DISCONNECT, startedServiceIntents().last().action)
 
@@ -436,19 +440,19 @@ class VpnControllerTest {
     fun switchTo_whileIdle_onlySelectsTheProfile() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
 
         controller.switchTo(second.id)
 
         assertEquals(VpnState.Idle, controller.state.value)
-        assertEquals(second.id, pref.getActiveProfile()?.id)
+        assertEquals(second.id, profiles.active()?.id)
         assertTrue("selecting a server while stopped is not a VPN command", startedServiceIntents().isEmpty())
     }
 
     @Test
     fun switchTo_sameProfile_isIgnored() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         controller.connect()
         controller.onServiceRunning(profile.id)
 
@@ -461,7 +465,7 @@ class VpnControllerTest {
     fun switchTo_whileConnecting_restartsForTheNewProfile() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
         controller.connect()
 
         controller.switchTo(second.id)
@@ -475,7 +479,7 @@ class VpnControllerTest {
     fun disconnect_duringASwitch_cancelsIt() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
         controller.connect()
         controller.onServiceRunning(first.id)
         controller.switchTo(second.id)
@@ -494,12 +498,12 @@ class VpnControllerTest {
     fun switchTo_deletedTarget_abandonsTheSwitch() {
         val first = addProfile("A")
         val second = addProfile("B")
-        pref.setActiveServer(first.id)
+        profiles.select(first.id)
         controller.connect()
         controller.onServiceRunning(first.id)
         controller.switchTo(second.id)
 
-        pref.deleteProfile(second.id)
+        profiles.delete(second.id)
         controller.onServiceStopped()
 
         assertEquals(VpnState.Idle, controller.state.value)
@@ -510,7 +514,7 @@ class VpnControllerTest {
     @Test
     fun freshProcess_startsIdleAndResumesFromThePersistedIntent() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         pref.userWantsVpn = true
 
         // A new process cannot inherit the tunnel: the VPN service lives in it,
@@ -529,7 +533,7 @@ class VpnControllerTest {
     @Test
     fun resume_afterAFailure_doesNotRetryAutomatically() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
         pref.userWantsVpn = true
         controller.onServiceFailed("boom", profile.id)
 
@@ -544,7 +548,7 @@ class VpnControllerTest {
     @Test
     fun resume_whileTheUserDoesNotWantTheVpn_doesNothing() {
         val profile = addProfile("A")
-        pref.setActiveServer(profile.id)
+        profiles.select(profile.id)
 
         assertEquals(ConnectRequest.AlreadyActive, controller.resume())
         assertEquals(VpnState.Idle, controller.state.value)

@@ -66,6 +66,7 @@
     <string name="error_no_active_profile">未配置服务器</string>
     <string name="error_start_service_failed">无法启动 VPN 服务</string>
     <string name="error_write_tproxy_config">写入隧道配置失败</string>
+    <string name="error_write_profile_config">写入服务器配置失败</string>
     <string name="error_socks_not_ready">本地代理启动超时</string>
     <string name="error_establish_tun">创建 VPN 网卡失败</string>
     <string name="error_tproxy_start">隧道引擎启动失败</string>

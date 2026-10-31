@@ -1,40 +1,39 @@
 package com.easysstun
+
 import android.content.Context
-import android.util.Log
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 
-@OptIn(ExperimentalSerializationApi::class)
-class Pref(private val ctx: Context) {
+/**
+ * Typed key/value access to the app's SharedPreferences.
+ *
+ * This class stores preferences and nothing else. The server profile repository
+ * lives in [ProfileStore], the per-app routing selection in [AppSelectionStore]
+ * and the config files handed to the native stack in [ProfileConfigWriter].
+ * Those are built on the generic key/value helpers at the bottom, so every
+ * stored key is defined next to the data model that owns it instead of leaking
+ * through this class.
+ *
+ * The raw [SharedPreferences] handle is private on purpose: callers go through a
+ * typed accessor (or one of the stores above), which keeps the stored
+ * representation — and the migrations between its versions — in one place.
+ */
+class Pref(context: Context) {
     companion object {
         const val SERVICE_ENABLED = "enable"
         const val VERSION = "version"
-        const val SERVER_PROFILES = "server_profiles"
-        const val ACTIVE_SERVER_ID = "active_server_id"
-        const val SELECTED_APPS = "selected_apps"
-        const val SELECTED_APPS_BYPASS = "selected_apps_bypass"
-        const val SELECTED_APPS_PROXY_ONLY = "selected_apps_proxy_only"
-        const val PROXY_MODE_KEY = "proxy_mode"
-        const val PROXY_MODE_BYPASS = "bypass"
-        const val PROXY_MODE_PROXY_ONLY = "proxy_only"
         const val SHOW_SYSTEM_APPS = "show_system_apps"
         const val UPDATE_AUTO_CHECK = "update_auto_check"
         const val UPDATE_LAST_CHECK_AT = "update_last_check_at"
         const val UPDATE_DISMISSED_VERSION_CODE = "update_dismissed_version_code"
-        const val PREFS_UPDATED = "prefs_updated"
-        const val CUSTOM_CA_FILE = "easyss_custom_ca.conf"
-        const val DIRECT_FILE = "easyss_direct.conf"
-        const val PROXY_FILE = "easyss_proxy.conf"
-        const val TPROXY_FILE = "tproxy.conf"
+        const val PROXY_MODE_KEY = "proxy_mode"
+        const val PROXY_MODE_BYPASS = "bypass"
+        const val PROXY_MODE_PROXY_ONLY = "proxy_only"
     }
 
-    val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
+    private val prefs: SharedPreferences =
+        PreferenceManager.getDefaultSharedPreferences(context)
 
     var version: String
         get() {
@@ -87,136 +86,39 @@ class Pref(private val ctx: Context) {
             prefs.edit { putInt(UPDATE_DISMISSED_VERSION_CODE, value) }
         }
 
-    fun getApps(): Set<String> {
-        return getAppsForMode(getProxyMode())
-    }
-
-    fun getAppsForMode(mode: String): Set<String> {
-        val key = if (mode == PROXY_MODE_PROXY_ONLY) SELECTED_APPS_PROXY_ONLY else SELECTED_APPS_BYPASS
-        val apps = prefs.getStringSet(key, null)
-        if (apps != null) {
-            Log.d("Pref", "getAppsForMode: mode=$mode, key=$key, found=$apps", Throwable("getAppsForMode call stack"))
-            return apps
+    /**
+     * Per-app routing mode: [PROXY_MODE_BYPASS] (route everything except the
+     * selected apps) or [PROXY_MODE_PROXY_ONLY] (route only the selected apps).
+     *
+     * The setter is a plain preference write. It does not notify the running
+     * tunnel: a caller that changed the routing configuration on purpose calls
+     * [ConfigChangeNotifier] itself, so a write never restarts the tunnel behind
+     * the caller's back.
+     */
+    var proxyMode: String
+        get() = prefs.getString(PROXY_MODE_KEY, PROXY_MODE_BYPASS) ?: PROXY_MODE_BYPASS
+        set(value) {
+            prefs.edit { putString(PROXY_MODE_KEY, value) }
         }
-        // Migration: if the mode-specific key is empty but the old key has data,
-        // migrate old data to bypass mode key (since bypass was the only mode before)
-        if (key == SELECTED_APPS_BYPASS) {
-            val oldApps = prefs.getStringSet(SELECTED_APPS, null)
-            if (oldApps != null && oldApps.isNotEmpty()) {
-                Log.i("Pref", "getAppsForMode: migrating old data to $key: $oldApps", Throwable("migration call stack"))
-                prefs.edit(commit = true) {
-                    putStringSet(SELECTED_APPS_BYPASS, oldApps)
-                    remove(SELECTED_APPS)
-                }
-                return oldApps
-            }
-        }
-        Log.d("Pref", "getAppsForMode: mode=$mode, key=$key, returning empty", Throwable("getAppsForMode empty call stack"))
-        return emptySet()
-    }
 
-    fun setAppsForMode(mode: String, apps: Set<String>) {
-        val key = if (mode == PROXY_MODE_PROXY_ONLY) SELECTED_APPS_PROXY_ONLY else SELECTED_APPS_BYPASS
-        prefs.edit { putStringSet(key, apps) }
-    }
+    // ── Key/value primitives used by the data-model stores ───────
 
-    fun getProxyMode(): String {
-        return prefs.getString(PROXY_MODE_KEY, PROXY_MODE_BYPASS) ?: PROXY_MODE_BYPASS
-    }
+    internal fun getString(key: String, defaultValue: String? = null): String? =
+        prefs.getString(key, defaultValue)
 
-    fun setProxyMode(mode: String) {
-        Log.i("Pref", "setProxyMode: $mode")
-        prefs.edit { putString(PROXY_MODE_KEY, mode) }
-        // Notify VPN service to restart with new mode
-        val intent = android.content.Intent(PREFS_UPDATED).apply {
-            setPackage(ctx.packageName)
-        }
-        ctx.sendBroadcast(intent)
-    }
-
-    fun getProfiles(): List<Profile> {
-        val profilesJson = prefs.getString(SERVER_PROFILES, null)
-        return if (profilesJson != null) {
-            try {
-                appJson.decodeFromString<List<Profile>>(profilesJson)
-            } catch (e: Exception) { // Catches any exception during deserialization
-                // In a real scenario, one might log e.message here.
-                Log.e("Pref", "Error deserializing server profiles: ${e.message}", e) // Added logging
-                emptyList() // Return empty list if deserialization fails
-            }
-        } else {
-            emptyList()
-        }
-    }
-
-    private fun saveProfiles(profiles: List<Profile>) {
-        val profilesJson = appJson.encodeToString(profiles)
+    internal fun putString(key: String, value: String?) {
         prefs.edit {
-            putString(SERVER_PROFILES, profilesJson)
+            if (value == null) remove(key) else putString(key, value)
         }
     }
 
-    fun addProfile(profile: Profile) {
-        val profiles = getProfiles().toMutableList()
-        profiles.add(profile)
-        saveProfiles(profiles)
+    internal fun getStringSet(key: String): Set<String>? = prefs.getStringSet(key, null)
+
+    internal fun putStringSet(key: String, value: Set<String>) {
+        prefs.edit { putStringSet(key, value) }
     }
 
-    fun updateProfile(profile: Profile) {
-        val profiles = getProfiles().toMutableList()
-        val index = profiles.indexOfFirst { it.id == profile.id }
-        if (index != -1) {
-            profiles[index] = profile
-            saveProfiles(profiles)
-        }
+    internal fun remove(key: String) {
+        prefs.edit { remove(key) }
     }
-
-    fun deleteProfile(profileId: String) {
-        val profiles = getProfiles().toMutableList()
-        profiles.removeAll { it.id == profileId }
-        saveProfiles(profiles)
-        if (prefs.getString(ACTIVE_SERVER_ID, null) == profileId) {
-            // Keep the invariant "an active server always exists while profiles remain":
-            // fall back to the first remaining profile instead of leaving the active
-            // server dangling. Only clear it when the last profile is deleted.
-            val fallback = profiles.firstOrNull()
-            prefs.edit {
-                if (fallback != null) putString(ACTIVE_SERVER_ID, fallback.id)
-                else remove(ACTIVE_SERVER_ID)
-            }
-        }
-    }
-
-    fun setActiveServer(profileId: String) {
-        prefs.edit { putString(ACTIVE_SERVER_ID, profileId) }
-    }
-
-    fun getActiveProfile(): Profile? {
-        val activeId = prefs.getString(ACTIVE_SERVER_ID, null)
-        return if (activeId != null) {
-            getProfiles().find { it.id == activeId }
-        } else {
-            null
-        }
-    }
-
-    fun getEasyssInfo(): easyssInfo {
-        val activeProfile = getActiveProfile()
-        val easyssInfo = easyssInfo()
-
-        if (activeProfile == null) {
-            easyssInfo.valid = false
-            return easyssInfo
-        }
-
-        easyssInfo.valid = true
-        easyssInfo.info = "${activeProfile.server}:${activeProfile.serverPort}"
-        return easyssInfo
-    }
-
 }
-
-data class easyssInfo(
-    var valid: Boolean = false,
-    var info: String = "",
-)

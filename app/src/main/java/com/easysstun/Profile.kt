@@ -1,11 +1,7 @@
 package com.easysstun
 
-import android.util.Log
 import io.github.nange.easyss.config.SimpleConfig
 import kotlinx.serialization.Serializable
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 import java.util.Locale
 
 @Serializable
@@ -110,8 +106,12 @@ internal fun parseBooleanFlag(value: String): Boolean = value.equals("true", ign
 
 /**
  * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
+ *
+ * Pure: the auxiliary files (custom CA, direct/proxy rules) are written by
+ * [ProfileConfigWriter] beforehand, and [paths] tells this function where they
+ * are. A missing path means the profile does not use that file.
  */
-fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
+fun Profile.buildSimpleConfig(paths: ProfileConfigPaths = ProfileConfigPaths()): SimpleConfig {
     val config = SimpleConfig()
 
     config.setServer(server)
@@ -136,43 +136,16 @@ fun Profile.buildSimpleConfig(cacheDir: File): SimpleConfig {
     // idle/dial timeouts are derived from. 0 keeps the native default.
     config.setTimeout(timeoutSeconds().toLong())
 
-    if (customCa.isNotBlank()) {
-        val customCaFile = File(cacheDir, Pref.CUSTOM_CA_FILE)
-        try {
-            customCaFile.createNewFile()
-            FileOutputStream(customCaFile, false).use { fos ->
-                fos.write(customCa.toByteArray())
-            }
-            config.setCAPath(customCaFile.absolutePath)
-        } catch (e: IOException) {
-            Log.e("Profile", "Error writing custom CA file", e)
-        }
+    if (paths.customCa != null) {
+        config.setCAPath(paths.customCa)
     }
 
-    if (directFile.isNotBlank()) {
-        val directConfFile = File(cacheDir, Pref.DIRECT_FILE)
-        try {
-            directConfFile.createNewFile()
-            FileOutputStream(directConfFile, false).use { fos ->
-                fos.write(directFile.toByteArray())
-            }
-            config.setDirectFile(directConfFile.absolutePath)
-        } catch (e: IOException) {
-            Log.e("Profile", "Error writing direct file", e)
-        }
+    if (paths.directFile != null) {
+        config.setDirectFile(paths.directFile)
     }
 
-    if (proxyFile.isNotBlank()) {
-        val proxyConfFile = File(cacheDir, Pref.PROXY_FILE)
-        try {
-            proxyConfFile.createNewFile()
-            FileOutputStream(proxyConfFile, false).use { fos ->
-                fos.write(proxyFile.toByteArray())
-            }
-            config.setProxyFile(proxyConfFile.absolutePath)
-        } catch (e: IOException) {
-            Log.e("Profile", "Error writing proxy file", e)
-        }
+    if (paths.proxyFile != null) {
+        config.setProxyFile(paths.proxyFile)
     }
 
     return config
