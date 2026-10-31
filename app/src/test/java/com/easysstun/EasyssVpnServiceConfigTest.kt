@@ -7,10 +7,12 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -53,9 +55,12 @@ class EasyssVpnServiceConfigTest {
     }
 
     @Test
-    fun disconnectWhileIdle_keepsTheServiceDisabled() {
+    fun disconnectWhileEnabledButIdle_clearsTheEnabledFlag() {
         val pref = Pref(service)
-        pref.isServiceEnabled = false
+        // Initialise `pref` the same way a real start would, then force the
+        // "enabled but no tunnel" state the disconnect path must clean up.
+        service.startService()
+        pref.isServiceEnabled = true
 
         service.onStartCommand(
             Intent(EasyssVpnService.ACTION_DISCONNECT),
@@ -64,5 +69,11 @@ class EasyssVpnServiceConfigTest {
         )
 
         assertFalse(pref.isServiceEnabled)
+        assertTrue(
+            "a finalized stop must notify the UI",
+            shadowOf(service).broadcastIntents.any {
+                it.action == EasyssVpnService.ACTION_SERVICE_STOPPED
+            },
+        )
     }
 }

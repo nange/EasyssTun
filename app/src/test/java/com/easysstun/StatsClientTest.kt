@@ -19,13 +19,22 @@ import org.robolectric.annotation.Config
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class StatsClientTest {
 
+    // Bind explicitly to IPv4: getLoopbackAddress() may return ::1, while the
+    // client URL below is an IPv4 literal.
+    private val loopback: InetAddress = InetAddress.getByName("127.0.0.1")
+
     private lateinit var server: HttpServer
+
+    // Written by the test thread, read by the HTTP server's handler thread.
+    @Volatile
     private var status = 200
+
+    @Volatile
     private var body = "{}"
 
     @Before
     fun setUp() {
-        server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
+        server = HttpServer.create(InetSocketAddress(loopback, 0), 0)
         server.createContext("/stats") { exchange: HttpExchange ->
             val bytes = body.toByteArray()
             exchange.sendResponseHeaders(status, bytes.size.toLong())
@@ -39,7 +48,8 @@ class StatsClientTest {
         server.stop(0)
     }
 
-    private fun url(): String = "http://127.0.0.1:${server.address.port}/stats"
+    private fun url(): String =
+        "http://${loopback.hostAddress}:${server.address.port}/stats"
 
     @Test
     fun fetch_returnsParsedSnapshotOnHttp200() = runBlocking {
@@ -69,9 +79,16 @@ class StatsClientTest {
 
     @Test
     fun fetch_returnsNullWhenNothingIsListening() = runBlocking {
-        val port = server.address.port
-        server.stop(0)
+        // A dedicated server keeps the shared one running for tearDown (and
+        // avoids relying on HttpServer.stop() being idempotent).
+        val closed = HttpServer.create(InetSocketAddress(loopback, 0), 0)
+        val port = closed.address.port
+        closed.start()
+        closed.stop(0)
 
-        assertNull(StatsClient(connectTimeoutMs = 500, readTimeoutMs = 500).fetch("http://127.0.0.1:$port/stats"))
+        assertNull(
+            StatsClient(connectTimeoutMs = 500, readTimeoutMs = 500)
+                .fetch("http://127.0.0.1:$port/stats")
+        )
     }
 }

@@ -65,8 +65,8 @@ class MainFragment : Fragment() {
 
     private var statsPollingJob: Job? = null
 
-    // Written by the stats coroutine (IO), read on the main thread when the
-    // poller is (re)started.
+    // Written by the polling coroutine (IO) on success and by the main-thread
+    // service-state update on stop; read by the polling coroutine (IO).
     @Volatile
     private var statsHadSuccessfulFetch: Boolean = false
 

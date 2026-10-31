@@ -2,17 +2,21 @@ package com.easysstun
 
 import android.content.Context
 import android.os.Build
+import android.os.Looper
 import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.easysstun.databinding.FragmentMainBinding
+import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
@@ -33,6 +37,7 @@ class StatsBinderTest {
     fun render_formatsEveryField() {
         val binding = binding()
         val binder = StatsBinder(binding)
+        binder.setVisible(false)
 
         binder.render(
             StatsSnapshot(
@@ -56,7 +61,11 @@ class StatsBinderTest {
             )
         )
 
-        assertEquals(View.VISIBLE, binding.statsGrid.visibility)
+        assertEquals(
+            "render must not override the fragment-owned visibility",
+            View.GONE,
+            binding.statsGrid.visibility,
+        )
         assertEquals("12.3ms", binding.statsAvgRttMs.text.toString())
         assertEquals("1.5 M/s", binding.statsDownloadSpeed.text.toString())
         assertEquals("2.0 K/s", binding.statsUploadSpeed.text.toString())
@@ -122,6 +131,46 @@ class StatsBinderTest {
         binding.statsHeader.performClick()
         assertFalse(binder.isExpanded)
         assertEquals(View.GONE, binding.statsExpandable.visibility)
+    }
+
+    @Test
+    fun collapse_animationEndsHiddenAndResetsHeight() {
+        val binding = binding()
+        val binder = StatsBinder(binding)
+        binder.setVisible(true)
+
+        binding.statsHeader.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+        assertEquals(View.VISIBLE, binding.statsExpandable.visibility)
+        assertEquals(
+            "expanding must restore WRAP_CONTENT after the animation",
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            binding.statsExpandable.layoutParams.height,
+        )
+
+        // Give the section a real height: without layout the collapse path
+        // takes the height==0 early return and never runs onAnimationEnd.
+        binding.statsExpandable.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        binding.statsExpandable.layout(
+            0,
+            0,
+            1080,
+            binding.statsExpandable.measuredHeight,
+        )
+        assertTrue(binding.statsExpandable.height > 0)
+
+        binding.statsHeader.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+
+        assertEquals(View.GONE, binding.statsExpandable.visibility)
+        assertEquals(
+            "collapsing must restore WRAP_CONTENT after the animation",
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            binding.statsExpandable.layoutParams.height,
+        )
     }
 
     @Test

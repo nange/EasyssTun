@@ -45,9 +45,12 @@ internal class StatsBinder(
         if (visible) applyExpandedState()
     }
 
-    /** Renders a successful sample and makes sure the grid is visible. */
+    /**
+     * Renders a successful sample. Visibility is owned by the caller through
+     * [setVisible]: a late sample must not re-show a card the fragment has
+     * already hidden when the tunnel stopped.
+     */
     fun render(snapshot: StatsSnapshot) {
-        binding.statsGrid.visibility = View.VISIBLE
         binding.statsAvgRttMs.text = String.format(Locale.ROOT, "%.1fms", snapshot.avgRttMs)
         binding.statsDownloadSpeed.text = stripByteUnit(snapshot.downloadSpeed)
         binding.statsUploadSpeed.text = stripByteUnit(snapshot.uploadSpeed)
