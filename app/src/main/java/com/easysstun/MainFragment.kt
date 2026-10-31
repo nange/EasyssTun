@@ -9,18 +9,12 @@ import android.graphics.drawable.AnimatedVectorDrawable
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ValueAnimator
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -35,13 +29,10 @@ import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.easysstun.databinding.FragmentMainBinding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.Locale
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -51,8 +42,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import org.json.JSONObject
 
 class MainFragment : Fragment() {
     companion object {
@@ -67,12 +56,27 @@ class MainFragment : Fragment() {
     private lateinit var pref: Pref
     private lateinit var easyssInfo: easyssInfo
 
+    private var _binding: FragmentMainBinding? = null
+    private val binding: FragmentMainBinding
+        get() = checkNotNull(_binding) { "view binding used outside onCreateView/onDestroyView" }
+
+    private val statsClient = StatsClient()
+    private var statsBinder: StatsBinder? = null
+
     private var statsPollingJob: Job? = null
+
+    // Written by the stats coroutine (IO), read on the main thread when the
+    // poller is (re)started.
+    @Volatile
     private var statsHadSuccessfulFetch: Boolean = false
+
     // Set when EasyssVpnService broadcasts ACTION_SERVICE_STARTED (tunnel fully
-    // up); cleared on ACTION_SERVICE_STOPPED. Used to gate the first stats fetch
-    // on actual service readiness instead of a fixed blind delay.
+    // up); cleared on ACTION_SERVICE_STOPPED. Gates the first stats fetch on
+    // actual service readiness instead of a fixed blind delay. Written on the
+    // main thread, read by the stats coroutine while it waits for the tunnel.
+    @Volatile
     private var statsServiceReady: Boolean = false
+
     private var isStatsExpanded: Boolean = false
 
     private var pendingServerProfileId: String? = null
@@ -238,15 +242,17 @@ class MainFragment : Fragment() {
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
-    ): View? {
-        val view = inflater.inflate(R.layout.fragment_main, container, false)
-        // easyssInfo will be initialized in onViewCreated after view is created
-        return view
+    ): View {
+        _binding = FragmentMainBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         easyssInfo = pref.getEasyssInfo()
+        statsBinder = StatsBinder(binding, initiallyExpanded = isStatsExpanded) {
+            isStatsExpanded = it
+        }
         setup(view) // Spinner setup is now in setup()
         requireActivity().addMenuProvider(object : MenuProvider {
             override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
@@ -273,13 +279,15 @@ class MainFragment : Fragment() {
         if (pref.isServiceEnabled) {
             startStatsPolling()
         } else {
-            view.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.GONE
+            statsBinder?.setVisible(false)
         }
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
         stopStatsPolling()
+        statsBinder = null
+        _binding = null
+        super.onDestroyView()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -549,21 +557,6 @@ class MainFragment : Fragment() {
             it.setOnClickListener { findNavController().navigate(R.id.action_main_to_applist) }
         }
 
-        // Stats header — tap to expand / collapse
-        view.findViewById<LinearLayout>(R.id.stats_header).setOnClickListener {
-            isStatsExpanded = !isStatsExpanded
-            val expandable = view.findViewById<LinearLayout>(R.id.stats_expandable)
-            val arrow = view.findViewById<ImageView>(R.id.stats_header_arrow)
-            if (isStatsExpanded) {
-                arrow?.animate()?.rotation(180f)?.setDuration(400)
-                        ?.setInterpolator(OvershootInterpolator(1.5f))?.start()
-                animateHeight(expandable, true)
-            } else {
-                arrow?.animate()?.rotation(0f)?.setDuration(400)
-                        ?.setInterpolator(OvershootInterpolator(1.5f))?.start()
-                animateHeight(expandable, false)
-            }
-        }
     }
 
     private fun updateAppListCard(view: View) {
@@ -654,12 +647,8 @@ class MainFragment : Fragment() {
             val intent2 = Intent(mContext, EasyssVpnService::class.java)
 
             if (activeProfile != null) {
-                val json = Json {
-                    ignoreUnknownKeys = true
-                    encodeDefaults = true
-                }
                 try {
-                    val profileJson = json.encodeToString(activeProfile)
+                    val profileJson = appJson.encodeToString(activeProfile)
                     intent2.putExtra(
                             "com.easysstun.ACTIVE_SERVER_PROFILE_JSON_EXTRA",
                             profileJson
@@ -894,7 +883,7 @@ class MainFragment : Fragment() {
 
     private fun startStatsPolling() {
         if (statsPollingJob?.isActive == true) return
-        view?.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.VISIBLE
+        statsBinder?.setVisible(true)
         statsPollingJob =
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                     // Gate the first fetch on the service's ACTION_SERVICE_STARTED
@@ -924,187 +913,18 @@ class MainFragment : Fragment() {
         statsPollingJob?.cancel()
         statsPollingJob = null
         // Hide stats card when service is stopped
-        view?.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.GONE
+        statsBinder?.setVisible(false)
     }
 
     private suspend fun fetchAndUpdateStats() {
-        var conn: HttpURLConnection? = null
-        try {
-            // Stats endpoint port follows the active profile's SOCKS port + 1000
-            // (e.g. default 4080 -> 5080). Recompute each fetch so a server switch
-            // that restarts the service with a new profile is picked up.
-            val statsUrl = pref.getActiveProfile()?.statsUrl() ?: Profile.defaultStatsUrl()
-            val url = URL(statsUrl)
-            conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 2000
-            conn.readTimeout = 2000
-            conn.requestMethod = "GET"
-
-            val status = conn.responseCode
-            if (status != 200) {
-                Log.w(TAG, "Stats endpoint returned HTTP $status")
-                withContext(Dispatchers.Main) { updateStatsUnavailable() }
-                return
-            }
-
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-
-            val json = JSONObject(body)
-            statsHadSuccessfulFetch = true
-            withContext(Dispatchers.Main) { updateStatsDisplay(json) }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            Log.w(TAG, "Failed to fetch stats: ${e.message}")
-            withContext(Dispatchers.Main) { updateStatsUnavailable() }
-        } finally {
-            conn?.disconnect()
-        }
-    }
-
-    private fun updateStatsUnavailable() {
-        val v = view ?: return
-        val txt = getString(R.string.stats_unavailable)
-        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = txt
-        v.findViewById<TextView>(R.id.stats_download_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text = ""
-        v.findViewById<TextView>(R.id.stats_conns)?.text = ""
-        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text = ""
-        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = ""
-        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = ""
-        v.findViewById<TextView>(R.id.stats_priority_conns)?.text = ""
-        v.findViewById<TextView>(R.id.stats_bulk_conns)?.text = ""
-        v.findViewById<TextView>(R.id.stats_priority_active_streams)?.text = ""
-        v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text = ""
-        v.findViewById<TextView>(R.id.stats_uptime)?.text = ""
-        v.findViewById<TextView>(R.id.stats_active_streams)?.text = ""
-        v.findViewById<TextView>(R.id.stats_slot_retired_degraded)?.text = ""
-        v.findViewById<TextView>(R.id.stats_conn_rotated)?.text = ""
-        v.findViewById<TextView>(R.id.stats_slot_probe_slow)?.text = ""
-    }
-
-    private fun updateStatsDisplay(json: JSONObject) {
-        val v = view ?: return
-        // Ensure card is visible on successful data
-        v.findViewById<LinearLayout>(R.id.stats_grid)?.visibility = View.VISIBLE
-        val avgRttMs = json.optDouble("avg_rtt_ms", 0.0)
-        val conns = json.optInt("conns", 0)
-        val sent = json.optLong("bytes_sent", 0)
-        val recv = json.optLong("bytes_recv", 0)
-        val priorityConns = json.optInt("priority_conns", 0)
-        val bulkConns = json.optInt("bulk_conns", 0)
-        val priorityActive = json.optInt("priority_active_streams", 0)
-        val bulkActive = json.optInt("bulk_active_streams", 0)
-        val uptime = json.optDouble("uptime_seconds", 0.0)
-        val active = json.optInt("active_streams", 0)
-        val slotRetiredDegraded = json.optInt("slot_retired_degraded", 0)
-        val connRotated = json.optInt("conn_rotated", 0)
-        val slotProbeSlow = json.optInt("slot_probe_slow", 0)
-        val dlSpeed = stripByteUnit(json.optString("download_speed_human", ""))
-        val ulSpeed = stripByteUnit(json.optString("upload_speed_human", ""))
-        val peakDl = stripByteUnit(json.optString("peak_download_speed_human", ""))
-        val peakUl = stripByteUnit(json.optString("peak_upload_speed_human", ""))
-
-        // Row 1: RTT | DL Speed | UL Speed | TCP Conns
-        v.findViewById<TextView>(R.id.stats_avg_rtt_ms)?.text =
-                String.format(Locale.ROOT, "%.1fms", avgRttMs)
-        v.findViewById<TextView>(R.id.stats_download_speed)?.text = dlSpeed
-        v.findViewById<TextView>(R.id.stats_upload_speed)?.text = ulSpeed
-        v.findViewById<TextView>(R.id.stats_conns)?.text =
-                String.format(Locale.ROOT, "%d", conns)
-
-        // Row 2: Peak DL | Peak UL | Sent | Received
-        v.findViewById<TextView>(R.id.stats_peak_download_speed)?.text = peakDl
-        v.findViewById<TextView>(R.id.stats_peak_upload_speed)?.text = peakUl
-        v.findViewById<TextView>(R.id.stats_bytes_sent)?.text = formatBytes(sent)
-        v.findViewById<TextView>(R.id.stats_bytes_recv)?.text = formatBytes(recv)
-
-        // Row 3: Priority Conns | Bulk Conns | Priority Active | Bulk Active
-        v.findViewById<TextView>(R.id.stats_priority_conns)?.text =
-                String.format(Locale.ROOT, "%d", priorityConns)
-        v.findViewById<TextView>(R.id.stats_bulk_conns)?.text =
-                String.format(Locale.ROOT, "%d", bulkConns)
-        v.findViewById<TextView>(R.id.stats_priority_active_streams)?.text =
-                String.format(Locale.ROOT, "%d", priorityActive)
-        v.findViewById<TextView>(R.id.stats_bulk_active_streams)?.text =
-                String.format(Locale.ROOT, "%d", bulkActive)
-
-        // Row 4: Active | Degraded | Rotated | Probe Slow
-        v.findViewById<TextView>(R.id.stats_active_streams)?.text =
-                String.format(Locale.ROOT, "%d", active)
-        v.findViewById<TextView>(R.id.stats_slot_retired_degraded)?.text =
-                String.format(Locale.ROOT, "%d", slotRetiredDegraded)
-        v.findViewById<TextView>(R.id.stats_conn_rotated)?.text =
-                String.format(Locale.ROOT, "%d", connRotated)
-        v.findViewById<TextView>(R.id.stats_slot_probe_slow)?.text =
-                String.format(Locale.ROOT, "%d", slotProbeSlow)
-
-        // Row 5: Uptime (span 2)
-        v.findViewById<TextView>(R.id.stats_uptime)?.text = formatDuration(uptime)
-
-        // Sync arrow rotation with current expand state
-        val arrow = v.findViewById<ImageView>(R.id.stats_header_arrow)
-        val targetRotation = if (isStatsExpanded) 180f else 0f
-        if (arrow?.rotation != targetRotation) {
-            arrow?.animate()?.rotation(targetRotation)?.setDuration(400)
-                    ?.setInterpolator(OvershootInterpolator(1.5f))?.start()
-        }
-    }
-
-    /**
-     * Strips "B" from byte-unit strings for compact display.
-     * "1.5 MB/s" → "1.5 M/s", "1.5 MB" → "1.5 M", "999 B" → "999 B"
-     */
-    private fun stripByteUnit(s: String): String {
-        if (s.isEmpty()) return s
-        return s.replace(Regex("(?<=[KMGT])B/s"), "/s")
-                .replace(Regex("(?<=[KMGT])B$"), "")
-    }
-
-    /**
-     * Animates a view's height for smooth expand/collapse.
-     */
-    private fun animateHeight(view: View?, expand: Boolean) {
-        view ?: return
-        view.measure(
-                View.MeasureSpec.makeMeasureSpec((view.parent as View).width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
-        val targetHeight = view.measuredHeight
-
-        if (expand) {
-            view.visibility = View.VISIBLE
-            view.layoutParams.height = 0
-            ValueAnimator.ofInt(0, targetHeight).apply {
-                duration = 350
-                interpolator = DecelerateInterpolator()
-                addUpdateListener {
-                    view.layoutParams.height = it.animatedValue as Int
-                    view.requestLayout()
-                }
-                start()
-            }
-        } else {
-            val startHeight = view.height
-            if (startHeight <= 0) {
-                view.visibility = View.GONE
-                return
-            }
-            ValueAnimator.ofInt(startHeight, 0).apply {
-                duration = 350
-                interpolator = AccelerateInterpolator()
-                addUpdateListener {
-                    view.layoutParams.height = it.animatedValue as Int
-                    view.requestLayout()
-                }
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        view.visibility = View.GONE
-                    }
-                })
-                start()
-            }
+        // Stats endpoint port follows the active profile's SOCKS port + 1000
+        // (e.g. default 4080 -> 5080). Recompute each fetch so a server switch
+        // that restarts the service with a new profile is picked up.
+        val statsUrl = pref.getActiveProfile()?.statsUrl() ?: Profile.defaultStatsUrl()
+        val snapshot = statsClient.fetch(statsUrl)
+        if (snapshot != null) statsHadSuccessfulFetch = true
+        withContext(Dispatchers.Main) {
+            if (snapshot != null) statsBinder?.render(snapshot) else statsBinder?.renderUnavailable()
         }
     }
 }

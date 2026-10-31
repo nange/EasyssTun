@@ -28,15 +28,11 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.URL
 import java.util.Locale
 
 
@@ -49,6 +45,7 @@ class EasyssVpnService : VpnService() {
     private lateinit var pref: Pref
     private var mobileJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private val statsClient = StatsClient()
     private var notificationUpdaterJob: Job? = null
     private var isRestarting: Boolean = false
     // Guards the async startup sequence: onStartCommand / startService must
@@ -138,9 +135,8 @@ class EasyssVpnService : VpnService() {
         val profileJson = receivedProfileJson
         if (profileJson != null && profileJson.isNotBlank()) {
             Log.d(TAG, "Attempting to deserialize profile from Intent JSON.")
-            val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
             try {
-                loadedProfile = json.decodeFromString<Profile>(profileJson)
+                loadedProfile = appJson.decodeFromString<Profile>(profileJson)
                 profileSource = "Intent JSON"
                 loadedProfile.let { Log.i(TAG, "Successfully deserialized profile from Intent. ID: ${it.id}") }
             } catch (e: kotlinx.serialization.SerializationException) {
@@ -690,29 +686,15 @@ socks5:
         }
     }
 
-    private fun fetchStatsContentText(statsUrl: String): String? {
-        var conn: HttpURLConnection? = null
-        return try {
-            val url = URL(statsUrl)
-            conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 2_000
-            conn.readTimeout = 2_000
-            conn.requestMethod = "GET"
-            if (conn.responseCode != 200) return null
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
-            val avgRttMs = json.optDouble("avg_rtt_ms", 0.0)
-            val dlSpeed = json.optString("download_speed_human", "")
-            val rttText = if (avgRttMs > 0) String.format(Locale.ROOT, "%.1fms", avgRttMs) else "--"
-            val speedText = if (dlSpeed.isNotBlank()) dlSpeed else "--"
-            getString(R.string.notification_stats_text, rttText, speedText)
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            Log.w(TAG, "Failed to fetch stats for notification: ${e.message}")
-            null
-        } finally {
-            conn?.disconnect()
+    private suspend fun fetchStatsContentText(statsUrl: String): String? {
+        val snapshot = statsClient.fetch(statsUrl) ?: return null
+        val rttText = if (snapshot.avgRttMs > 0) {
+            String.format(Locale.ROOT, "%.1fms", snapshot.avgRttMs)
+        } else {
+            "--"
         }
+        val speedText = snapshot.downloadSpeed.ifBlank { "--" }
+        return getString(R.string.notification_stats_text, rttText, speedText)
     }
 
     private fun initNotificationChannel(channelName: String) {

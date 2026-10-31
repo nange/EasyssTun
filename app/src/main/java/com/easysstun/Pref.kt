@@ -6,7 +6,6 @@ import androidx.preference.PreferenceManager
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -35,7 +34,6 @@ class Pref(private val ctx: Context) {
         const val TPROXY_FILE = "tproxy.conf"
     }
 
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
 
     var version: String
@@ -131,7 +129,7 @@ class Pref(private val ctx: Context) {
         val profilesJson = prefs.getString(SERVER_PROFILES, null)
         return if (profilesJson != null) {
             try {
-                json.decodeFromString<List<Profile>>(profilesJson)
+                appJson.decodeFromString<List<Profile>>(profilesJson)
             } catch (e: Exception) { // Catches any exception during deserialization
                 // In a real scenario, one might log e.message here.
                 Log.e("Pref", "Error deserializing server profiles: ${e.message}", e) // Added logging
@@ -143,7 +141,7 @@ class Pref(private val ctx: Context) {
     }
 
     private fun saveProfiles(profiles: List<Profile>) {
-        val profilesJson = json.encodeToString(profiles)
+        val profilesJson = appJson.encodeToString(profiles)
         prefs.edit {
             putString(SERVER_PROFILES, profilesJson)
         }
