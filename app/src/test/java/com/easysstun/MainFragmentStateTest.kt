@@ -1,7 +1,6 @@
 package com.easysstun
 
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.os.Looper
 import android.view.View
@@ -15,6 +14,8 @@ import com.google.android.material.button.MaterialButton
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -23,31 +24,41 @@ import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowVpnService
 
 /**
  * Characterisation tests for the home screen's connect/disconnect state
- * machine. They pin the observable UI states that the planned VpnState
- * refactor must preserve; they do not assert how the state is stored.
+ * machine. The screen is a pure renderer of [VpnState], so these tests drive
+ * the process-wide [VpnController] (the service's reports) and assert what the
+ * user sees.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class MainFragmentStateTest {
 
     private lateinit var context: Context
-    private lateinit var controller: ActivityController<MainActivity>
+    private lateinit var activityController: ActivityController<MainActivity>
     private lateinit var activity: MainActivity
+    private lateinit var vpn: VpnController
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         PreferenceManager.getDefaultSharedPreferences(context).edit().clear().commit()
-        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
-        activity = controller.get()
+        VpnController.resetForTests()
+        TunnelState.update(false)
+        ShadowVpnService.setPrepareResult(null)
+        vpn = VpnController.get(context)
+        activityController = Robolectric.buildActivity(MainActivity::class.java).setup()
+        activity = activityController.get()
     }
 
     @After
     fun tearDown() {
-        controller.destroy()
+        activityController.destroy()
+        VpnController.resetForTests()
+        TunnelState.update(false)
         PreferenceManager.getDefaultSharedPreferences(context).edit().clear().commit()
     }
 
@@ -60,8 +71,25 @@ class MainFragmentStateTest {
     private fun button(): MaterialButton =
         mainFragment().requireView().findViewById(R.id.service_button)
 
+    private fun spinner(): Spinner =
+        mainFragment().requireView().findViewById(R.id.server_spinner)
+
     private fun statsGrid(): LinearLayout =
         mainFragment().requireView().findViewById(R.id.stats_grid)
+
+    private fun serviceTitle(): String =
+        mainFragment().requireView()
+            .findViewById<android.widget.TextView>(R.id.service_title)
+            .text
+            .toString()
+
+    private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    private fun recreate() {
+        activityController.recreate()
+        activity = activityController.get()
+        idle()
+    }
 
     private fun addProfile(name: String, id: String = name): Profile {
         val profile = Profile(
@@ -83,26 +111,28 @@ class MainFragmentStateTest {
     }
 
     @Test
-    fun start_entersConnectingStateUntilServiceReportsStarted() {
+    fun start_entersConnectingStateUntilServiceReportsRunning() {
         val profile = addProfile("A")
         Pref(context).setActiveServer(profile.id)
         // Recreate so the fragment picks up the profile added after launch.
-        controller.recreate()
-        activity = controller.get()
+        recreate()
 
         button().performClick()
+        idle()
 
         assertEquals(
             activity.getString(R.string.service_connecting),
-            button().text.toString()
+            serviceTitle()
         )
-        assertFalse("the start button must be disabled while connecting", button().isEnabled)
+        assertTrue(
+            "connecting must stay cancellable from the home screen",
+            button().isEnabled
+        )
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
 
         // The service reports a fully established tunnel.
-        context.sendBroadcast(
-            Intent(EasyssVpnService.ACTION_SERVICE_STARTED).setPackage(context.packageName)
-        )
-        shadowOf(Looper.getMainLooper()).idle()
+        vpn.onServiceRunning(profile.id)
+        idle()
 
         assertEquals(activity.getString(R.string.service_disable), button().text.toString())
         assertTrue(button().isEnabled)
@@ -110,23 +140,27 @@ class MainFragmentStateTest {
     }
 
     @Test
-    fun serviceStoppedWhileConnecting_returnsToStoppedState() {
+    fun cancelWhileConnecting_returnsToStoppedState() {
         val profile = addProfile("A")
         Pref(context).setActiveServer(profile.id)
-        controller.recreate()
-        activity = controller.get()
+        recreate()
+
+        // Start, then cancel through the same button (the real entry point).
+        button().performClick()
+        idle()
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
 
         button().performClick()
-        assertFalse(button().isEnabled)
-
-        // The same click target is disabled while connecting; the user stops
-        // through the preference flag + the UI refresh triggered by the
-        // service-failure/stop path. Exercise the stop branch directly.
-        Pref(context).isServiceEnabled = false
-        context.sendBroadcast(
-            Intent(EasyssVpnService.ACTION_SERVICE_STOPPED).setPackage(context.packageName)
+        idle()
+        assertEquals(
+            activity.getString(R.string.service_stopping),
+            serviceTitle()
         )
-        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse("stopping is not cancellable", button().isEnabled)
+
+        // The service finished tearing down.
+        vpn.onServiceStopped()
+        idle()
 
         assertEquals(activity.getString(R.string.service_enable), button().text.toString())
         assertTrue(button().isEnabled)
@@ -134,52 +168,124 @@ class MainFragmentStateTest {
     }
 
     @Test
-    fun switchingServer_activatesPendingProfileWhenServiceStops() {
+    fun connecting_recoversWhenTheServiceIsDestroyed() {
+        val profile = addProfile("A")
+        Pref(context).setActiveServer(profile.id)
+        recreate()
+
+        button().performClick()
+        idle()
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
+
+        // The system took the service away mid-startup: the screen must not stay
+        // frozen on "connecting" with no way out.
+        vpn.onServiceDestroyed()
+        idle()
+
+        assertEquals(activity.getString(R.string.service_enable), button().text.toString())
+        assertTrue(button().isEnabled)
+    }
+
+    @Test
+    fun switchingServer_activatesTheNewProfileAndRebuildsTheTunnel() {
         val first = addProfile("A")
-        addProfile("B")
+        val second = addProfile("B")
         Pref(context).setActiveServer(first.id)
-        Pref(context).isServiceEnabled = true
-        controller.recreate()
-        activity = controller.get()
+        Pref(context).userWantsVpn = true
+        vpn.onServiceRunning(first.id)
+        recreate()
 
-        val spinner = mainFragment().requireView().findViewById<Spinner>(R.id.server_spinner)
-        spinner.setSelection(1)
-        shadowOf(Looper.getMainLooper()).idle()
+        spinner().setSelection(1)
+        idle()
 
-        // Selecting a different server only arms the switch: the fragment stops
-        // the service and waits for ACTION_SERVICE_STOPPED before activating the
-        // pending profile.
-        assertFalse("the spinner is disabled while switching", spinner.isEnabled)
-        assertEquals("A", Pref(context).getActiveProfile()?.name)
-
-        context.sendBroadcast(
-            Intent(EasyssVpnService.ACTION_SERVICE_STOPPED).setPackage(context.packageName)
-        )
-        shadowOf(Looper.getMainLooper()).idle()
-
+        // Selecting a different server asks the controller for a switch: the
+        // target becomes the active profile immediately (so a process death
+        // resumes on it) while the old tunnel is torn down first.
+        assertEquals(activity.getString(R.string.service_switching), serviceTitle())
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
+        assertTrue("a switch can be cancelled", button().isEnabled)
+        assertFalse("the spinner is disabled while switching", spinner().isEnabled)
         assertEquals("B", Pref(context).getActiveProfile()?.name)
-        assertTrue("the spinner is usable again after the switch", spinner.isEnabled)
+
+        // The old tunnel is gone: the switch continues with the new profile.
+        vpn.onServiceStopped()
+        idle()
+        assertEquals("B", Pref(context).getActiveProfile()?.name)
+        assertEquals(activity.getString(R.string.service_connecting), serviceTitle())
+
+        vpn.onServiceRunning(second.id)
+        idle()
+        assertTrue("the spinner is usable again after the switch", spinner().isEnabled)
         assertEquals(activity.getString(R.string.service_disable), button().text.toString())
     }
 
     @Test
-    fun rotation_whileEnabled_keepsRunningUi() {
+    fun rotationDuringSwitch_keepsTheSwitchingState() {
+        val first = addProfile("A")
+        val second = addProfile("B")
+        Pref(context).setActiveServer(first.id)
+        Pref(context).userWantsVpn = true
+        vpn.onServiceRunning(first.id)
+        recreate()
+
+        spinner().setSelection(1)
+        idle()
+
+        // The pending target lives in VpnState now, not in the fragment.
+        recreate()
+        assertEquals(activity.getString(R.string.service_switching), serviceTitle())
+        assertFalse(spinner().isEnabled)
+
+        vpn.onServiceStopped()
+        idle()
+        assertEquals("B", Pref(context).getActiveProfile()?.name)
+
+        vpn.onServiceRunning(second.id)
+        idle()
+        assertEquals(activity.getString(R.string.service_disable), button().text.toString())
+        assertTrue(spinner().isEnabled)
+    }
+
+    @Test
+    fun rotation_whileRunning_keepsRunningUi() {
         val profile = addProfile("A")
         Pref(context).setActiveServer(profile.id)
-        Pref(context).isServiceEnabled = true
-        controller.recreate()
-        activity = controller.get()
+        Pref(context).userWantsVpn = true
+        vpn.onServiceRunning(profile.id)
+        recreate()
 
         assertEquals(activity.getString(R.string.service_disable), button().text.toString())
         assertTrue(button().isEnabled)
 
-        controller.recreate()
-        activity = controller.get()
+        recreate()
 
         assertEquals(
             "recreating the activity must not drop the running state",
             activity.getString(R.string.service_disable),
             button().text.toString()
         )
+    }
+
+    @Test
+    fun startFailure_showsTheErrorOnceAndReturnsToStopped() {
+        val profile = addProfile("A")
+        Pref(context).setActiveServer(profile.id)
+        recreate()
+
+        button().performClick()
+        idle()
+
+        vpn.onServiceFailed("dial tcp 1.2.3.4:443: connection refused", profile.id)
+        idle()
+
+        val dialog = ShadowDialog.getLatestDialog()
+        assertNotNull("a failed start must explain itself", dialog)
+        assertTrue(dialog.isShowing)
+        assertEquals(activity.getString(R.string.service_enable), button().text.toString())
+        assertTrue(button().isEnabled)
+
+        // A rotation must not pop the same dialog again.
+        recreate()
+        assertSame("the failure must be reported only once", dialog, ShadowDialog.getLatestDialog())
     }
 }

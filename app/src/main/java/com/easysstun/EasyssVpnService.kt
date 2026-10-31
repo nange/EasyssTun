@@ -15,7 +15,6 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.edit
 import io.github.nange.easyss.mobile.Mobile
 import hev.htproxy.TProxyService
 import kotlinx.coroutines.CancellationException
@@ -28,6 +27,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -36,6 +36,16 @@ import java.net.Socket
 import java.util.Locale
 
 
+/**
+ * Foreground service that owns the TUN interface and the native tunnel.
+ *
+ * It is also the only component that reports tunnel facts: every state change
+ * is published through [VpnController], which the home screen renders. The
+ * service never writes [Pref.userWantsVpn] — the user's intent is owned by the
+ * controller, so a failed start stays a [VpnState.Failed] the UI can explain
+ * instead of silently turning the intent off and reconnecting on the next
+ * render.
+ */
 class EasyssVpnService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
 
@@ -44,13 +54,24 @@ class EasyssVpnService : VpnService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private val statsClient = StatsClient()
     private var notificationUpdaterJob: Job? = null
-    private var isRestarting: Boolean = false
     // Guards the async startup sequence: onStartCommand / startService must
     // not launch a second Mobile.start while one is in flight (the AAR
     // rejects "already started"), and a hot restart must wait for the
     // previous startup to fully unwind.
     @Volatile
     private var isStarting: Boolean = false
+    // True from the moment a teardown is requested until it completes. A second
+    // disconnect while the first teardown is still running must not start a
+    // competing shutdown (which would finalize the service twice).
+    @Volatile
+    private var isStopping: Boolean = false
+    // Set when the controller issued a follow-up start while finalizing (server
+    // switch), so onDestroy() knows the next instance is already on its way.
+    @Volatile
+    private var replacedByController: Boolean = false
+
+    private val controller: VpnController
+        get() = VpnController.get(this)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (ACTION_DISCONNECT == intent?.action) {
@@ -67,23 +88,29 @@ class EasyssVpnService : VpnService() {
             Log.w(TAG, "onStartCommand: unexpected action '${intent.action}', treating it as a connect request.")
         }
 
-        try {
-            startService()
-        } catch (e: IOException) {
-            Log.e(TAG, "Failed to start service due to IOException. Stopping service.", e)
+        return try {
+            if (startService()) START_STICKY else START_NOT_STICKY
+        } catch (e: Exception) {
+            // A start that never reached the startup coroutine must not leave the
+            // home screen waiting in "connecting" forever.
+            Log.e(TAG, "onStartCommand: unexpected start failure", e)
+            controller.onServiceFailed(
+                e.message ?: getString(R.string.error_start_service_failed),
+                if (::pref.isInitialized) pref.getActiveProfile()?.id else null
+            )
             stopSelf()
+            START_NOT_STICKY
         }
-        return START_STICKY
     }
 
     private val prefsUpdatedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (tunFd != null && !isRestarting) {
+            if (tunFd != null && !isStopping) {
                 restartService()
             } else {
                 Log.d(
                         TAG,
-                        "prefsUpdatedReceiver: tunFd=${tunFd?.fd}, isRestarting=$isRestarting. Ignoring PREFS_UPDATED."
+                        "prefsUpdatedReceiver: tunFd=${tunFd?.fd}, isStopping=$isStopping. Ignoring PREFS_UPDATED."
                 )
             }
         }
@@ -100,25 +127,43 @@ class EasyssVpnService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // The proxy dies with the service; actualFinalizeStop() already clears
-        // this on the normal path, but a system-initiated destroy may skip it.
-        TunnelState.update(false)
         unregisterReceiver(prefsUpdatedReceiver)
         Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel()
+        // Defensive net: a system-initiated destroy skips the stop path, so the
+        // controller must not keep advertising a tunnel that no longer exists.
+        // A planned replacement (server switch) already started the next
+        // instance, so it must not be reconciled away.
+        if (!replacedByController) controller.onServiceDestroyed()
         Log.i(TAG, "onDestroy: Service being destroyed.")
     }
 
     override fun onRevoke() {
         super.onRevoke()
+        // The system revoked the VPN permission (another VPN took over, or the
+        // user revoked it in Settings). That is an explicit user/system action,
+        // so the persisted intent is cleared here, in the controller.
+        controller.onPermissionRevoked()
         stopService()
     }
 
-    @Throws(IOException::class)
-    fun startService() {
+    /**
+     * Builds and starts the tunnel. Returns true when a startup sequence is in
+     * flight (or the tunnel is already up), false when the service could not
+     * start and has already reported the failure and stopped itself.
+     */
+    fun startService(): Boolean {
         if (tunFd != null || isStarting) {
             Log.d(TAG, "startService: already running or starting (tunFd=${tunFd?.fd}, isStarting=$isStarting). Ignoring.")
-            return
+            return true
+        }
+        if (isStopping) {
+            // The teardown owns the native stack; starting underneath it is the
+            // exact start/stop race this service is careful to avoid. The
+            // controller blocks connect() while Stopping, so this is defensive:
+            // the teardown's own finalize reports the state right after.
+            Log.w(TAG, "startService: teardown in progress, dropping the start request.")
+            return false
         }
 
         pref = Pref(this)
@@ -126,18 +171,19 @@ class EasyssVpnService : VpnService() {
         // The service and the UI run in the same process, so the active
         // profile, proxy mode and app list are read directly from Pref
         // instead of being serialized through the start Intent.
-        val loadedProfile = pref.getActiveProfile()
-        if (loadedProfile == null) {
+        val profile = pref.getActiveProfile()
+        if (profile == null) {
             Log.w(TAG, "startService: no active server profile in Pref, not starting.")
-            pref.isServiceEnabled = false
             // Do not leave a started service without a tunnel or notification.
             // Callers using startForegroundService() must validate the profile
             // first: the platform requires startForeground() before stopping an
             // FGS-started instance (ServiceReceiver enforces that check).
+            controller.onServiceFailed(getString(R.string.error_no_active_profile), null)
             stopSelf()
-            return
+            return false
         }
-        Log.i(TAG, "startService: loaded active profile '${loadedProfile.name}' (${loadedProfile.id}) from Pref")
+        controller.onServiceStarting(profile.id)
+        Log.i(TAG, "startService: loaded active profile '${profile.name}' (${profile.id}) from Pref")
 
         /* VPN builder: built now, but establish() is deferred until the
          * easyss SOCKS5 proxy is confirmed ready (see startup sequence
@@ -145,6 +191,128 @@ class EasyssVpnService : VpnService() {
          * traffic (including the first DNS queries and the connectivity
          * check) into a tunnel nobody is serving yet — the dropped packets
          * surface as 10s+ first page loads right after enabling. */
+        val builder = buildVpnBuilder()
+
+        // Build SimpleConfig and write the TProxy config before establishing
+        // the VPN, so everything the native stack needs is on disk first.
+        val config = profile.buildSimpleConfig(cacheDir)
+        Log.i(TAG, "startService: Starting Mobile proxy - server=${config.getServer()}:${config.getServerPort()}, localPort=${config.getLocalPort()}")
+
+        val socksPort = profile.socksPort.toIntOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toInt()
+        val proxyFile = writeTproxyConfig(socksPort)
+        if (proxyFile == null) {
+            controller.onServiceFailed(getString(R.string.error_write_tproxy_config), profile.id)
+            stopSelf()
+            return false
+        }
+
+        val channelName = "easysstun"
+        initNotificationChannel(channelName)
+
+        isStarting = true
+        val startElapsed = SystemClock.elapsedRealtime()
+        val startupElapsed: () -> Long = { SystemClock.elapsedRealtime() - startElapsed }
+        mobileJob = serviceScope.launch {
+            try {
+                // libeasyss prints a version banner in its CLI only, never
+                // through the gomobile binding used here, so log it for the
+                // in-app log viewer before the startup sequence begins.
+                logVersionBanner("profile='${profile.name}' logLevel=${profile.logLevel}")
+
+                // Foreground immediately with a "connecting" state: the
+                // startup sequence waits for the proxy to become ready and
+                // can take a few seconds, and Android requires the
+                // foreground service to be announced promptly.
+                showForeground(
+                    buildNotification(channelName, profile.name, getString(R.string.notification_connecting))
+                )
+
+                // Mobile.start() mirrors the Go export `func Start(cfg) error`:
+                // the gomobile binding throws Exception carrying the specific Go
+                // error text when startup fails. Surface it to the user via a
+                // dialog instead of silently tearing down.
+                Log.i(TAG, "startup: Mobile.start() begin, t+${startupElapsed()}ms")
+                try {
+                    Mobile.start(config)
+                    Log.i(TAG, "startup: Mobile.start() returned, t+${startupElapsed()}ms")
+                } catch (e: CancellationException) {
+                    // User stopped the service while startup was in flight; let
+                    // the outer catch rethrow and the teardown own the cleanup.
+                    throw e
+                } catch (e: Exception) {
+                    val message = e.message ?: e.toString()
+                    Log.e(TAG, "startup: Mobile.start() failed: $message", e)
+                    finishStartupFailure(message, profile.id)
+                    return@launch
+                }
+
+                coroutineContext.ensureActive()
+                val socksReady = waitForSocksReady(socksPort, STARTUP_READY_TIMEOUT_MS)
+                Log.i(TAG, "startup: socks ready=$socksReady, t+${startupElapsed()}ms")
+                if (!socksReady) {
+                    Log.e(TAG, "startup: SOCKS5 proxy not ready within ${STARTUP_READY_TIMEOUT_MS}ms, aborting")
+                    finishStartupFailure(getString(R.string.error_socks_not_ready), profile.id)
+                    return@launch
+                }
+                coroutineContext.ensureActive()
+
+                // Only the SOCKS5 readiness above gates the VPN, so no app
+                // traffic (or Android's connectivity check) is dropped into a
+                // dead TUN: the native core is already up at this point.
+                val newTunFd = builder.establish()
+                if (newTunFd == null) {
+                    Log.w(TAG, "startService: Failed to establish new tunFd, it's null.")
+                    finishStartupFailure(getString(R.string.error_establish_tun), profile.id)
+                    return@launch
+                }
+                tunFd = newTunFd
+                Log.i(TAG, "startService: Successfully established new tunFd: ${newTunFd.fd}, t+${startupElapsed()}ms")
+
+                // The teardown waits for this coroutine before stopping the
+                // native stack, but the last steps below are not suspendable, so
+                // re-check cancellation right before touching TProxy.
+                coroutineContext.ensureActive()
+
+                Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${newTunFd.fd}.")
+                // Natives of the hev-socks5-tunnel AAR; the binding class coming
+                // from hev.htproxy is imported at the top of this file.
+                val started = TProxyService.TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
+                Log.d(TAG, "startService: TProxyStartService returned: $started, t+${startupElapsed()}ms")
+                if (!started) {
+                    Log.w(TAG, "startService: TProxyStartService reported failure")
+                    finishStartupFailure(getString(R.string.error_tproxy_start), profile.id)
+                    return@launch
+                }
+
+                createNotification(channelName, profile.name)
+                startNotificationUpdater(channelName, profile.name, profile.statsUrl())
+                Log.i(TAG, "startup: service fully started, t+${startupElapsed()}ms")
+                // waitForSocksReady() proved the SOCKS5 listener is serving and
+                // TProxy is running, so the local proxy is usable from here.
+                controller.onServiceRunning(profile.id)
+            } catch (e: CancellationException) {
+                // User stopped the service while startup was in flight; the
+                // teardown path owns the cleanup.
+                Log.d(TAG, "startup: cancelled, t+${startupElapsed()}ms")
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "startup: failed", e)
+                finishStartupFailure(
+                    e.message ?: getString(R.string.error_start_service_failed),
+                    profile.id
+                )
+            } finally {
+                isStarting = false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Builds the VpnService builder: addresses, routes, MTU and the per-app
+     * routing rules of the current proxy mode.
+     */
+    private fun buildVpnBuilder(): Builder {
         var session = String()
         val builder = Builder()
 
@@ -213,16 +381,18 @@ class EasyssVpnService : VpnService() {
             session += "/per-App"
         }
         builder.setSession(session)
+        return builder
+    }
 
-        // Build SimpleConfig and write the TProxy config before establishing
-        // the VPN, so everything the native stack needs is on disk first.
-        val config = loadedProfile.buildSimpleConfig(cacheDir)
-        Log.i(TAG, "startService: Starting Mobile proxy - server=${config.getServer()}:${config.getServerPort()}, localPort=${config.getLocalPort()}")
-
-        val socksPort = loadedProfile.socksPort.toIntOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toInt()
+    /**
+     * Writes the hev-socks5-tunnel config for [socksPort]. Returns null when the
+     * file cannot be written, so the caller can report the failure instead of
+     * starting the tunnel with a stale config.
+     */
+    private fun writeTproxyConfig(socksPort: Int): File? {
         Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPort")
         val proxyFile = File(cacheDir, Pref.TPROXY_FILE)
-        try {
+        return try {
             proxyFile.createNewFile()
             // TCP idle timeout: hev-socks5-tunnel defaults to 300000ms (5min);
             // raise it to 480000ms (8min) so idle-but-alive TCP sessions
@@ -239,142 +409,37 @@ socks5:
             FileOutputStream(proxyFile, false).use { fos ->
                 fos.write(tproxyConf.toByteArray())
             }
+            proxyFile
         } catch (e: IOException) {
             Log.e(TAG, "Error writing tproxy.conf", e)
-            return
-        }
-
-        val channelName = "easysstun"
-        initNotificationChannel(channelName)
-
-        isStarting = true
-        val startElapsed = SystemClock.elapsedRealtime()
-        val startupElapsed: () -> Long = { SystemClock.elapsedRealtime() - startElapsed }
-        mobileJob = serviceScope.launch {
-            try {
-                // libeasyss prints a version banner in its CLI only, never
-                // through the gomobile binding used here, so log it for the
-                // in-app log viewer before the startup sequence begins.
-                logVersionBanner("profile='${loadedProfile.name}' logLevel=${loadedProfile.logLevel}")
-
-                // Foreground immediately with a "connecting" state: the
-                // startup sequence waits for the proxy to become ready and
-                // can take a few seconds, and Android requires the
-                // foreground service to be announced promptly.
-                showForeground(
-                    buildNotification(channelName, loadedProfile.name, getString(R.string.notification_connecting))
-                )
-
-                // Mobile.start() mirrors the Go export `func Start(cfg) error`:
-                // the gomobile binding throws Exception carrying the specific Go
-                // error text when startup fails. Surface it to the user via a
-                // dialog instead of silently tearing down.
-                Log.i(TAG, "startup: Mobile.start() begin, t+${startupElapsed()}ms")
-                try {
-                    Mobile.start(config)
-                    Log.i(TAG, "startup: Mobile.start() returned, t+${startupElapsed()}ms")
-                } catch (e: CancellationException) {
-                    // User stopped the service while startup was in flight; let
-                    // the outer catch rethrow and the teardown own the cleanup.
-                    throw e
-                } catch (e: Exception) {
-                    val message = e.message ?: e.toString()
-                    Log.e(TAG, "startup: Mobile.start() failed: $message", e)
-                    notifyStartFailure(message)
-                    finishStartupFailure()
-                    return@launch
-                }
-
-                coroutineContext.ensureActive()
-                val socksReady = waitForSocksReady(socksPort, STARTUP_READY_TIMEOUT_MS)
-                Log.i(TAG, "startup: socks ready=$socksReady, t+${startupElapsed()}ms")
-                if (!socksReady) {
-                    Log.e(TAG, "startup: SOCKS5 proxy not ready within ${STARTUP_READY_TIMEOUT_MS}ms, aborting")
-                    finishStartupFailure()
-                    return@launch
-                }
-                coroutineContext.ensureActive()
-
-                // Only the SOCKS5 readiness above gates the VPN, so no app
-                // traffic (or Android's connectivity check) is dropped into a
-                // dead TUN: the native core is already up at this point.
-                val newTunFd = builder.establish()
-                tunFd = newTunFd
-                if (newTunFd != null) {
-                    Log.i(TAG, "startService: Successfully established new tunFd: ${newTunFd.fd}, t+${startupElapsed()}ms")
-                } else {
-                    Log.w(TAG, "startService: Failed to establish new tunFd, it's null.")
-                    finishStartupFailure()
-                    return@launch
-                }
-
-                Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${newTunFd.fd}.")
-                // Natives of the hev-socks5-tunnel AAR; the binding class coming
-                // from hev.htproxy is imported at the top of this file.
-                val started = TProxyService.TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
-                Log.d(TAG, "startService: TProxyStartService returned: $started, t+${startupElapsed()}ms")
-                if (!started) {
-                    Log.w(TAG, "startService: TProxyStartService reported failure")
-                }
-
-                pref.prefs.edit { apply { putBoolean("enable", true) } }
-                createNotification(channelName, loadedProfile.name)
-                startNotificationUpdater(channelName, loadedProfile.name, loadedProfile.statsUrl())
-                Log.i(TAG, "startup: service fully started, t+${startupElapsed()}ms")
-                // waitForSocksReady() proved the SOCKS5 listener is serving and
-                // TProxy is now running, so the local proxy is usable from here.
-                TunnelState.update(true)
-                notifyServiceStarted()
-            } catch (e: CancellationException) {
-                // User stopped the service while startup was in flight; the
-                // teardown path owns the cleanup.
-                Log.d(TAG, "startup: cancelled, t+${startupElapsed()}ms")
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "startup: failed", e)
-                finishStartupFailure()
-            } finally {
-                isStarting = false
-            }
+            null
         }
     }
 
     /**
-     * Best-effort cleanup for a startup that could not complete: stop the
-     * native stack, close the TUN fd if one was established, and finalize
-     * the stop (pref state + UI broadcast + stopSelf).
+     * Best-effort cleanup for a startup that could not complete: stop whatever
+     * part of the native stack came up, close the TUN fd, report the failure to
+     * the controller and stop the service.
      */
-    private fun finishStartupFailure() {
-        Log.w(TAG, "finishStartupFailure: cleaning up partial startup.")
-        runCatching { Mobile.stop() }
+    private fun finishStartupFailure(message: String, profileId: String) {
+        Log.w(TAG, "finishStartupFailure: $message")
         runCatching { TProxyService.TProxyStopService() }
+            .onFailure { Log.e(TAG, "finishStartupFailure: TProxyStopService failed: ${it.message}", it) }
+        runCatching { Mobile.stop() }
+            .onFailure { Log.e(TAG, "finishStartupFailure: Mobile.stop failed: ${it.message}", it) }
+        try {
+            tunFd?.close()
+        } catch (e: IOException) {
+            Log.e(TAG, "finishStartupFailure: exception closing tunFd: ${e.message}", e)
+        }
         tunFd = null
-        actualFinalizeStop()
-    }
-
-    /**
-     * Notifies the UI that the native proxy failed to start, carrying the
-     * specific error text returned by the Go side (see Mobile.start's
-     * Exception contract). MainFragment shows it in a dialog.
-     */
-    internal fun notifyStartFailure(errorMessage: String) {
-        Log.e(TAG, "Broadcasting $ACTION_SERVICE_START_FAILED with error: $errorMessage")
-        val broadcastIntent = Intent(ACTION_SERVICE_START_FAILED)
-        broadcastIntent.setPackage(packageName)
-        broadcastIntent.putExtra(EXTRA_START_ERROR, errorMessage)
-        sendBroadcast(broadcastIntent)
-    }
-
-    /**
-     * Notifies the UI that the tunnel is fully up and serving traffic.
-     * MainFragment listens for this to leave the "connecting" (spinner,
-     * disabled button) state and show the running "Stop" state.
-     */
-    internal fun notifyServiceStarted() {
-        Log.i(TAG, "Broadcasting $ACTION_SERVICE_STARTED")
-        val broadcastIntent = Intent(ACTION_SERVICE_STARTED)
-        broadcastIntent.setPackage(packageName)
-        sendBroadcast(broadcastIntent)
+        notificationUpdaterJob?.cancel()
+        notificationUpdaterJob = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        // Report before stopping so the failure is not lost if the process is
+        // torn down right after stopSelf().
+        controller.onServiceFailed(message, profileId)
+        stopSelf()
     }
 
     /**
@@ -417,19 +482,23 @@ socks5:
     }
 
     fun stopService() {
+        if (isStopping) {
+            Log.d(TAG, "stopService: teardown already in progress, ignoring.")
+            return
+        }
         val startupActive = mobileJob?.isActive == true
-        if (tunFd == null && !startupActive) {
-            Log.d(TAG, "stopService: called but appears already stopped or not fully started.")
-            if (::pref.isInitialized && pref.isServiceEnabled || tunFd != null) {
-                Log.w(TAG, "stopService: State indicates service might be partially running despite checks. Forcing finalization.")
-                actualFinalizeStop()
-            }
+        if (tunFd == null && !startupActive && !isStarting) {
+            // Nothing to tear down. Finalizing anyway is what removes a residual
+            // service instance: an idle ACTION_DISCONNECT used to return here
+            // without stopSelf(), leaving a started (but useless) service behind.
+            Log.d(TAG, "stopService: nothing to tear down, finalizing the idle instance.")
+            isStopping = true
+            finalizeStop()
             return
         }
         Log.i(TAG, "stopService() called. Initiating shutdown sequence. Current tunFd: ${tunFd?.fd}")
-        shutdownTunnel {
-            actualFinalizeStop()
-        }
+        isStopping = true
+        shutdownTunnel { finalizeStop() }
     }
 
     /**
@@ -440,151 +509,107 @@ socks5:
      * stopping for good.
      */
     private fun restartService() {
-        if (isRestarting) {
-            Log.d(TAG, "restartService: restart already in progress, ignoring broadcast.")
+        if (isStopping) {
+            Log.d(TAG, "restartService: teardown already in progress, ignoring broadcast.")
             return
         }
         Log.i(TAG, "restartService() called. Tearing down tunnel to reload latest prefs.")
-        isRestarting = true
+        isStopping = true
+        // Report the restart window as Connecting: the local proxy is about to
+        // be unusable, so TunnelState.ready must drop now instead of staying
+        // true for the whole teardown (and the home screen must stop polling a
+        // stats endpoint that is being torn down).
+        pref.getActiveProfile()?.let { controller.onServiceStarting(it.id) }
         shutdownTunnel {
-            performRestart()
-        }
-    }
-
-    private fun performRestart() {
-        try {
-            if (::pref.isInitialized && !pref.isServiceEnabled) {
+            if (!pref.userWantsVpn) {
                 // User pressed stop while the tunnel was being torn down.
-                Log.w(TAG, "performRestart: Service was disabled during restart window. Finalizing stop instead.")
-                actualFinalizeStop()
-                return
+                Log.w(TAG, "performRestart: user no longer wants the VPN. Finalizing stop instead.")
+                finalizeStop()
+                return@shutdownTunnel
             }
             Log.i(TAG, "performRestart: Reloading latest prefs and re-establishing tunnel.")
-            startService()
-            if (tunFd == null && mobileJob?.isActive != true) {
-                // startService() failed to establish a tunnel (invalid profile,
-                // establish() returned null, or startup aborted). Finalize so
-                // the UI is notified.
-                Log.w(TAG, "performRestart: startService did not establish a tunnel. Finalizing stop.")
-                actualFinalizeStop()
+            if (!startService()) {
+                Log.w(TAG, "performRestart: startService could not re-establish the tunnel; failure reported.")
             }
-        } catch (e: IOException) {
-            Log.e(TAG, "performRestart: startService failed. Finalizing stop.", e)
-            actualFinalizeStop()
-        } finally {
-            isRestarting = false
         }
     }
 
     /**
-     * Common teardown sequence: stops the native tunnel and Mobile proxy,
-     * cancels the notification updater, closes the TUN fd, then runs
-     * [onShutdownComplete] on the main thread.
+     * Common teardown sequence: waits for an in-flight startup to unwind, stops
+     * the native stack, closes the TUN fd, then runs [onShutdownComplete] on the
+     * main thread.
+     *
+     * The startup job is cancelled and joined *before* `Mobile.stop()` /
+     * `TProxyStopService()`: `Mobile.start()` is a blocking native call, so
+     * cancelling only cooperatively and stopping underneath it raced the native
+     * start/stop inside libeasyss.
      */
     private fun shutdownTunnel(onShutdownComplete: () -> Unit) {
-        // Stop and restart share this entry point: mark the proxy unusable before
-        // the first native teardown step, otherwise a restart leaves the flag
-        // true for the whole window (and the post-restart update(true) is then
-        // deduplicated, so no readiness event would ever fire again).
-        TunnelState.update(false)
         notificationUpdaterJob?.cancel()
+        notificationUpdaterJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
-
-        // Cancel any in-flight startup so it cannot re-establish the VPN
-        // after teardown completes.
-        mobileJob?.cancel()
 
         serviceScope.launch {
             try {
-                // 1. Stop TProxy (hev-socks5-tunnel)
-                val tproxyStopJob = launch {
-                    try {
-                        Log.d(TAG, "shutdownTunnel: TProxyStopService coroutine calling TProxyStopService()")
-                        val stopped = TProxyService.TProxyStopService()
-                        Log.d(TAG, "shutdownTunnel: TProxyStopService returned: $stopped")
-                    } catch (e: Throwable) {
-                        Log.e(TAG, "shutdownTunnel: Exception during TProxyStopService: ${e.message}", e)
-                    }
-                }
-
-                // 2. Stop Mobile proxy (via AAR)
-                try {
-                    Log.d(TAG, "shutdownTunnel: Calling Mobile.stop()...")
-                    Mobile.stop()
-                    Log.d(TAG, "shutdownTunnel: Mobile.stop() completed.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "shutdownTunnel: Exception during Mobile.stop(): ${e.message}", e)
-                }
-
-                // 3. Cancel and join the mobile coroutine
+                // 1. Cancel the in-flight startup and wait for it to finish.
                 val job = mobileJob
                 if (job != null && job.isActive) {
-                    Log.d(TAG, "shutdownTunnel: Cancelling mobileJob.")
+                    Log.d(TAG, "shutdownTunnel: cancelling and joining mobileJob.")
                     job.cancel()
-
-                    Log.d(TAG, "shutdownTunnel: Joining mobileJob.")
-                    try {
-                        job.join()
-                        Log.d(TAG, "shutdownTunnel: mobileJob completed.")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "shutdownTunnel: Exception during mobileJob.join(): ${e.message}", e)
+                    val finished = withTimeoutOrNull(STARTUP_JOIN_TIMEOUT_MS) { job.join() }
+                    if (finished == null) {
+                        Log.w(
+                            TAG,
+                            "shutdownTunnel: startup did not finish within ${STARTUP_JOIN_TIMEOUT_MS}ms, stopping anyway."
+                        )
                     }
-                } else {
-                    Log.d(TAG, "shutdownTunnel: mobileJob was not active or initialized.")
                 }
 
-                // 4. Wait for TProxy to stop
-                Log.d(TAG, "shutdownTunnel: Waiting for TProxyStopService job (tproxyStopJob) to complete.")
-                tproxyStopJob.join()
-                Log.d(TAG, "shutdownTunnel: TProxyStopService job (tproxyStopJob) completed.")
-
+                // 2. Stop TProxy (hev-socks5-tunnel), then Mobile.
+                runCatching { TProxyService.TProxyStopService() }
+                    .onFailure { Log.e(TAG, "shutdownTunnel: TProxyStopService failed: ${it.message}", it) }
+                runCatching { Mobile.stop() }
+                    .onFailure { Log.e(TAG, "shutdownTunnel: Mobile.stop failed: ${it.message}", it) }
             } catch (e: Exception) {
-                Log.e(TAG, "shutdownTunnel: Unhandled exception during native cleanup phase: ${e.message}", e)
+                Log.e(TAG, "shutdownTunnel: unhandled exception during native cleanup: ${e.message}", e)
             } finally {
-                Log.d(TAG, "shutdownTunnel: Native cleanup phase complete or errored. Proceeding with final Java-level cleanup.")
                 withContext(Dispatchers.Main.immediate) {
                     Log.d(TAG, "shutdownTunnel: Closing tunFd: ${tunFd?.fd}.")
                     try {
                         tunFd?.close()
                     } catch (e: IOException) {
-                        Log.e(TAG, "shutdownTunnel: Exception closing tunFd: ${e.message}", e)
+                        Log.e(TAG, "shutdownTunnel: exception closing tunFd: ${e.message}", e)
                     }
                     tunFd = null
-                    Log.d(TAG, "shutdownTunnel: tunFd set to null.")
+                    isStopping = false
                     onShutdownComplete()
                 }
             }
         }
     }
 
-    private fun actualFinalizeStop() {
-        Log.d(TAG, "actualFinalizeStop: Finalizing service stop.")
-        // shutdownTunnel() clears this before the teardown; repeating it here is
-        // the idempotent safety net for the startup-failure path, which reaches
-        // finalize without going through shutdownTunnel().
-        TunnelState.update(false)
+    /**
+     * Final Java-level stop: removes the notification, closes the TUN fd, stops
+     * this service instance and lets the controller decide what comes next
+     * (Idle, or the second half of a server switch).
+     */
+    private fun finalizeStop() {
+        Log.d(TAG, "finalizeStop: finalizing service stop.")
+        notificationUpdaterJob?.cancel()
+        notificationUpdaterJob = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
         try {
-            Log.d(TAG, "actualFinalizeStop: Attempting to close tunFd: ${tunFd?.fd}.")
             tunFd?.close()
         } catch (e: IOException) {
-            Log.e(TAG, "actualFinalizeStop: Exception closing tunFd: ${e.message}", e)
+            Log.e(TAG, "finalizeStop: exception closing tunFd: ${e.message}", e)
         }
         tunFd = null
-        Log.d(TAG, "actualFinalizeStop: tunFd set to null.")
-
-        if (::pref.isInitialized) {
-            pref.isServiceEnabled = false
-        } else {
-            Log.w(TAG, "actualFinalizeStop: Pref not initialized, cannot set isServiceEnabled.")
-        }
-
-        Log.d(TAG, "actualFinalizeStop: Calling stopSelf().")
+        isStopping = false
+        Log.d(TAG, "finalizeStop: calling stopSelf().")
         stopSelf()
-        Log.d(TAG, "actualFinalizeStop: Broadcasting ACTION_SERVICE_STOPPED")
-        val broadcastIntent = Intent(ACTION_SERVICE_STOPPED)
-        broadcastIntent.setPackage(packageName)
-        sendBroadcast(broadcastIntent)
-        Log.i(TAG, "actualFinalizeStop: Service fully stopped and broadcast sent to package $packageName.")
+        // After stopSelf() so a switch's follow-up start cannot be swallowed by
+        // the stop this service instance is performing right now.
+        replacedByController = controller.onServiceStopped()
     }
 
     private fun createNotification(channelName: String, profileName: String) {
@@ -657,12 +682,12 @@ socks5:
         // real handshake before giving up (see waitForSocksReady).
         const val STARTUP_READY_TIMEOUT_MS = 30_000L
 
+        // How long a teardown waits for the in-flight startup coroutine before
+        // stopping the native stack anyway (see shutdownTunnel).
+        const val STARTUP_JOIN_TIMEOUT_MS = 10_000L
+
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
-        const val ACTION_SERVICE_STOPPED = "com.easysstun.SERVICE_FULLY_STOPPED"
-        const val ACTION_SERVICE_STARTED = "com.easysstun.SERVICE_STARTED"
-        const val ACTION_SERVICE_START_FAILED = "com.easysstun.SERVICE_START_FAILED"
-        const val EXTRA_START_ERROR = "com.easysstun.START_ERROR_EXTRA"
         const val NOTIFICATION_ID = 1
         private const val TAG = "EasyssVpnServiceDiag"
 

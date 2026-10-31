@@ -47,7 +47,7 @@ internal interface UpdateSource {
  * so without this fallback a blocked network could never fetch an update.
  *
  * The proxy route is gated on [TunnelState.ready] rather than
- * `Pref.isServiceEnabled`: the latter records the user's intent and is set
+ * `Pref.userWantsVpn`: the latter records the user's intent and is set
  * before `Mobile.start()` runs, so it would advertise a port that is not
  * listening yet.
  */

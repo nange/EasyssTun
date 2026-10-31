@@ -45,7 +45,16 @@ class Pref(private val ctx: Context) {
             prefs.edit { putString(VERSION, value) }
         }
 
-    var isServiceEnabled: Boolean
+    /**
+     * The user's persisted *intent*: true while they want the VPN to be up.
+     *
+     * This is deliberately not a liveness flag — [VpnState] owns that. It is
+     * written only by explicit user actions (start, stop, denied permission) and
+     * by system reconciliation ([ServiceReceiver] on boot, [VpnController] on
+     * revoke), never by the service on its own. The stored key keeps its old
+     * name so existing installations keep their setting.
+     */
+    var userWantsVpn: Boolean
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
         set(value) {
             prefs.edit { putBoolean(SERVICE_ENABLED, value) }

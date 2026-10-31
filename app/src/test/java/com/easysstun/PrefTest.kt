@@ -181,17 +181,17 @@ class PrefTest {
 
     @Test
     fun setAndGetIsServiceEnabled() {
-        assertFalse("Initially, isServiceEnabled should be false", pref.isServiceEnabled)
+        assertFalse("Initially, userWantsVpn should be false", pref.userWantsVpn)
         assertFalse("SharedPreferences should reflect false initially", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, false))
 
 
-        pref.isServiceEnabled = true
-        assertTrue("isServiceEnabled should be true after setting to true", pref.isServiceEnabled)
+        pref.userWantsVpn = true
+        assertTrue("userWantsVpn should be true after setting to true", pref.userWantsVpn)
         assertTrue("SharedPreferences should reflect true", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, false))
 
 
-        pref.isServiceEnabled = false
-        assertFalse("isServiceEnabled should be false after setting to false", pref.isServiceEnabled)
+        pref.userWantsVpn = false
+        assertFalse("userWantsVpn should be false after setting to false", pref.userWantsVpn)
         assertFalse("SharedPreferences should reflect false", sharedPreferences.getBoolean(Pref.SERVICE_ENABLED, true))
     }
 
