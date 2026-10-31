@@ -931,7 +931,7 @@ class MainFragment : Fragment() {
         var conn: HttpURLConnection? = null
         try {
             // Stats endpoint port follows the active profile's SOCKS port + 1000
-            // (e.g. default 2080 -> 3080). Recompute each fetch so a server switch
+            // (e.g. default 4080 -> 5080). Recompute each fetch so a server switch
             // that restarts the service with a new profile is picked up.
             val statsUrl = pref.getActiveProfile()?.statsUrl() ?: Profile.defaultStatsUrl()
             val url = URL(statsUrl)

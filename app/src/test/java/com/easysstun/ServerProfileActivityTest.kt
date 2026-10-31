@@ -41,6 +41,17 @@ class ServerProfileActivityTest {
     }
 
     @Test
+    fun newProfile_prefillsTheDefaultLocalPort() {
+        val activity = launch()
+
+        assertEquals(
+            "A new profile must prefill the default local SOCKS port",
+            Profile.DEFAULT_SOCKS_PORT,
+            activity.field(R.id.profile_socks_port).text.toString()
+        )
+    }
+
+    @Test
     fun save_trimsSurroundingWhitespaceOfEveryParameterField() {
         val activity = launch()
         activity.field(R.id.profile_name).setText("  My Server  ")
