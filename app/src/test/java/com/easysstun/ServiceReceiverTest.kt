@@ -75,7 +75,7 @@ class ServiceReceiverTest {
             id = "boot-test-id",
             name = "Boot Test Server",
             server = "test.example.com",
-            serverPort = "443",
+            serverPort = 443,
             password = "test-password"
         )
         profiles.add(profile)

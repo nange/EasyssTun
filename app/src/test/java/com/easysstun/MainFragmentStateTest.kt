@@ -98,7 +98,7 @@ class MainFragmentStateTest {
             id = id,
             name = name,
             server = "example.com",
-            serverPort = "443",
+            serverPort = 443,
             password = "secret",
         )
         ProfileStore.get(context).add(profile)

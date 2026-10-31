@@ -62,7 +62,7 @@ class VpnControllerTest {
             id = id,
             name = name,
             server = "example.com",
-            serverPort = "443",
+            serverPort = 443,
             password = "secret",
         )
         profiles.add(profile)

@@ -50,13 +50,13 @@ class ProfileStoreTest {
         id = id,
         name = name,
         server = "test.server.com",
-        serverPort = "1234",
+        serverPort = 1234,
         password = "password",
         encryption = "chacha20-poly1305",
         proxyRule = "auto",
         outbound = "native",
         logLevel = "info",
-        enableQuic = "false",
+        enableQuic = false,
         ipv6Rule = "auto",
         serverNameIndication = "test.sni.com",
         customCa = "",
@@ -208,6 +208,34 @@ class ProfileStoreTest {
 
         assertTrue(store.all().isEmpty())
         assertNull(store.active())
+    }
+
+    @Test
+    fun all_readsProfilesWrittenByLegacyBuilds() {
+        // Exact shape written by builds before the typed model: every numeric
+        // field is a string and the QUIC flag is "true"/"false".
+        pref.putString(
+            ProfileStore.SERVER_PROFILES,
+            """
+            [{
+                "id": "legacy",
+                "name": "Legacy",
+                "server": "legacy.example.com",
+                "serverPort": "443",
+                "password": "pw",
+                "enableQuic": "true",
+                "socksPort": "4080",
+                "timeout": "45"
+            }]
+            """.trimIndent(),
+        )
+
+        val profile = store.all().single()
+
+        assertEquals(443, profile.serverPort)
+        assertEquals(4080, profile.socksPort)
+        assertEquals(45, profile.timeout)
+        assertTrue(profile.enableQuic)
     }
 
     @Test

@@ -29,7 +29,7 @@ class ProfileConfigWriterTest {
         id = "writer-test",
         name = "Writer Test",
         server = "example.com",
-        serverPort = "443",
+        serverPort = 443,
         password = "secret",
         customCa = customCa,
         directFile = directFile,

@@ -4,32 +4,46 @@ import io.github.nange.easyss.config.SimpleConfig
 import kotlinx.serialization.Serializable
 import java.util.Locale
 
+/**
+ * One saved server profile.
+ *
+ * The numeric knobs ([serverPort], [socksPort], [timeout]) and the QUIC flag
+ * ([enableQuic]) are typed. Builds before this model existed stored all of them
+ * as strings, so each field is decoded by a lenient serializer that accepts both
+ * representations and normalizes them on write; see [LenientIntSerializer] and
+ * [LenientBooleanSerializer]. `null` means "not configured": the native config
+ * then applies its own default instead of a value the user never chose.
+ */
 @Serializable
 data class Profile(
     val id: String,
     val name: String,
     val server: String,
-    val serverPort: String,
+    @Serializable(with = LenientIntSerializer::class)
+    val serverPort: Int? = null,
     val password: String,
     val encryption: String = "chacha20-poly1305",
     val proxyRule: String = "auto",
     val outbound: String = "native",
     val logLevel: String = "info",
-    val enableQuic: String = "false",
+    @Serializable(with = LenientBooleanSerializer::class)
+    val enableQuic: Boolean = false,
     val ipv6Rule: String = "auto",
     val serverNameIndication: String = "",
     val customCa: String = "",
     val directFile: String = "",
     val proxyFile: String = "",
-    val socksPort: String = DEFAULT_SOCKS_PORT,
-    val timeout: String = DEFAULT_TIMEOUT
+    @Serializable(with = LenientIntSerializer::class)
+    val socksPort: Int? = DEFAULT_SOCKS_PORT,
+    @Serializable(with = LenientIntSerializer::class)
+    val timeout: Int? = DEFAULT_TIMEOUT,
 ) {
     companion object {
         /**
          * Local SOCKS port prefilled for new profiles and used as the fallback
          * when a stored profile carries no (or an unparseable) port.
          */
-        const val DEFAULT_SOCKS_PORT = "4080"
+        const val DEFAULT_SOCKS_PORT = 4080
         const val STATS_PORT_OFFSET = 1000
 
         /**
@@ -37,7 +51,7 @@ data class Profile(
          * profile leaves `timeout` blank. Matches the native default
          * (`config.DefaultTimeout` in easyss, also the `-t` startup flag default).
          */
-        const val DEFAULT_TIMEOUT = "30"
+        const val DEFAULT_TIMEOUT = 30
 
         /**
          * Legal range (seconds) of the native timeout knob: easyss derives every
@@ -55,15 +69,14 @@ data class Profile(
          * profile is available.
          */
         fun defaultStatsUrl(): String =
-            String.format(Locale.ROOT, STATS_URL_FORMAT, DEFAULT_SOCKS_PORT.toInt() + STATS_PORT_OFFSET)
+            String.format(Locale.ROOT, STATS_URL_FORMAT, DEFAULT_SOCKS_PORT + STATS_PORT_OFFSET)
     }
 
     /**
      * The local HTTP stats endpoint port, derived from the SOCKS port
      * (matches the easyss native convention: HTTPPort = SocksPort + 1000).
      */
-    fun statsPort(): Int =
-        (socksPort.toIntOrNull() ?: DEFAULT_SOCKS_PORT.toInt()) + STATS_PORT_OFFSET
+    fun statsPort(): Int = (socksPort ?: DEFAULT_SOCKS_PORT) + STATS_PORT_OFFSET
 
     /**
      * The local HTTP stats endpoint URL, e.g. http://127.0.0.1:5080/stats
@@ -73,12 +86,12 @@ data class Profile(
 
     /**
      * The base timeout (seconds) handed to the native config, i.e. the equivalent
-     * of the easyss `-t/--timeout` startup flag. Delegates to
-     * [parseTimeoutSeconds]; a blank or (hand-edited) invalid value becomes 0,
-     * which makes libeasyss fall back to its own default instead of pinning a
-     * value the user never chose.
+     * of the easyss `-t/--timeout` startup flag. A missing or (hand-edited)
+     * out-of-range value becomes 0, which makes libeasyss fall back to its own
+     * default instead of pinning a value the user never chose.
      */
-    fun timeoutSeconds(): Int = parseTimeoutSeconds(timeout) ?: 0
+    fun timeoutSeconds(): Int =
+        timeout?.takeIf { it in MIN_TIMEOUT_SECONDS..MAX_TIMEOUT_SECONDS } ?: 0
 }
 
 /**
@@ -98,11 +111,17 @@ fun parseTimeoutSeconds(raw: String): Int? {
 }
 
 /**
- * Parses a profile flag stored as a string ("true"/"false"). Anything that is
- * not "true" (case-insensitive) counts as false, so a missing or hand-edited
- * value falls back to the safest option for the corresponding switch.
+ * Parses a port typed into the profile form. Surrounding whitespace is ignored.
+ *
+ * @return the port, or `null` when [raw] is blank or is not a whole number in
+ *         1..65535. Callers that allow a blank field (the local SOCKS port)
+ *         check the raw text to tell "not configured" from "invalid".
  */
-internal fun parseBooleanFlag(value: String): Boolean = value.equals("true", ignoreCase = true)
+fun parsePortOrNull(raw: String): Int? {
+    val text = raw.trim()
+    if (text.isEmpty()) return null
+    return text.toIntOrNull()?.takeIf { it in 1..65535 }
+}
 
 /**
  * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
@@ -115,13 +134,13 @@ fun Profile.buildSimpleConfig(paths: ProfileConfigPaths = ProfileConfigPaths()):
     val config = SimpleConfig()
 
     config.setServer(server)
-    config.setServerPort(serverPort.toLongOrNull() ?: 443L)
+    config.setServerPort(serverPort?.toLong() ?: 443L)
     config.setPassword(password)
     config.setMethod(encryption)
     config.setProxyRule(proxyRule)
     config.setOutboundProto(outbound)
     config.setLogLevel(logLevel)
-    config.setEnableQUIC(parseBooleanFlag(enableQuic))
+    config.setEnableQUIC(enableQuic)
     config.setIPV6Rule(ipv6Rule)
 
     var sni = serverNameIndication
@@ -130,7 +149,7 @@ fun Profile.buildSimpleConfig(paths: ProfileConfigPaths = ProfileConfigPaths()):
     }
     config.setSN(sni)
 
-    config.setLocalPort(socksPort.toLongOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toLong())
+    config.setLocalPort((socksPort ?: Profile.DEFAULT_SOCKS_PORT).toLong())
 
     // Same knob as the easyss `-t/--timeout` startup flag: the base timeout all
     // idle/dial timeouts are derived from. 0 keeps the native default.

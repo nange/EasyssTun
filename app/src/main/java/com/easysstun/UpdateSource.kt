@@ -52,7 +52,6 @@ internal interface UpdateSource {
  * listening yet.
  */
 internal class GitHubUpdateSource(
-    private val pref: Pref,
     private val profiles: ProfileStore,
     private val proxyPortProvider: () -> Int? = {
         if (TunnelState.ready.value) profiles.active()?.statsPort() else null

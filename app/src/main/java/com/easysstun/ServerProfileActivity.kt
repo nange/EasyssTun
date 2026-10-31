@@ -10,6 +10,7 @@ import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import java.util.Locale
 import java.util.UUID
 
 class ServerProfileActivity : AppCompatActivity() {
@@ -129,22 +130,22 @@ class ServerProfileActivity : AppCompatActivity() {
             currentProfile?.let {
                 profileName.setText(it.name)
                 profileServer.setText(it.server)
-                profileServerPort.setText(it.serverPort)
+                profileServerPort.setText(it.serverPort.toFieldText())
                 profilePassword.setText(it.password)
-                profileSocksPort.setText(it.socksPort)
+                profileSocksPort.setText(it.socksPort.toFieldText())
                 // Set spinner selections
                 setSpinnerSelection(profileEncryption, it.encryption, R.array.easyss_encryption_list)
                 setSpinnerSelection(profileProxyRule, it.proxyRule, R.array.easyss_proxyrule_list_value, R.array.easyss_proxyrule_list_value)
                 setSpinnerSelection(profileOutbound, it.outbound, R.array.easyss_outbound_list_value, R.array.easyss_outbound_list_value)
                 setSpinnerSelection(profileLogLevel, it.logLevel, R.array.easyss_loglevel_list_value, R.array.easyss_loglevel_list_value)
-                setSpinnerSelection(profileEnableQuic, it.enableQuic, R.array.easyss_enable_quic_list_value, R.array.easyss_enable_quic_list_value)
+                setSpinnerSelection(profileEnableQuic, it.enableQuic.toString(), R.array.easyss_enable_quic_list_value, R.array.easyss_enable_quic_list_value)
                 setSpinnerSelection(profileIpv6Rule, it.ipv6Rule, R.array.easyss_ipv6_rule_value, R.array.easyss_ipv6_rule_value)
 
                 profileServerNameIndication.setText(it.serverNameIndication)
                 profileCustomCa.setText(it.customCa)
                 profileDirectFile.setText(it.directFile)
                 profileProxyFile.setText(it.proxyFile)
-                profileTimeout.setText(it.timeout)
+                profileTimeout.setText(it.timeout.toFieldText())
 
                 // Show delete button if editing an existing profile
                 deleteProfileButton.visibility = View.VISIBLE
@@ -253,12 +254,19 @@ class ServerProfileActivity : AppCompatActivity() {
         return field.text.toString()
     }
 
+    /**
+     * Renders a numeric profile field for an [EditText]. `Locale.ROOT` keeps the
+     * digits ungrouped (e.g. "8443", never "8,443") whatever the device locale.
+     */
+    private fun Int?.toFieldText(): String =
+        this?.let { String.format(Locale.ROOT, "%d", it) } ?: ""
+
     private fun saveProfile() {
         val name = trimmedText(profileName)
         val server = trimmedText(profileServer)
-        val serverPort = trimmedText(profileServerPort)
+        val serverPortText = trimmedText(profileServerPort)
         val password = trimmedText(profilePassword)
-        val socksPort = trimmedText(profileSocksPort)
+        val socksPortText = trimmedText(profileSocksPort)
         val encryption = profileEncryption.selectedItem.toString() // May need to get from values array if entries are different
         val proxyRule = getSpinnerValue(profileProxyRule, R.array.easyss_proxyrule_list_value)
         val outbound = getSpinnerValue(profileOutbound, R.array.easyss_outbound_list_value)
@@ -267,19 +275,33 @@ class ServerProfileActivity : AppCompatActivity() {
         val directFile = trimmedText(profileDirectFile)
         val proxyFile = trimmedText(profileProxyFile)
         val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
-        val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value)
+        val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value).toBoolean()
         val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
-        val timeout = trimmedText(profileTimeout)
+        val timeoutText = trimmedText(profileTimeout)
 
 
-        if (server.isBlank() || serverPort.isBlank() || password.isBlank()) {
+        if (server.isBlank() || serverPortText.isBlank() || password.isBlank()) {
             Toast.makeText(this, "Server, Port, and Password cannot be empty", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // The server port is required and must be a real port; the local SOCKS
+        // port is optional (blank means "use the default").
+        val serverPort = parsePortOrNull(serverPortText)
+        if (serverPort == null) {
+            Toast.makeText(this, getString(R.string.error_port_invalid), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val socksPort = parsePortOrNull(socksPortText)
+        if (socksPortText.isNotEmpty() && socksPort == null) {
+            Toast.makeText(this, getString(R.string.error_port_invalid), Toast.LENGTH_SHORT).show()
             return
         }
 
         // Blank means "use the native default"; anything else must be a whole
         // number of seconds in the range the native timeout knob accepts.
-        if (parseTimeoutSeconds(timeout) == null) {
+        val timeoutSeconds = parseTimeoutSeconds(timeoutText)
+        if (timeoutSeconds == null) {
             Toast.makeText(
                 this,
                 getString(
@@ -308,8 +330,8 @@ class ServerProfileActivity : AppCompatActivity() {
             customCa = customCa,
             directFile = directFile,
             proxyFile = proxyFile,
-            socksPort = socksPort,
-            timeout = timeout
+            socksPort = socksPort ?: Profile.DEFAULT_SOCKS_PORT,
+            timeout = timeoutSeconds.takeIf { it > 0 }
         )
 
         if (profileId == null) { // A new profile is being added

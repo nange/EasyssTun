@@ -205,7 +205,7 @@ class EasyssVpnService : VpnService() {
         val config = profile.buildSimpleConfig(configPaths)
         Log.i(TAG, "startService: Starting Mobile proxy - server=${config.getServer()}:${config.getServerPort()}, localPort=${config.getLocalPort()}")
 
-        val socksPort = profile.socksPort.toIntOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toInt()
+        val socksPort = profile.socksPort ?: Profile.DEFAULT_SOCKS_PORT
         val proxyFile = configWriter.writeTproxyConfig(socksPort).getOrElse { error ->
             Log.e(TAG, "startService: could not write the tproxy config", error)
             controller.onServiceFailed(getString(R.string.error_write_tproxy_config), profile.id)
