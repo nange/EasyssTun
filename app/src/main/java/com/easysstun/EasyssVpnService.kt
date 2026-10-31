@@ -28,8 +28,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -50,6 +48,11 @@ class EasyssVpnService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
 
     private lateinit var pref: Pref
+
+    /** Profile repository; readable at any point, unlike [pref]. */
+    private val profiles: ProfileStore
+        get() = ProfileStore.get(this)
+
     private var mobileJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private val statsClient = StatsClient()
@@ -82,8 +85,8 @@ class EasyssVpnService : VpnService() {
 
         if (intent == null) {
             // System restart: no Intent is replayed, so the service recovers
-            // the active profile, proxy mode and app list from Pref.
-            Log.i(TAG, "onStartCommand: no Intent (system restart), loading configuration from Pref.")
+            // the active profile, proxy mode and app list from the stores.
+            Log.i(TAG, "onStartCommand: no Intent (system restart), loading configuration from the stores.")
         } else if (intent.action != ACTION_CONNECT) {
             Log.w(TAG, "onStartCommand: unexpected action '${intent.action}', treating it as a connect request.")
         }
@@ -96,21 +99,21 @@ class EasyssVpnService : VpnService() {
             Log.e(TAG, "onStartCommand: unexpected start failure", e)
             controller.onServiceFailed(
                 e.message ?: getString(R.string.error_start_service_failed),
-                if (::pref.isInitialized) pref.getActiveProfile()?.id else null
+                profiles.active()?.id
             )
             stopSelf()
             START_NOT_STICKY
         }
     }
 
-    private val prefsUpdatedReceiver = object : BroadcastReceiver() {
+    private val configChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (tunFd != null && !isStopping) {
                 restartService()
             } else {
                 Log.d(
                         TAG,
-                        "prefsUpdatedReceiver: tunFd=${tunFd?.fd}, isStopping=$isStopping. Ignoring PREFS_UPDATED."
+                        "configChangeReceiver: tunFd=${tunFd?.fd}, isStopping=$isStopping. Ignoring the config change."
                 )
             }
         }
@@ -118,16 +121,12 @@ class EasyssVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        registerReceiver(
-            prefsUpdatedReceiver,
-            IntentFilter(Pref.PREFS_UPDATED),
-            RECEIVER_NOT_EXPORTED
-        )
+        ConfigChangeNotifier.register(this, configChangeReceiver)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(prefsUpdatedReceiver)
+        unregisterReceiver(configChangeReceiver)
         Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel()
         // Defensive net: a system-initiated destroy skips the stop path, so the
@@ -169,11 +168,11 @@ class EasyssVpnService : VpnService() {
         pref = Pref(this)
 
         // The service and the UI run in the same process, so the active
-        // profile, proxy mode and app list are read directly from Pref
-        // instead of being serialized through the start Intent.
-        val profile = pref.getActiveProfile()
+        // profile, proxy mode and app list are read from the stores instead
+        // of being serialized through the start Intent.
+        val profile = profiles.active()
         if (profile == null) {
-            Log.w(TAG, "startService: no active server profile in Pref, not starting.")
+            Log.w(TAG, "startService: no active server profile, not starting.")
             // Do not leave a started service without a tunnel or notification.
             // Callers using startForegroundService() must validate the profile
             // first: the platform requires startForeground() before stopping an
@@ -183,7 +182,7 @@ class EasyssVpnService : VpnService() {
             return false
         }
         controller.onServiceStarting(profile.id)
-        Log.i(TAG, "startService: loaded active profile '${profile.name}' (${profile.id}) from Pref")
+        Log.i(TAG, "startService: loaded active profile '${profile.name}' (${profile.id})")
 
         /* VPN builder: built now, but establish() is deferred until the
          * easyss SOCKS5 proxy is confirmed ready (see startup sequence
@@ -193,14 +192,22 @@ class EasyssVpnService : VpnService() {
          * surface as 10s+ first page loads right after enabling. */
         val builder = buildVpnBuilder()
 
-        // Build SimpleConfig and write the TProxy config before establishing
-        // the VPN, so everything the native stack needs is on disk first.
-        val config = profile.buildSimpleConfig(cacheDir)
+        // Write every config file the native stack needs before establishing
+        // the VPN. A write failure is reported instead of silently starting
+        // with a stale (or missing) CA / routing-rules file.
+        val configWriter = ProfileConfigWriter(cacheDir)
+        val configPaths = configWriter.writeProfileFiles(profile).getOrElse { error ->
+            Log.e(TAG, "startService: could not write the profile config files", error)
+            controller.onServiceFailed(getString(R.string.error_write_profile_config), profile.id)
+            stopSelf()
+            return false
+        }
+        val config = profile.buildSimpleConfig(configPaths)
         Log.i(TAG, "startService: Starting Mobile proxy - server=${config.getServer()}:${config.getServerPort()}, localPort=${config.getLocalPort()}")
 
-        val socksPort = profile.socksPort.toIntOrNull() ?: Profile.DEFAULT_SOCKS_PORT.toInt()
-        val proxyFile = writeTproxyConfig(socksPort)
-        if (proxyFile == null) {
+        val socksPort = profile.socksPort ?: Profile.DEFAULT_SOCKS_PORT
+        val proxyFile = configWriter.writeTproxyConfig(socksPort).getOrElse { error ->
+            Log.e(TAG, "startService: could not write the tproxy config", error)
             controller.onServiceFailed(getString(R.string.error_write_tproxy_config), profile.id)
             stopSelf()
             return false
@@ -332,8 +339,8 @@ class EasyssVpnService : VpnService() {
 
         builder.addAddress("2001:0db8:0:f101::1", 64)
 
-        val proxyMode = pref.getProxyMode()
-        val apps = pref.getAppsForMode(proxyMode)
+        val proxyMode = pref.proxyMode
+        val apps = AppSelectionStore(pref).selected(proxyMode)
         Log.i(TAG, "Per-app routing: mode=$proxyMode, selectedApps=$apps")
 
         // VpnService forbids mixing addAllowedApplication and
@@ -382,38 +389,6 @@ class EasyssVpnService : VpnService() {
         }
         builder.setSession(session)
         return builder
-    }
-
-    /**
-     * Writes the hev-socks5-tunnel config for [socksPort]. Returns null when the
-     * file cannot be written, so the caller can report the failure instead of
-     * starting the tunnel with a stale config.
-     */
-    private fun writeTproxyConfig(socksPort: Int): File? {
-        Log.d(TAG, "startService: Preparing tproxy.conf with SOCKS port: $socksPort")
-        val proxyFile = File(cacheDir, Pref.TPROXY_FILE)
-        return try {
-            proxyFile.createNewFile()
-            // TCP idle timeout: hev-socks5-tunnel defaults to 300000ms (5min);
-            // raise it to 480000ms (8min) so idle-but-alive TCP sessions
-            // (long polls, keep-alive connections) survive longer.
-            val tproxyConf = """misc:
-  tcp-read-write-timeout: 480000
-  udp-read-write-timeout: 15000
-
-socks5:
-  port: $socksPort
-  address: '127.0.0.1'
-  udp: 'udp'
-"""
-            FileOutputStream(proxyFile, false).use { fos ->
-                fos.write(tproxyConf.toByteArray())
-            }
-            proxyFile
-        } catch (e: IOException) {
-            Log.e(TAG, "Error writing tproxy.conf", e)
-            null
-        }
     }
 
     /**
@@ -503,9 +478,9 @@ socks5:
 
     /**
      * Tears down the current tunnel and re-establishes it with the latest
-     * SharedPreferences state. Used when PREFS_UPDATED is broadcast while the
-     * VPN is running (active profile edited, proxy mode toggled, app list
-     * changed), so the service keeps running with the new config instead of
+     * persisted configuration. Used when [ConfigChangeNotifier] signals a change
+     * while the VPN is running (active profile edited, proxy mode toggled, app
+     * list changed), so the service keeps running with the new config instead of
      * stopping for good.
      */
     private fun restartService() {
@@ -519,7 +494,7 @@ socks5:
         // be unusable, so TunnelState.ready must drop now instead of staying
         // true for the whole teardown (and the home screen must stop polling a
         // stats endpoint that is being torn down).
-        pref.getActiveProfile()?.let { controller.onServiceStarting(it.id) }
+        profiles.active()?.let { controller.onServiceStarting(it.id) }
         shutdownTunnel {
             if (!pref.userWantsVpn) {
                 // User pressed stop while the tunnel was being torn down.

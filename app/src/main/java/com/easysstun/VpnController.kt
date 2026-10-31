@@ -52,6 +52,7 @@ internal sealed interface ConnectRequest {
 internal class VpnController private constructor(
     private val appContext: Context,
     private val pref: Pref,
+    private val profiles: ProfileStore,
 ) {
 
     private val _state = MutableStateFlow<VpnState>(VpnState.Idle)
@@ -82,7 +83,7 @@ internal class VpnController private constructor(
             Log.w(TAG, "connect($profileId) without a configured server profile")
             return ConnectRequest.NoProfile
         }
-        if (profileId != null) pref.setActiveServer(profile.id)
+        if (profileId != null) profiles.select(profile.id)
 
         pref.userWantsVpn = true
         setState(VpnState.Connecting(profile.id))
@@ -174,18 +175,18 @@ internal class VpnController private constructor(
      */
     @Synchronized
     fun switchTo(profileId: String) {
-        val target = pref.getProfiles().firstOrNull { it.id == profileId }
+        val target = profiles.find(profileId)
         if (target == null) {
             Log.w(TAG, "switchTo($profileId): unknown profile, ignoring")
             return
         }
-        val from = pref.getActiveProfile()?.id
+        val from = profiles.active()?.id
         if (from == target.id) {
             Log.d(TAG, "switchTo($profileId): already the active profile, ignoring")
             return
         }
         val engaged = _state.value.isEngaged
-        pref.setActiveServer(target.id)
+        profiles.select(target.id)
         if (!engaged) {
             // Selecting a server while the tunnel is down is not a VPN command.
             if (_state.value is VpnState.Failed) setState(VpnState.Idle)
@@ -242,7 +243,7 @@ internal class VpnController private constructor(
         when (val current = _state.value) {
             is VpnState.Switching -> {
                 val target = current.toProfileId
-                if (pref.getProfiles().none { it.id == target }) {
+                if (profiles.find(target) == null) {
                     // The target was deleted while the switch was in flight.
                     Log.w(
                         TAG,
@@ -252,7 +253,7 @@ internal class VpnController private constructor(
                     return false
                 }
                 Log.i(TAG, "switch ${current.fromProfileId} -> $target: old tunnel gone, starting the new one")
-                pref.setActiveServer(target)
+                profiles.select(target)
                 setState(VpnState.Connecting(target))
                 startServiceNow(target)
                 return true
@@ -316,8 +317,7 @@ internal class VpnController private constructor(
     // ── Internals ───────────────────────────────────────────────
 
     private fun resolveProfile(profileId: String?): Profile? =
-        if (profileId == null) pref.getActiveProfile()
-        else pref.getProfiles().firstOrNull { it.id == profileId }
+        if (profileId == null) profiles.active() else profiles.find(profileId)
 
     private fun setState(next: VpnState) {
         val previous = _state.value
@@ -371,7 +371,8 @@ internal class VpnController private constructor(
             return synchronized(this) {
                 instance ?: VpnController(
                     appContext = context.applicationContext,
-                    pref = Pref(context.applicationContext)
+                    pref = Pref(context.applicationContext),
+                    profiles = ProfileStore.get(context.applicationContext),
                 ).also { instance = it }
             }
         }

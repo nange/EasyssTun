@@ -67,6 +67,7 @@
     <string name="error_no_active_profile">No server profile configured</string>
     <string name="error_start_service_failed">Could not start the VPN service</string>
     <string name="error_write_tproxy_config">Could not write the tunnel configuration</string>
+    <string name="error_write_profile_config">Could not write the server profile configuration</string>
     <string name="error_socks_not_ready">The local proxy did not start in time</string>
     <string name="error_establish_tun">Could not create the VPN interface</string>
     <string name="error_tproxy_start">The tunnel engine failed to start</string>
@@ -92,6 +93,7 @@
     <string name="hint_timeout">Timeout (seconds)</string>
     <string name="helper_timeout">Range 15–60, default 30</string>
     <string name="error_timeout_invalid">Timeout must be a whole number of seconds (%1$d–%2$d)</string>
+    <string name="error_port_invalid">Port must be a number between 1 and 65535</string>
     <string name="hint_direct_domains">Direct Domains/IPs (one per line)</string>
     <string name="hint_proxy_domains">Proxy Domains/IPs (one per line)</string>
 

@@ -133,7 +133,7 @@ internal class UpdateManager internal constructor(
                 context = appContext,
                 pref = pref,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-                sourceFactory = { GitHubUpdateSource(pref) },
+                sourceFactory = { GitHubUpdateSource(ProfileStore.get(appContext)) },
                 verifier = { file, versionCode -> UpdateInstaller.verify(appContext, file, versionCode) },
                 clock = { System.currentTimeMillis() },
                 isDebugBuild = BuildConfig.DEBUG,

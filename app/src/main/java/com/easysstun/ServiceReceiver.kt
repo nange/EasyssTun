@@ -15,11 +15,11 @@ class ServiceReceiver : BroadcastReceiver() {
             /* Auto-start */
             if (!prefs.userWantsVpn) return
 
-            // The service reads its configuration from Pref. Starting a
+            // The service reads its configuration from the stores. Starting a
             // foreground service without an active profile would leave it
             // unable to call startForeground() within the platform deadline,
             // so validate the configuration before starting it.
-            if (prefs.getActiveProfile() == null) {
+            if (ProfileStore.get(context).active() == null) {
                 Log.w(TAG, "BOOT_COMPLETED: service enabled but no active profile; clearing flag.")
                 prefs.userWantsVpn = false
                 return
@@ -31,7 +31,7 @@ class ServiceReceiver : BroadcastReceiver() {
                 context.startActivity(i)
             } else {
                 // Permission already granted, start service directly. The
-                // service reads the active profile from Pref.
+                // service reads the active profile from the stores.
                 context.startForegroundService(EasyssVpnService.connectIntent(context))
             }
         }

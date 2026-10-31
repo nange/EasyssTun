@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
@@ -33,13 +34,16 @@ class ServiceReceiverTest {
     private lateinit var context: Context
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var pref: Pref
+    private lateinit var profiles: ProfileStore
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         pref = Pref(context)
-        sharedPreferences = pref.prefs
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         sharedPreferences.edit().clear().commit()
+        ProfileStore.resetForTests()
+        profiles = ProfileStore.get(context)
     }
 
     @After
@@ -71,11 +75,11 @@ class ServiceReceiverTest {
             id = "boot-test-id",
             name = "Boot Test Server",
             server = "test.example.com",
-            serverPort = "443",
+            serverPort = 443,
             password = "test-password"
         )
-        pref.addProfile(profile)
-        pref.setActiveServer(profile.id)
+        profiles.add(profile)
+        profiles.select(profile.id)
         pref.userWantsVpn = true
 
         val application = context as Application

@@ -4,10 +4,13 @@ import android.content.Intent
 import android.os.Build
 import android.widget.Button
 import android.widget.EditText
+import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -21,6 +24,15 @@ import org.robolectric.shadows.ShadowToast
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class ServerProfileActivityTest {
+
+    @Before
+    fun setUp() {
+        PreferenceManager.getDefaultSharedPreferences(
+            ApplicationProvider.getApplicationContext()
+        ).edit().clear().commit()
+        ProfileStore.resetForTests()
+        VpnController.resetForTests()
+    }
 
     private fun launch(profileId: String? = null): ServerProfileActivity {
         val intent = Intent(ApplicationProvider.getApplicationContext(), ServerProfileActivity::class.java)
@@ -46,7 +58,7 @@ class ServerProfileActivityTest {
 
         assertEquals(
             "A new profile must prefill the default local SOCKS port",
-            Profile.DEFAULT_SOCKS_PORT,
+            Profile.DEFAULT_SOCKS_PORT.toString(),
             activity.field(R.id.profile_socks_port).text.toString()
         )
     }
@@ -67,17 +79,17 @@ class ServerProfileActivityTest {
 
         activity.save()
 
-        val saved = Pref(activity).getProfiles().single()
+        val saved = ProfileStore.get(activity).all().single()
         assertEquals("My Server", saved.name)
         assertEquals("example.com", saved.server)
-        assertEquals("8443", saved.serverPort)
+        assertEquals(8443, saved.serverPort)
         assertEquals("secret", saved.password)
-        assertEquals("2081", saved.socksPort)
+        assertEquals(2081, saved.socksPort)
         assertEquals("sni.example.com", saved.serverNameIndication)
         assertEquals("-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----", saved.customCa)
         assertEquals("example.org", saved.directFile)
         assertEquals("example.net", saved.proxyFile)
-        assertEquals("45", saved.timeout)
+        assertEquals(45, saved.timeout)
     }
 
     @Test
@@ -88,8 +100,8 @@ class ServerProfileActivityTest {
 
         activity.save()
 
-        val saved = Pref(activity).getProfiles().single()
-        assertEquals("45", saved.timeout)
+        val saved = ProfileStore.get(activity).all().single()
+        assertEquals(45, saved.timeout)
         assertEquals(45, saved.timeoutSeconds())
     }
 
@@ -101,8 +113,8 @@ class ServerProfileActivityTest {
 
         activity.save()
 
-        val saved = Pref(activity).getProfiles().single()
-        assertEquals("", saved.timeout)
+        val saved = ProfileStore.get(activity).all().single()
+        assertNull(saved.timeout)
         assertEquals("A blank timeout must leave libeasyss on its own default", 0, saved.timeoutSeconds())
     }
 
@@ -114,11 +126,53 @@ class ServerProfileActivityTest {
 
         activity.save()
 
-        assertTrue("An invalid timeout must not create a profile", Pref(activity).getProfiles().isEmpty())
+        assertTrue("An invalid timeout must not create a profile", ProfileStore.get(activity).all().isEmpty())
         assertEquals(
             "Timeout must be a whole number of seconds (15–60)",
             ShadowToast.getTextOfLatestToast()
         )
+    }
+
+    @Test
+    fun save_rejectsANonNumericServerPort() {
+        val activity = launch()
+        activity.field(R.id.profile_server).setText("example.com")
+        activity.field(R.id.profile_server_port).setText("abc")
+        activity.field(R.id.profile_password).setText("secret")
+
+        activity.save()
+
+        assertTrue("An invalid port must not create a profile", ProfileStore.get(activity).all().isEmpty())
+        assertEquals(
+            activity.getString(R.string.error_port_invalid),
+            ShadowToast.getTextOfLatestToast()
+        )
+    }
+
+    @Test
+    fun save_rejectsAnOutOfRangeLocalSocksPort() {
+        val activity = launch()
+        activity.fillRequired()
+        activity.field(R.id.profile_socks_port).setText("70000")
+
+        activity.save()
+
+        assertTrue("An invalid local port must not create a profile", ProfileStore.get(activity).all().isEmpty())
+        assertEquals(
+            activity.getString(R.string.error_port_invalid),
+            ShadowToast.getTextOfLatestToast()
+        )
+    }
+
+    @Test
+    fun save_blankLocalSocksPort_fallsBackToTheDefault() {
+        val activity = launch()
+        activity.fillRequired()
+        activity.field(R.id.profile_socks_port).setText("   ")
+
+        activity.save()
+
+        assertEquals(Profile.DEFAULT_SOCKS_PORT, ProfileStore.get(activity).all().single().socksPort)
     }
 
     @Test
@@ -137,16 +191,15 @@ class ServerProfileActivityTest {
 
     @Test
     fun edit_showsTheStoredTimeout() {
-        val pref = Pref(ApplicationProvider.getApplicationContext())
         val profile = Profile(
             id = "timeout-profile",
             name = "Server",
             server = "example.com",
-            serverPort = "443",
+            serverPort = 443,
             password = "secret",
-            timeout = "50"
+            timeout = 50
         )
-        pref.addProfile(profile)
+        ProfileStore.get(ApplicationProvider.getApplicationContext()).add(profile)
 
         val activity = launch(profileId = profile.id)
 
