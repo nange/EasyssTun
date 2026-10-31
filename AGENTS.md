@@ -59,6 +59,7 @@ keystore.properties           # 本地签名配置（已 gitignore，模板见 k
 local.properties              # 本地 SDK 路径（已 gitignore）
 app/src/main/java/com/easysstun/
   EasyssVpnService.kt         # ★ 核心：VpnService 前台服务，建 TUN 网卡、启动 native 隧道、通知栏管理
+  VpnState.kt / VpnController.kt  # ★ VPN 状态的唯一真相来源：进程级 StateFlow + connect/disconnect/switchTo 命令
   MainFragment.kt             # ★ 主界面与连接控制逻辑（最大的一个文件）
   ServerProfileActivity.kt    # 服务器配置档编辑页
   Profile.kt                  # 服务器配置数据模型（kotlinx-serialization）
@@ -97,7 +98,7 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
   3. Release **不可**标记为 pre-release 或 draft，否则 `/releases/latest` 会跳过它，自动更新停在旧版本。
   4. 升级必须使用同一签名 key（CI 的 `KEYSTORE_*`）；换 key 后用户只能手动卸载重装。
   5. 下载经 `cacheDir/updates` + FileProvider（authority `${applicationId}.fileprovider`）交给系统安装器，需要 `REQUEST_INSTALL_PACKAGES` 且用户允许「安装未知应用」。
-  6. VPN 运行时检查/下载优先走 libeasyss 本地 HTTP 代理 `127.0.0.1:{socksPort+1000}`，失败回退直连（App 自身流量被 VPN 排除，无法依赖 TUN）；debug 构建禁用更新。自动检查由「隧道就绪」触发：`EasyssVpnService` 在 `waitForSocksReady` 通过后把 `TunnelState.ready` 置 true（更早的 `Pref.isServiceEnabled` 只代表用户意图，不能用来判断代理可用）；冷启动时隧道未就绪则挂起，就绪事件到达即检查，最多等 `LAUNCH_FALLBACK_DELAY_MS`（60s）后直连兜底（覆盖从不连 VPN 的用户）；检查失败不写 `updateLastCheckAt`，因此不消耗 24h 窗口。
+  6. VPN 运行时检查/下载优先走 libeasyss 本地 HTTP 代理 `127.0.0.1:{socksPort+1000}`，失败回退直连（App 自身流量被 VPN 排除，无法依赖 TUN）；debug 构建禁用更新。自动检查由「隧道就绪」触发：`EasyssVpnService` 在 `waitForSocksReady` 通过后把 `TunnelState.ready` 置 true（更早的 `Pref.userWantsVpn` 只代表用户意图，不能用来判断代理可用）；冷启动时隧道未就绪则挂起，就绪事件到达即检查，最多等 `LAUNCH_FALLBACK_DELAY_MS`（60s）后直连兜底（覆盖从不连 VPN 的用户）；检查失败不写 `updateLastCheckAt`，因此不消耗 24h 窗口。
   修改资产命名或发布方式时，必须同步更新 `UpdateRelease.kt` 的正则、`UpdateReleaseTest.kt` 与本段文档。
 - **Gradle wrapper 升级**：`gradlew`、`gradlew.bat`、`gradle/wrapper/gradle-wrapper.jar`、`gradle/wrapper/gradle-wrapper.properties` 四个文件必须同版本、**一起提交**（wrapper jar 入库是 Gradle 官方要求；勿在 `.gitignore` 里加裸 `wrapper` 规则，它会匹配 `gradle/wrapper/` 并让 `git add` 直接报错退出）。升级必须跑**两次** wrapper 任务：先 `./gradlew wrapper --gradle-version <新版本>`（由当前版本执行，只改 properties），再执行一次 `./gradlew wrapper`（此时由新版本执行，刷新 jar；脚本是否变化取决于上游模板）。脚本/jar 到底变没变一律以 `git diff` 为准，有变化就与 properties 一起提交——模板未变时脚本可以一字不动（如 9.6.1→9.7.1），模板变了则必须重新生成（如 9.5.1→9.6.1 改动了 `gradlew`/`gradlew.bat`）。收尾校验：`./gradlew --version`，并将 `shasum -a 256 gradle/wrapper/gradle-wrapper.jar` 与 `https://services.gradle.org/distributions/gradle-<版本>-wrapper.jar.sha256` 比对。**切勿合并外部 PR 提交的 wrapper jar**，务必用可信发行版按上述步骤本地重新生成。
 
@@ -116,7 +117,8 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
 - 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
 - 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（新增偏好项）。
-- 首页状态与统计的覆盖：`MainFragmentStateTest`（连接/停止/切服/旋转的 UI 状态）、`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比）、`EasyssVpnServiceConfigTest`（无有效配置时不启动）。
+- VPN 状态机与首页状态的覆盖：`VpnControllerTest`（命令幂等、切服、失败只报一次、撤权、进程重建/resume、TunnelState 派生）、`MainFragmentStateTest`（连接/停止/切服中旋转/失败弹窗的 UI 状态）、`EasyssVpnServiceConfigTest`（无有效配置上报 Failed、空闲 DISCONNECT 会 stopSelf）。
+- 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比）。
 
 ## Git 提交与 PR 规范
 
