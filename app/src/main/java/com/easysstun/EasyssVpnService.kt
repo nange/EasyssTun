@@ -130,6 +130,11 @@ class EasyssVpnService : VpnService() {
         if (loadedProfile == null) {
             Log.w(TAG, "startService: no active server profile in Pref, not starting.")
             pref.isServiceEnabled = false
+            // Do not leave a started service without a tunnel or notification.
+            // Callers using startForegroundService() must validate the profile
+            // first: the platform requires startForeground() before stopping an
+            // FGS-started instance (ServiceReceiver enforces that check).
+            stopSelf()
             return
         }
         Log.i(TAG, "startService: loaded active profile '${loadedProfile.name}' (${loadedProfile.id}) from Pref")

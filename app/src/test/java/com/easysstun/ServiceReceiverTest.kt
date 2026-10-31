@@ -21,7 +21,8 @@ import org.robolectric.shadows.ShadowVpnService
  *
  * Since VpnService.prepare() and startForegroundService() require a real Android
  * environment, we focus on verifying the branching logic:
- *   - BOOT_COMPLETED + isServiceEnabled=true  → tries to start
+ *   - BOOT_COMPLETED + isServiceEnabled=true + active profile → tries to start
+ *   - BOOT_COMPLETED + isServiceEnabled=true + no active profile → does not start
  *   - BOOT_COMPLETED + isServiceEnabled=false → does nothing
  *   - Non-BOOT_COMPLETED action               → does nothing
  */
@@ -36,15 +37,15 @@ class ServiceReceiverTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        sharedPreferences = context.getSharedPreferences("test_easysstun_prefs", Context.MODE_PRIVATE)
-        sharedPreferences.edit().clear().apply()
         pref = Pref(context)
+        sharedPreferences = pref.prefs
+        sharedPreferences.edit().clear().commit()
     }
 
     @After
     fun tearDown() {
         ShadowVpnService.reset()
-        sharedPreferences.edit().clear().apply()
+        sharedPreferences.edit().clear().commit()
     }
 
     @Test
@@ -94,6 +95,23 @@ class ServiceReceiverTest {
             "the service must read its configuration from Pref, not the Intent",
             started.extras
         )
+    }
+
+    @Test
+    fun onReceive_bootCompleted_enabledButNoProfile_doesNotStartAndClearsFlag() {
+        pref.isServiceEnabled = true
+
+        val application = context as Application
+        shadowOf(application).clearStartedServices()
+
+        val receiver = ServiceReceiver()
+        receiver.onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+
+        assertNull(
+            "boot auto-start must not start a foreground service without an active profile",
+            shadowOf(application).nextStartedService
+        )
+        assertFalse("the stale enabled flag must be cleared", pref.isServiceEnabled)
     }
 
     @Test
