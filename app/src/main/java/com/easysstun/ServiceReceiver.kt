@@ -13,7 +13,7 @@ class ServiceReceiver : BroadcastReceiver() {
             val prefs = Pref(context)
 
             /* Auto-start */
-            if (!prefs.isServiceEnabled) return
+            if (!prefs.userWantsVpn) return
 
             // The service reads its configuration from Pref. Starting a
             // foreground service without an active profile would leave it
@@ -21,7 +21,7 @@ class ServiceReceiver : BroadcastReceiver() {
             // so validate the configuration before starting it.
             if (prefs.getActiveProfile() == null) {
                 Log.w(TAG, "BOOT_COMPLETED: service enabled but no active profile; clearing flag.")
-                prefs.isServiceEnabled = false
+                prefs.userWantsVpn = false
                 return
             }
 

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * [EasyssVpnService] flips this to true only after the SOCKS5 listener answered
  * a real handshake ([EasyssVpnService.waitForSocksReady]) and the tunnel is
- * serving, so it is a strictly stronger signal than `Pref.isServiceEnabled`,
+ * serving, so it is a strictly stronger signal than `Pref.userWantsVpn`,
  * which records the user's *intent* and is set before `Mobile.start()` has even
  * run. The in-app updater uses it to pick the local HTTP proxy route instead of
  * a direct connection that a censored network would drop.

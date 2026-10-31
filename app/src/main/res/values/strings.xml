@@ -4,6 +4,7 @@
     <string name="service_disable">Stop</string>
     <string name="service_connecting">Connecting…</string>
     <string name="service_switching">Switching…</string>
+    <string name="service_stopping">Stopping…</string>
 
     <string name="service_running">EasyssTun is Running</string>
     <string name="service_stopped">EasyssTun is Stopped</string>
@@ -59,6 +60,14 @@
     <string name="app_name_placeholder">PackageName</string>
     <string name="easyss_need_config">Easyss Server Not Configured</string>
     <string name="start_failed_title">Start Failed</string>
+
+    <!-- Tunnel startup errors shown in the start-failure dialog -->
+    <string name="error_no_active_profile">No server profile configured</string>
+    <string name="error_start_service_failed">Could not start the VPN service</string>
+    <string name="error_write_tproxy_config">Could not write the tunnel configuration</string>
+    <string name="error_socks_not_ready">The local proxy did not start in time</string>
+    <string name="error_establish_tun">Could not create the VPN interface</string>
+    <string name="error_tproxy_start">The tunnel engine failed to start</string>
 
 
     <!-- Server profile form -->

@@ -21,9 +21,9 @@ import org.robolectric.shadows.ShadowVpnService
  *
  * Since VpnService.prepare() and startForegroundService() require a real Android
  * environment, we focus on verifying the branching logic:
- *   - BOOT_COMPLETED + isServiceEnabled=true + active profile → tries to start
- *   - BOOT_COMPLETED + isServiceEnabled=true + no active profile → does not start
- *   - BOOT_COMPLETED + isServiceEnabled=false → does nothing
+ *   - BOOT_COMPLETED + userWantsVpn=true + active profile → tries to start
+ *   - BOOT_COMPLETED + userWantsVpn=true + no active profile → does not start
+ *   - BOOT_COMPLETED + userWantsVpn=false → does nothing
  *   - Non-BOOT_COMPLETED action               → does nothing
  */
 @RunWith(AndroidJUnit4::class)
@@ -51,8 +51,8 @@ class ServiceReceiverTest {
     @Test
     fun onReceive_bootCompleted_serviceDisabled_doesNotStart() {
         // Confirm service is disabled
-        pref.isServiceEnabled = false
-        assertFalse("Service should be disabled", pref.isServiceEnabled)
+        pref.userWantsVpn = false
+        assertFalse("Service should be disabled", pref.userWantsVpn)
 
         val receiver = ServiceReceiver()
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
@@ -61,7 +61,7 @@ class ServiceReceiverTest {
         receiver.onReceive(context, intent)
 
         // Service should remain disabled (no start attempted)
-        assertFalse("Service should still be disabled after broadcast", pref.isServiceEnabled)
+        assertFalse("Service should still be disabled after broadcast", pref.userWantsVpn)
     }
 
     @Test
@@ -76,7 +76,7 @@ class ServiceReceiverTest {
         )
         pref.addProfile(profile)
         pref.setActiveServer(profile.id)
-        pref.isServiceEnabled = true
+        pref.userWantsVpn = true
 
         val application = context as Application
         shadowOf(application).clearStartedServices()
@@ -99,7 +99,7 @@ class ServiceReceiverTest {
 
     @Test
     fun onReceive_bootCompleted_enabledButNoProfile_doesNotStartAndClearsFlag() {
-        pref.isServiceEnabled = true
+        pref.userWantsVpn = true
 
         val application = context as Application
         shadowOf(application).clearStartedServices()
@@ -111,12 +111,12 @@ class ServiceReceiverTest {
             "boot auto-start must not start a foreground service without an active profile",
             shadowOf(application).nextStartedService
         )
-        assertFalse("the stale enabled flag must be cleared", pref.isServiceEnabled)
+        assertFalse("the stale enabled flag must be cleared", pref.userWantsVpn)
     }
 
     @Test
     fun onReceive_nonBootAction_doesNothing() {
-        pref.isServiceEnabled = true
+        pref.userWantsVpn = true
 
         val receiver = ServiceReceiver()
         val intent = Intent("some.other.action")
@@ -125,12 +125,12 @@ class ServiceReceiverTest {
         receiver.onReceive(context, intent)
 
         // Verify nothing changed — prefs should still be intact
-        assertTrue("Service should still be enabled after non-boot broadcast", pref.isServiceEnabled)
+        assertTrue("Service should still be enabled after non-boot broadcast", pref.userWantsVpn)
     }
 
     @Test
     fun onReceive_nullAction_doesNothing() {
-        pref.isServiceEnabled = true
+        pref.userWantsVpn = true
 
         val receiver = ServiceReceiver()
         val intent = Intent() // No action set
@@ -139,6 +139,6 @@ class ServiceReceiverTest {
         receiver.onReceive(context, intent)
 
         // Service state unchanged
-        assertTrue("Service should still be enabled", pref.isServiceEnabled)
+        assertTrue("Service should still be enabled", pref.userWantsVpn)
     }
 }

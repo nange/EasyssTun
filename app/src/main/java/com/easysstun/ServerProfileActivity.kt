@@ -15,6 +15,7 @@ import java.util.UUID
 class ServerProfileActivity : AppCompatActivity() {
 
     private lateinit var pref: Pref
+    private lateinit var controller: VpnController
     private var currentProfile: Profile? = null
     private var profileId: String? = null
 
@@ -62,6 +63,7 @@ class ServerProfileActivity : AppCompatActivity() {
         setContentView(R.layout.activity_server_profile)
 
         pref = Pref(this)
+        controller = VpnController.get(this)
         profileId = intent.getStringExtra("profileId")
 
         // Initialize UI elements
@@ -162,7 +164,7 @@ class ServerProfileActivity : AppCompatActivity() {
 
     private fun showDeleteConfirmationDialog() {
         val isActive = profileId != null && profileId == pref.getActiveProfile()?.id
-        val message = if (isActive && pref.isServiceEnabled) {
+        val message = if (isActive && controller.state.value.isEngaged) {
             // Deleting the active profile while the VPN is running will disconnect it.
             getString(R.string.delete_confirm_message_active)
         } else {
@@ -181,14 +183,14 @@ class ServerProfileActivity : AppCompatActivity() {
     private fun deleteProfileAndFinish() {
         profileId?.let {
             val wasActive = pref.getActiveProfile()?.id == it
-            val wasRunning = pref.isServiceEnabled
+            val wasRunning = controller.state.value.isEngaged
             pref.deleteProfile(it)
             Toast.makeText(this, getString(R.string.delete_success), Toast.LENGTH_SHORT).show()
             if (wasActive && wasRunning) {
                 // The VPN was running with the profile being deleted. Disconnect it
-                // explicitly (same signal as the home screen stop button) instead of
-                // letting it keep running with a config that no longer exists.
-                startService(EasyssVpnService.disconnectIntent(this))
+                // explicitly (same command as the home screen stop button) instead
+                // of letting it keep running with a config that no longer exists.
+                controller.disconnect()
             }
             finish()
         }
