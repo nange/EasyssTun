@@ -71,6 +71,8 @@ app/src/main/java/com/easysstun/
   UpdateInstaller.kt / UpdateDialogs.kt   # 签名校验、FileProvider 安装 intent、更新弹窗
   UpdateCardView.kt           # 首页统计卡片下方的「软件更新」卡片（版本号、自动检查开关、检查/下载）
   ServiceReceiver.kt          # 开机自启广播接收
+  Stats.kt / StatsBinder.kt   # ★ 本地 stats 端点客户端/快照（首页与通知栏共用）及统计卡片渲染
+  AppJson.kt                 # 共享 kotlinx.serialization Json 配置（档案、Intent payload、Release）
   AppState.kt / TunnelState.kt / FormatUtils.kt / EasyssTunApplication.kt  # 辅助类（AppState=前后台，TunnelState=隧道就绪）
 app/src/main/res/xml/file_paths.xml     # FileProvider 路径（cacheDir/updates）
 app/libs/                     # ★ 本地 AAR 依赖（均不入库，首次构建自动下载）
@@ -114,6 +116,7 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
 - 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
 - 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（新增偏好项）。
+- 首页状态与统计的覆盖：`MainFragmentStateTest`（连接/停止/切服/旋转的 UI 状态）、`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比）、`EasyssVpnServiceConfigTest`（无有效配置时不启动）。
 
 ## Git 提交与 PR 规范
 
