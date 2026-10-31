@@ -100,7 +100,7 @@ class ProfileTest {
         assertEquals("Default customCa should be empty", "", decoded.customCa)
         assertEquals("Default directFile should be empty", "", decoded.directFile)
         assertEquals("Default proxyFile should be empty", "", decoded.proxyFile)
-        assertEquals("Default socksPort should be 2080", "2080", decoded.socksPort)
+        assertEquals("Default socksPort should be 4080", "4080", decoded.socksPort)
     }
 
     @Test
@@ -173,15 +173,15 @@ class ProfileTest {
     // ── Stats endpoint (SOCKS port + 1000) ──────────────────────────────
 
     @Test
-    fun statsPort_withDefaultSocksPort_returns3080() {
+    fun statsPort_withDefaultSocksPort_returns5080() {
         val profile = createFullProfile()
-        assertEquals("Default socks port 2080 should map to stats port 3080", 3080, profile.statsPort())
+        assertEquals("Default socks port 4080 should map to stats port 5080", 5080, profile.statsPort())
     }
 
     @Test
-    fun statsUrl_withDefaultSocksPort_usesPort3080() {
+    fun statsUrl_withDefaultSocksPort_usesPort5080() {
         val profile = createFullProfile()
-        assertEquals("http://127.0.0.1:3080/stats", profile.statsUrl())
+        assertEquals("http://127.0.0.1:5080/stats", profile.statsUrl())
     }
 
     @Test
@@ -193,14 +193,14 @@ class ProfileTest {
 
     @Test
     fun statsPort_withBlankOrInvalidSocksPort_fallsBackToDefault() {
-        assertEquals("Blank socks port should fall back to 3080", 3080, createFullProfile().copy(socksPort = "").statsPort())
-        assertEquals("Non-numeric socks port should fall back to 3080", 3080, createFullProfile().copy(socksPort = "abc").statsPort())
-        assertEquals("Blank socks port should fall back to default URL", "http://127.0.0.1:3080/stats", createFullProfile().copy(socksPort = "").statsUrl())
+        assertEquals("Blank socks port should fall back to 5080", 5080, createFullProfile().copy(socksPort = "").statsPort())
+        assertEquals("Non-numeric socks port should fall back to 5080", 5080, createFullProfile().copy(socksPort = "abc").statsPort())
+        assertEquals("Blank socks port should fall back to default URL", "http://127.0.0.1:5080/stats", createFullProfile().copy(socksPort = "").statsUrl())
     }
 
     @Test
     fun defaultStatsUrl_pointsToDefaultStatsPort() {
-        assertEquals("http://127.0.0.1:3080/stats", Profile.defaultStatsUrl())
+        assertEquals("http://127.0.0.1:5080/stats", Profile.defaultStatsUrl())
     }
 
     // ── Timeout (native `-t/--timeout` knob) ────────────────────────────

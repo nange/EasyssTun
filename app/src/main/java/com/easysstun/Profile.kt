@@ -29,7 +29,11 @@ data class Profile(
     val timeout: String = DEFAULT_TIMEOUT
 ) {
     companion object {
-        const val DEFAULT_SOCKS_PORT = "2080"
+        /**
+         * Local SOCKS port prefilled for new profiles and used as the fallback
+         * when a stored profile carries no (or an unparseable) port.
+         */
+        const val DEFAULT_SOCKS_PORT = "4080"
         const val STATS_PORT_OFFSET = 1000
 
         /**
@@ -51,7 +55,7 @@ data class Profile(
         private const val STATS_URL_FORMAT = "http://127.0.0.1:%d/stats"
 
         /**
-         * Stats URL for the default SOCKS port (i.e. 3080), used when no active
+         * Stats URL for the default SOCKS port (i.e. 5080), used when no active
          * profile is available.
          */
         fun defaultStatsUrl(): String =
@@ -66,8 +70,8 @@ data class Profile(
         (socksPort.toIntOrNull() ?: DEFAULT_SOCKS_PORT.toInt()) + STATS_PORT_OFFSET
 
     /**
-     * The local HTTP stats endpoint URL, e.g. http://127.0.0.1:3080/stats
-     * for the default SOCKS port 2080.
+     * The local HTTP stats endpoint URL, e.g. http://127.0.0.1:5080/stats
+     * for the default SOCKS port 4080.
      */
     fun statsUrl(): String = String.format(Locale.ROOT, STATS_URL_FORMAT, statsPort())
 
