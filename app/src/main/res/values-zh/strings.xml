@@ -6,6 +6,7 @@
     <string name="service_connecting">连接中…</string>
     <string name="service_switching">切换中…</string>
     <string name="service_stopping">停止中…</string>
+    <string name="service_cancel">取消</string>
     <string name="service_running">EasyssTun 服务运行中</string>
     <string name="service_stopped">EasyssTun 已停止</string>
     <string name="skipped_app_list">已配置跳过 %s 个应用</string>
@@ -59,6 +60,7 @@
     <string name="app_name_placeholder">应用名</string>
     <string name="easyss_need_config">Easyss 服务未配置</string>
     <string name="start_failed_title">启动失败</string>
+    <string name="start_failed_title_named">启动失败：%1$s</string>
 
     <!-- 启动失败弹窗中的隧道启动错误 -->
     <string name="error_no_active_profile">未配置服务器</string>

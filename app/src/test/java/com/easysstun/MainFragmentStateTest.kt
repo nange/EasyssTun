@@ -77,6 +77,12 @@ class MainFragmentStateTest {
     private fun statsGrid(): LinearLayout =
         mainFragment().requireView().findViewById(R.id.stats_grid)
 
+    private fun serviceTitle(): String =
+        mainFragment().requireView()
+            .findViewById<android.widget.TextView>(R.id.service_title)
+            .text
+            .toString()
+
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
     private fun recreate() {
@@ -116,9 +122,13 @@ class MainFragmentStateTest {
 
         assertEquals(
             activity.getString(R.string.service_connecting),
-            button().text.toString()
+            serviceTitle()
         )
-        assertFalse("the start button must be disabled while connecting", button().isEnabled)
+        assertTrue(
+            "connecting must stay cancellable from the home screen",
+            button().isEnabled
+        )
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
 
         // The service reports a fully established tunnel.
         vpn.onServiceRunning(profile.id)
@@ -130,23 +140,23 @@ class MainFragmentStateTest {
     }
 
     @Test
-    fun stopWhileConnecting_returnsToStoppedState() {
+    fun cancelWhileConnecting_returnsToStoppedState() {
         val profile = addProfile("A")
         Pref(context).setActiveServer(profile.id)
         recreate()
 
+        // Start, then cancel through the same button (the real entry point).
         button().performClick()
         idle()
-        assertFalse(button().isEnabled)
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
 
-        // The user stops while the tunnel is still coming up.
-        vpn.disconnect()
+        button().performClick()
         idle()
         assertEquals(
             activity.getString(R.string.service_stopping),
-            button().text.toString()
+            serviceTitle()
         )
-        assertFalse(button().isEnabled)
+        assertFalse("stopping is not cancellable", button().isEnabled)
 
         // The service finished tearing down.
         vpn.onServiceStopped()
@@ -155,6 +165,25 @@ class MainFragmentStateTest {
         assertEquals(activity.getString(R.string.service_enable), button().text.toString())
         assertTrue(button().isEnabled)
         assertEquals(View.GONE, statsGrid().visibility)
+    }
+
+    @Test
+    fun connecting_recoversWhenTheServiceIsDestroyed() {
+        val profile = addProfile("A")
+        Pref(context).setActiveServer(profile.id)
+        recreate()
+
+        button().performClick()
+        idle()
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
+
+        // The system took the service away mid-startup: the screen must not stay
+        // frozen on "connecting" with no way out.
+        vpn.onServiceDestroyed()
+        idle()
+
+        assertEquals(activity.getString(R.string.service_enable), button().text.toString())
+        assertTrue(button().isEnabled)
     }
 
     @Test
@@ -172,10 +201,9 @@ class MainFragmentStateTest {
         // Selecting a different server asks the controller for a switch: the
         // target becomes the active profile immediately (so a process death
         // resumes on it) while the old tunnel is torn down first.
-        assertEquals(
-            activity.getString(R.string.service_switching),
-            button().text.toString()
-        )
+        assertEquals(activity.getString(R.string.service_switching), serviceTitle())
+        assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
+        assertTrue("a switch can be cancelled", button().isEnabled)
         assertFalse("the spinner is disabled while switching", spinner().isEnabled)
         assertEquals("B", Pref(context).getActiveProfile()?.name)
 
@@ -183,10 +211,7 @@ class MainFragmentStateTest {
         vpn.onServiceStopped()
         idle()
         assertEquals("B", Pref(context).getActiveProfile()?.name)
-        assertEquals(
-            activity.getString(R.string.service_connecting),
-            button().text.toString()
-        )
+        assertEquals(activity.getString(R.string.service_connecting), serviceTitle())
 
         vpn.onServiceRunning(second.id)
         idle()
@@ -208,10 +233,7 @@ class MainFragmentStateTest {
 
         // The pending target lives in VpnState now, not in the fragment.
         recreate()
-        assertEquals(
-            activity.getString(R.string.service_switching),
-            button().text.toString()
-        )
+        assertEquals(activity.getString(R.string.service_switching), serviceTitle())
         assertFalse(spinner().isEnabled)
 
         vpn.onServiceStopped()

@@ -18,7 +18,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat.getDrawable
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.easysstun.databinding.FragmentMainBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -100,9 +102,13 @@ class MainFragment : Fragment() {
 
         // The VPN state is process-wide (VpnController), so collecting it here
         // survives rotation and re-entry without any fragment-side bookkeeping:
-        // the first emission already renders the correct state.
+        // the first emission already renders the correct state. Collection is
+        // paused while the screen is stopped so a failure dialog never pops up
+        // in the background; onResume() renders the current state on return.
         viewLifecycleOwner.lifecycleScope.launch {
-            controller.state.collect { renderState(it) }
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                controller.state.collect { renderState(it) }
+            }
         }
     }
 
@@ -180,15 +186,13 @@ class MainFragment : Fragment() {
             Log.d(TAG, "Spinner selected the active server. No change.")
             return
         }
-        if (state.isEngaged) {
-            // The controller remembers the target, so a rotation during the
-            // switch no longer loses it.
-            controller.switchTo(profile.id)
-        } else {
-            // Selecting a server while the tunnel is down is a plain
-            // configuration change, not a VPN command.
-            pref.setActiveServer(profile.id)
-            renderState(state)
+        // The controller is the only writer of the active profile: it either
+        // selects it (tunnel down) or runs the stop/start switch (tunnel up).
+        controller.switchTo(profile.id)
+        if (!state.isEngaged) {
+            // A plain selection emits no state change, so refresh the
+            // configuration-dependent UI here.
+            renderState(controller.state.value)
         }
     }
 
@@ -246,12 +250,21 @@ class MainFragment : Fragment() {
                 // dialog can actually be shown, so a failure that arrives while
                 // the screen is finishing is still reported on the next visit.
                 if (isAdded && !requireActivity().isFinishing) {
-                    controller.consumeFailure()?.let { showStartFailedDialog(it) }
+                    val message = controller.consumeFailure()
+                    if (message != null) {
+                        val profileName = state.profileId?.let { id ->
+                            pref.getProfiles().firstOrNull { it.id == id }?.name
+                        }
+                        showStartFailedDialog(message, profileName)
+                    }
                 }
             }
-            is VpnState.Connecting -> renderBusy(R.string.service_connecting)
-            is VpnState.Switching -> renderBusy(R.string.service_switching)
-            VpnState.Stopping -> renderBusy(R.string.service_stopping)
+            // Connecting/switching can be cancelled: the service may be slow or
+            // never report back, and a disabled button would leave the user with
+            // no way out. Stopping is already the way out.
+            is VpnState.Connecting -> renderBusy(R.string.service_connecting, cancellable = true)
+            is VpnState.Switching -> renderBusy(R.string.service_switching, cancellable = true)
+            VpnState.Stopping -> renderBusy(R.string.service_stopping, cancellable = false)
             is VpnState.Running -> renderRunning()
         }
     }
@@ -273,13 +286,18 @@ class MainFragment : Fragment() {
         stopStatsPolling()
     }
 
-    private fun renderBusy(titleRes: Int) {
-        binding.serviceButton.text = getString(titleRes)
-        binding.serviceButton.isEnabled = false
-        binding.serviceButton.icon = getDrawable(
-            mContext, R.drawable.ic_spinner_anim
+    private fun renderBusy(titleRes: Int, cancellable: Boolean) {
+        binding.serviceButton.text = getString(
+            if (cancellable) R.string.service_cancel else titleRes
         )
-        (binding.serviceButton.icon as? AnimatedVectorDrawable)?.start()
+        binding.serviceButton.isEnabled = cancellable
+        val icon = getDrawable(
+            mContext,
+            if (cancellable) R.drawable.ic_close_24 else R.drawable.ic_spinner_anim
+        )
+        binding.serviceButton.icon = icon
+        if (!cancellable) (icon as? AnimatedVectorDrawable)?.start()
+        binding.serviceButton.setBackgroundColor(mContext.getColor(R.color.button_disable))
         binding.serviceTitle.text = getString(titleRes)
         stopStatsPolling()
     }
@@ -351,13 +369,19 @@ class MainFragment : Fragment() {
      * finishing/detached activity so the dialog never throws BadTokenException
      * (e.g. when the failure surfaces while the app is backgrounded).
      */
-    private fun showStartFailedDialog(errorMessage: String) {
+    private fun showStartFailedDialog(errorMessage: String, profileName: String?) {
         if (!isAdded || requireActivity().isFinishing) {
             Log.w(TAG, "showStartFailedDialog: fragment not added or activity finishing, skipping dialog. Error: $errorMessage")
             return
         }
         MaterialAlertDialogBuilder(requireActivity())
-                .setTitle(R.string.start_failed_title)
+                .setTitle(
+                    if (profileName != null) {
+                        getString(R.string.start_failed_title_named, profileName)
+                    } else {
+                        getString(R.string.start_failed_title)
+                    }
+                )
                 .setMessage(errorMessage)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()

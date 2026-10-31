@@ -60,7 +60,7 @@ local.properties              # 本地 SDK 路径（已 gitignore）
 app/src/main/java/com/easysstun/
   EasyssVpnService.kt         # ★ 核心：VpnService 前台服务，建 TUN 网卡、启动 native 隧道、通知栏管理
   VpnState.kt / VpnController.kt  # ★ VPN 状态的唯一真相来源：进程级 StateFlow + connect/disconnect/switchTo 命令
-  MainFragment.kt             # ★ 主界面与连接控制逻辑（最大的一个文件）
+  MainFragment.kt             # ★ 主界面：渲染 VpnState、连接/取消、服务器切换、统计与更新卡片
   ServerProfileActivity.kt    # 服务器配置档编辑页
   Profile.kt                  # 服务器配置数据模型（kotlinx-serialization）
   Pref.kt                     # SharedPreferences 封装（设置持久化）
