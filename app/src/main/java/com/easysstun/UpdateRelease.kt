@@ -2,7 +2,6 @@ package com.easysstun
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 internal const val UPDATE_REPO = "nange/EasyssTun"
 internal const val LATEST_RELEASE_API = "https://api.github.com/repos/$UPDATE_REPO/releases/latest"
@@ -47,10 +46,8 @@ internal data class ApkAsset(
     val sha256: String?,
 )
 
-private val releaseJson = Json { ignoreUnknownKeys = true }
-
 internal fun decodeRelease(body: String): Release? =
-    runCatching { releaseJson.decodeFromString<Release>(body) }
+    runCatching { appJson.decodeFromString<Release>(body) }
         .getOrNull()
         ?.takeIf { it.tagName.isNotBlank() }
 

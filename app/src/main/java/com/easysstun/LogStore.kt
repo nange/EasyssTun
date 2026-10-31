@@ -34,7 +34,7 @@ object LogParser {
     val APP_LOG_TAGS = arrayOf(
         "GoLog", "EasyssVpnServiceDiag", "MainFragment", "AppState",
         "Pref", "Profile", "LogFragment", "AppListAdapter", "LogStore",
-        "Updater", VERSION_LOG_TAG
+        "Stats", "Updater", VERSION_LOG_TAG
     )
 
     // Written to logcat right before the LogStore reader starts; everything

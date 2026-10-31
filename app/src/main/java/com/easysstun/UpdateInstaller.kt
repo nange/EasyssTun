@@ -113,15 +113,6 @@ internal object UpdateInstaller {
         }
     }
 
-    private fun sha256(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        val hex = CharArray(digest.size * 2)
-        val digits = "0123456789abcdef"
-        for ((index, byte) in digest.withIndex()) {
-            val value = byte.toInt() and 0xff
-            hex[index * 2] = digits[value shr 4]
-            hex[index * 2 + 1] = digits[value and 0x0f]
-        }
-        return String(hex)
-    }
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).toHex()
 }
