@@ -281,17 +281,39 @@ class VpnControllerTest {
     }
 
     @Test
-    fun onServiceDestroyed_whileConnecting_keepsTheStartInFlight() {
+    fun onServiceDestroyed_whileConnecting_returnsToIdleSoTheScreenCanRetry() {
         val profile = addProfile("A")
         controller.onServiceStarting(profile.id)
 
         controller.onServiceDestroyed()
 
         assertEquals(
-            "a destroyed instance may be replaced by the one a switch just started",
-            VpnState.Connecting(profile.id),
+            "a destroyed service must not leave the screen stuck on 'connecting'",
+            VpnState.Idle,
             controller.state.value
         )
+    }
+
+    @Test
+    fun onServiceDestroyed_whileStopping_returnsToIdle() {
+        val profile = addProfile("A")
+        pref.setActiveServer(profile.id)
+        controller.connect()
+        controller.disconnect()
+        assertEquals(VpnState.Stopping, controller.state.value)
+
+        controller.onServiceDestroyed()
+
+        assertEquals(VpnState.Idle, controller.state.value)
+    }
+
+    @Test
+    fun onServiceDestroyed_whileFailed_keepsTheFailure() {
+        controller.onServiceFailed("boom", null)
+
+        controller.onServiceDestroyed()
+
+        assertTrue(controller.state.value is VpnState.Failed)
     }
 
     @Test
@@ -305,6 +327,80 @@ class VpnControllerTest {
 
         assertFalse(pref.userWantsVpn)
         assertEquals(VpnState.Stopping, controller.state.value)
+    }
+
+    @Test
+    fun onServiceStopped_reportsWhetherItStartedAReplacement() {
+        val first = addProfile("A")
+        val second = addProfile("B")
+        pref.setActiveServer(first.id)
+        controller.connect()
+        controller.onServiceRunning(first.id)
+        controller.switchTo(second.id)
+
+        assertTrue(
+            "a switch issues a follow-up start, so the stopping instance is replaced",
+            controller.onServiceStopped()
+        )
+
+        controller.onServiceRunning(second.id)
+        controller.disconnect()
+        assertFalse("a plain stop has no replacement", controller.onServiceStopped())
+    }
+
+    @Test
+    fun onServiceStarting_duringAStop_isIgnored() {
+        val profile = addProfile("A")
+        pref.setActiveServer(profile.id)
+        controller.connect()
+        controller.onServiceRunning(profile.id)
+        controller.disconnect()
+
+        controller.onServiceStarting(profile.id)
+
+        assertEquals(VpnState.Stopping, controller.state.value)
+    }
+
+    @Test
+    fun onServiceStarting_duringASwitch_isIgnored() {
+        val first = addProfile("A")
+        val second = addProfile("B")
+        pref.setActiveServer(first.id)
+        controller.connect()
+        controller.onServiceRunning(first.id)
+        controller.switchTo(second.id)
+
+        controller.onServiceStarting(first.id)
+
+        assertEquals(VpnState.Switching(first.id, second.id), controller.state.value)
+    }
+
+    @Test
+    fun onServiceStarting_afterARestart_dropsReadiness() {
+        val profile = addProfile("A")
+        pref.setActiveServer(profile.id)
+        controller.connect()
+        controller.onServiceRunning(profile.id)
+        assertTrue(TunnelState.ready.value)
+
+        // PREFS_UPDATED restart: the service rebuilds the tunnel from Pref.
+        controller.onServiceStarting(profile.id)
+
+        assertEquals(VpnState.Connecting(profile.id), controller.state.value)
+        assertFalse(
+            "readiness must drop as soon as the tunnel is being rebuilt",
+            TunnelState.ready.value
+        )
+    }
+
+    @Test
+    fun onServiceFailed_repeatedMessage_isNotShownTwice() {
+        controller.onServiceFailed("boom", null)
+        assertEquals("boom", controller.consumeFailure())
+
+        controller.onServiceFailed("boom", null)
+
+        assertNull("the same failure must not re-arm the dialog", controller.consumeFailure())
     }
 
     // ── Server switch ───────────────────────────────────────────
@@ -359,6 +455,39 @@ class VpnControllerTest {
         controller.switchTo(profile.id)
 
         assertEquals(VpnState.Running(profile.id), controller.state.value)
+    }
+
+    @Test
+    fun switchTo_whileConnecting_restartsForTheNewProfile() {
+        val first = addProfile("A")
+        val second = addProfile("B")
+        pref.setActiveServer(first.id)
+        controller.connect()
+
+        controller.switchTo(second.id)
+        assertEquals(VpnState.Switching(first.id, second.id), controller.state.value)
+
+        controller.onServiceStopped()
+        assertEquals(VpnState.Connecting(second.id), controller.state.value)
+    }
+
+    @Test
+    fun disconnect_duringASwitch_cancelsIt() {
+        val first = addProfile("A")
+        val second = addProfile("B")
+        pref.setActiveServer(first.id)
+        controller.connect()
+        controller.onServiceRunning(first.id)
+        controller.switchTo(second.id)
+
+        controller.disconnect()
+        controller.onServiceStopped()
+
+        assertEquals(
+            "cancelling a switch must not start the new profile",
+            VpnState.Idle,
+            controller.state.value
+        )
     }
 
     @Test

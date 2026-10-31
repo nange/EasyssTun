@@ -35,7 +35,10 @@ internal sealed interface ConnectRequest {
  * [Pref.userWantsVpn] is the persisted *intent* and is only written on an
  * explicit user action (start, stop, denied permission) or a system revocation;
  * the service never writes it. A failed start therefore stays visible as
- * [VpnState.Failed] instead of silently flipping the intent off.
+ * [VpnState.Failed] instead of silently flipping the intent off. [VpnState] is
+ * process-local, so a failure does not outlive the process: after a restart the
+ * state is [VpnState.Idle] again and [resume] may retry the connection the user
+ * still asked for.
  *
  * A fresh process starts [VpnState.Idle] even when [Pref.userWantsVpn] is true:
  * the tunnel lives in this very process, so it cannot survive a process death.
@@ -229,42 +232,64 @@ internal class VpnController private constructor(
      * The service finished tearing down (it is already stopping itself). This is
      * where the second half of a server switch happens: the new profile is
      * started only after the old tunnel is completely gone.
+     *
+     * @return true when a follow-up start was issued, i.e. the service instance
+     *   that is stopping is immediately replaced. The service uses this to tell
+     *   a planned replacement from a system-initiated destroy.
      */
     @Synchronized
-    internal fun onServiceStopped() {
+    internal fun onServiceStopped(): Boolean {
         when (val current = _state.value) {
             is VpnState.Switching -> {
                 val target = current.toProfileId
                 if (pref.getProfiles().none { it.id == target }) {
                     // The target was deleted while the switch was in flight.
-                    Log.w(TAG, "switch target $target no longer exists, returning to Idle")
+                    Log.w(
+                        TAG,
+                        "switch ${current.fromProfileId} -> $target abandoned: target no longer exists"
+                    )
                     setState(VpnState.Idle)
-                    return
+                    return false
                 }
+                Log.i(TAG, "switch ${current.fromProfileId} -> $target: old tunnel gone, starting the new one")
                 pref.setActiveServer(target)
                 setState(VpnState.Connecting(target))
                 startServiceNow(target)
+                return true
             }
             // Keep the failure visible: the UI still has to show its dialog.
             is VpnState.Failed -> Unit
             else -> setState(VpnState.Idle)
         }
+        return false
     }
 
     /** The service could not start (or lost) the tunnel; [message] is user-facing. */
     @Synchronized
     internal fun onServiceFailed(message: String, profileId: String?) {
         Log.w(TAG, "service failed (profile=$profileId): $message")
-        failureConsumed = false
         setState(VpnState.Failed(message, profileId))
     }
 
-    /** Defensive net for a service destroyed without going through the stop path. */
+    /**
+     * The service instance is gone without having reported a stop. This happens
+     * when the system takes the service away mid-startup/mid-teardown, or when
+     * the teardown coroutine was cancelled by `onDestroy` before it could
+     * finalize. Falling back to [VpnState.Idle] is what keeps the home screen
+     * from freezing on "connecting"/"stopping" with a disabled button.
+     *
+     * A service that is being replaced by a server switch does not call this
+     * (see [onServiceStopped]); a failed start has already reported
+     * [VpnState.Failed] and keeps it.
+     */
     @Synchronized
     internal fun onServiceDestroyed() {
-        if (_state.value is VpnState.Running) {
-            Log.w(TAG, "service destroyed while running, returning to Idle")
-            setState(VpnState.Idle)
+        when (val current = _state.value) {
+            is VpnState.Running, is VpnState.Connecting, VpnState.Stopping -> {
+                Log.w(TAG, "service destroyed in state $current, returning to Idle")
+                setState(VpnState.Idle)
+            }
+            else -> Unit
         }
     }
 
@@ -297,7 +322,10 @@ internal class VpnController private constructor(
     private fun setState(next: VpnState) {
         val previous = _state.value
         if (previous == next) return
-        if (next !is VpnState.Failed) failureConsumed = false
+        // Every transition invalidates the one-shot failure latch. A repeated
+        // report of the very same failure is a no-op above, so the dialog is
+        // never shown twice for one failure.
+        failureConsumed = false
         // A new Connecting phase has not issued its start Intent yet.
         if (previous !is VpnState.Connecting || next !is VpnState.Connecting) startIssued = false
         Log.i(TAG, "vpn state: $previous -> $next")

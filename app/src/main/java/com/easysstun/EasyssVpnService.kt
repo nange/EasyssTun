@@ -65,6 +65,10 @@ class EasyssVpnService : VpnService() {
     // competing shutdown (which would finalize the service twice).
     @Volatile
     private var isStopping: Boolean = false
+    // Set when the controller issued a follow-up start while finalizing (server
+    // switch), so onDestroy() knows the next instance is already on its way.
+    @Volatile
+    private var replacedByController: Boolean = false
 
     private val controller: VpnController
         get() = VpnController.get(this)
@@ -128,7 +132,9 @@ class EasyssVpnService : VpnService() {
         serviceScope.cancel()
         // Defensive net: a system-initiated destroy skips the stop path, so the
         // controller must not keep advertising a tunnel that no longer exists.
-        controller.onServiceDestroyed()
+        // A planned replacement (server switch) already started the next
+        // instance, so it must not be reconciled away.
+        if (!replacedByController) controller.onServiceDestroyed()
         Log.i(TAG, "onDestroy: Service being destroyed.")
     }
 
@@ -150,6 +156,14 @@ class EasyssVpnService : VpnService() {
         if (tunFd != null || isStarting) {
             Log.d(TAG, "startService: already running or starting (tunFd=${tunFd?.fd}, isStarting=$isStarting). Ignoring.")
             return true
+        }
+        if (isStopping) {
+            // The teardown owns the native stack; starting underneath it is the
+            // exact start/stop race this service is careful to avoid. The
+            // controller blocks connect() while Stopping, so this is defensive:
+            // the teardown's own finalize reports the state right after.
+            Log.w(TAG, "startService: teardown in progress, dropping the start request.")
+            return false
         }
 
         pref = Pref(this)
@@ -501,6 +515,11 @@ socks5:
         }
         Log.i(TAG, "restartService() called. Tearing down tunnel to reload latest prefs.")
         isStopping = true
+        // Report the restart window as Connecting: the local proxy is about to
+        // be unusable, so TunnelState.ready must drop now instead of staying
+        // true for the whole teardown (and the home screen must stop polling a
+        // stats endpoint that is being torn down).
+        pref.getActiveProfile()?.let { controller.onServiceStarting(it.id) }
         shutdownTunnel {
             if (!pref.userWantsVpn) {
                 // User pressed stop while the tunnel was being torn down.
@@ -590,7 +609,7 @@ socks5:
         stopSelf()
         // After stopSelf() so a switch's follow-up start cannot be swallowed by
         // the stop this service instance is performing right now.
-        controller.onServiceStopped()
+        replacedByController = controller.onServiceStopped()
     }
 
     private fun createNotification(channelName: String, profileName: String) {
