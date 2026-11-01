@@ -1,10 +1,7 @@
 package com.easysstun
 
 import android.content.Context
-import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageInfo
-import androidx.preference.PreferenceManager // Add this import
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -12,7 +9,6 @@ import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.core.content.edit
 import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -34,9 +30,7 @@ class AppListAdapter(
     private val differ = AsyncListDiffer(this, DIFF_CALLBACK)
 
     private val selectedApps = mutableListOf<String>()
-    private val sharedPreferences: SharedPreferences by lazy {
-        PreferenceManager.getDefaultSharedPreferences(context)
-    }
+    private val selection = AppSelectionStore(Pref(context))
 
     init {
         loadSelectedApps()
@@ -50,14 +44,9 @@ class AppListAdapter(
         }
     }
 
-    private fun getSelectedAppsKey(): String {
-        return if (proxyMode == Pref.PROXY_MODE_PROXY_ONLY) Pref.SELECTED_APPS_PROXY_ONLY else Pref.SELECTED_APPS_BYPASS
-    }
-
     private fun loadSelectedApps() {
         selectedApps.clear()
-        val savedApps = sharedPreferences.getStringSet(getSelectedAppsKey(), emptySet())
-        selectedApps.addAll(savedApps ?: emptySet())
+        selectedApps.addAll(selection.selected(proxyMode))
     }
 
     fun setAppList(list: List<PackageInfo>) {
@@ -108,19 +97,18 @@ class AppListAdapter(
     }
 
     private fun saveSelectedApps() {
-        // Use commit() for synchronous disk write to avoid race conditions
-        val key = getSelectedAppsKey()
         val apps = selectedApps.toSet()
-        Log.i("AppListAdapter", "Saving $apps to key=$key (commit)")
-        sharedPreferences.edit(commit = true) { putStringSet(key, apps) }
-        // Debounce only the broadcast to avoid rapid VPN restarts
+        Log.i("AppListAdapter", "Saving ${apps.size} selected apps for mode=$proxyMode")
+        // The store applies the write to the in-memory preferences immediately,
+        // so a same-process reader (the VPN service) already sees it; no
+        // blocking commit is needed on the main thread.
+        selection.setSelected(proxyMode, apps)
+        // Debounce only the reload signal to avoid rapid VPN restarts while the
+        // user is ticking apps one by one.
         saveJob?.cancel()
         saveJob = lifecycleScope.launch {
             delay(300)
-            val intent = Intent(Pref.PREFS_UPDATED).apply {
-                setPackage(context.packageName)
-            }
-            context.sendBroadcast(intent)
+            ConfigChangeNotifier.notifyChanged(context)
         }
     }
 

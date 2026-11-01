@@ -62,8 +62,12 @@ app/src/main/java/com/easysstun/
   VpnState.kt / VpnController.kt  # ★ VPN 状态的唯一真相来源：进程级 StateFlow + connect/disconnect/switchTo 命令
   MainFragment.kt             # ★ 主界面：渲染 VpnState、连接/取消、服务器切换、统计与更新卡片
   ServerProfileActivity.kt    # 服务器配置档编辑页
-  Profile.kt                  # 服务器配置数据模型（kotlinx-serialization）
-  Pref.kt                     # SharedPreferences 封装（设置持久化）
+  Profile.kt / ProfileSerializers.kt  # 服务器配置数据模型（端口/超时/QUIC 为类型化字段，含旧 JSON 迁移）
+  Pref.kt                     # 仅键值访问（偏好读写；不含档案、分应用、配置文件注册表）
+  ProfileStore.kt             # ★ 服务器档案仓库：CRUD + active id 不变量 + changes 变更事件
+  AppSelectionStore.kt        # 分应用选择（按代理模式分开存储 + 旧 key 迁移）
+  ProfileConfigWriter.kt      # 原生配置落盘（CA/规则/tproxy；返回 Result，内容未变不重写）
+  ConfigChangeNotifier.kt     # 配置变更的唯一广播出口（运行中的隧道据此重载）
   AppListFragment.kt / AppListAdapter.kt  # 分应用代理选择列表
   LogFragment.kt              # 运行日志查看
   SettingsFragment.kt         # 偏好设置页（服务器配置）
@@ -111,12 +115,15 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - native 层以 `app/libs/` 下的预编译 AAR（libeasyss、hev-socks5-tunnel）引入，本仓库无 C 源码与 NDK 构建配置；如需修改 native 行为，到对应上游/fork 仓库改动并发布新 AAR 后，更新 `version.properties` 锁定版本。
 - 字符串资源：默认英文在 `res/values/`，中文在 `res/values-zh/`，新增用户可见文案需两处同步。
 - minSdk 为 33，可以使用较新的 Android API，无需做低版本兼容分支。
+- 配置层职责：`Pref` 只做键值访问（原始 SharedPreferences 私有）；服务器档案一律走 `ProfileStore`（CRUD + active id 不变量 + `changes` 变更事件），分应用选择走 `AppSelectionStore`，原生配置文件走 `ProfileConfigWriter`（返回 `Result`，内容未变不重写）。写入配置的 setter 不会自动重启隧道；需要运行中的隧道重载时，由调用方显式调用 `ConfigChangeNotifier.notifyChanged()`。
+- `Profile` 的端口/超时/QUIC 字段是类型化的（`Int?` / `Boolean`），旧版本写入的字符串 JSON 由 `LenientIntSerializer` / `LenientBooleanSerializer` 兼容，不要退回字符串字段。
 
 ## 测试
 
 - 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
 - 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
-- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（新增偏好项）。
+- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（偏好键值）。
+- 配置层与档案模型的覆盖：`ProfileStoreTest`（CRUD、active id 回退、变更事件、损坏 JSON）、`AppSelectionStoreTest`（按模式隔离、旧 key 迁移）、`ProfileConfigWriterTest`（写入、内容未变不重写、失败 Result）、`ProfileTest`（类型化字段、旧 JSON 迁移、端口/超时解析）。
 - VPN 状态机与首页状态的覆盖：`VpnControllerTest`（命令幂等、切服、失败只报一次、撤权、进程重建/resume、TunnelState 派生）、`MainFragmentStateTest`（连接/停止/切服中旋转/失败弹窗的 UI 状态）、`EasyssVpnServiceConfigTest`（无有效配置上报 Failed、空闲 DISCONNECT 会 stopSelf）。
 - 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比）。
 

@@ -243,7 +243,7 @@ object LogStore {
     // process-lifetime singleton is not a leak (lint cannot see that).
     @SuppressLint("StaticFieldLeak")
     @Volatile
-    private var pref: Pref? = null
+    private var profiles: ProfileStore? = null
     @Volatile
     private var minSeverity = DEFAULT_MIN_SEVERITY
     @Volatile
@@ -267,7 +267,7 @@ object LogStore {
     /** Start capturing logcat output for the lifetime of the process. Idempotent. */
     fun start(context: Context) {
         if (!started.compareAndSet(false, true)) return
-        pref = Pref(context.applicationContext)
+        profiles = ProfileStore.get(context.applicationContext)
         _updates.tryEmit(0)
         scope.launch {
             while (isActive) {
@@ -335,7 +335,7 @@ object LogStore {
         val now = SystemClock.elapsedRealtime()
         if (now - minSeverityCheckedAt >= 1_000L) {
             minSeverityCheckedAt = now
-            val level = pref?.getActiveProfile()?.logLevel ?: "info"
+            val level = profiles?.active()?.logLevel ?: "info"
             minSeverity = when (level.lowercase()) {
                 "debug" -> 3
                 "info" -> 4

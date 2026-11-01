@@ -11,8 +11,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.easysstun.databinding.FragmentSettingsBinding
 import com.google.android.material.card.MaterialCardView
+import kotlinx.coroutines.launch
 
 
 class SettingsFragment : Fragment() {
@@ -20,7 +24,7 @@ class SettingsFragment : Fragment() {
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = requireNotNull(_binding)
 
-    private lateinit var pref: Pref
+    private lateinit var profiles: ProfileStore
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -34,12 +38,19 @@ class SettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        pref = Pref(requireContext())
+        profiles = ProfileStore.get(requireContext())
         binding.addServerButton.setOnClickListener {
             startActivity(Intent(context, ServerProfileActivity::class.java))
         }
 
-        refreshServerList()
+        // The store emits on every profile mutation, and replays the current
+        // revision when the screen starts, so returning from the profile form
+        // refreshes the list without an onResume() hook.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                profiles.changes.collect { refreshServerList() }
+            }
+        }
     }
 
     override fun onDestroyView() {
@@ -47,21 +58,15 @@ class SettingsFragment : Fragment() {
         _binding = null
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (_binding != null && ::pref.isInitialized) {
-            refreshServerList()
-        }
-    }
-
     private fun refreshServerList() {
+        if (_binding == null) return
         val container = binding.serverProfilesContainer
         container.removeAllViews()
 
-        val profiles = pref.getProfiles()
-        val activeProfileId = pref.getActiveProfile()?.id
+        val serverProfiles = profiles.all()
+        val activeProfileId = profiles.activeId()
 
-        profiles.forEachIndexed { index, profile ->
+        serverProfiles.forEachIndexed { index, profile ->
             val cardView = buildServerCard(profile, profile.id == activeProfileId, container)
 
             // Add top margin for cards after the first one (10dp spacing)
