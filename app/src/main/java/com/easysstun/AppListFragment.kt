@@ -1,151 +1,152 @@
 package com.easysstun
 
+import android.Manifest
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import android.Manifest
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageInfo
-import android.text.Editable
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.checkbox.MaterialCheckBox
-import com.google.android.material.textfield.TextInputEditText
-import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.easysstun.databinding.FragmentAppListBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class AppListFragment : Fragment() {
-    private lateinit var recyclerView: RecyclerView
+
+    private var _binding: FragmentAppListBinding? = null
+    private val binding get() = checkNotNull(_binding)
+
+    private lateinit var pref: Pref
     private lateinit var adapter: AppListAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        val view = inflater.inflate(R.layout.fragment_app_list, container, false)
-        recyclerView = view.findViewById(R.id.recyclerView)
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+    ): View {
+        _binding = FragmentAppListBinding.inflate(inflater, container, false)
+        return binding.root
+    }
 
-        val pref = Pref(requireContext())
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        pref = Pref(requireContext())
 
-        adapter = AppListAdapter(requireContext(), lifecycleScope)
+        adapter = AppListAdapter(requireContext(), viewLifecycleOwner.lifecycleScope)
         adapter.setProxyMode(pref.proxyMode)
+        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         // Avoid overly large recycled view pool for a simple item layout
-        recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
-        recyclerView.adapter = adapter
+        binding.recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
+        binding.recyclerView.adapter = adapter
 
-        val searchEditText = view.findViewById<TextInputEditText>(R.id.searchEditText)
-        searchEditText.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                adapter.filter(s.toString())
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-
-        val toggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.proxyModeToggleGroup)
-        val modeDescription = view.findViewById<TextView>(R.id.modeDescription)
+        binding.searchEditText.doAfterTextChanged { text ->
+            adapter.filter(text?.toString().orEmpty())
+        }
 
         // Initialize toggle state WITHOUT triggering the listener
         val currentMode = pref.proxyMode
-        toggleGroup.clearOnButtonCheckedListeners()
+        binding.proxyModeToggleGroup.clearOnButtonCheckedListeners()
         if (currentMode == Pref.PROXY_MODE_PROXY_ONLY) {
-            toggleGroup.check(R.id.btnProxyOnlyMode)
-            modeDescription.text = getString(R.string.mode_proxy_only_desc)
+            binding.proxyModeToggleGroup.check(R.id.btnProxyOnlyMode)
+            binding.modeDescription.text = getString(R.string.mode_proxy_only_desc)
         } else {
-            toggleGroup.check(R.id.btnBypassMode)
-            modeDescription.text = getString(R.string.mode_bypass_desc)
+            binding.proxyModeToggleGroup.check(R.id.btnBypassMode)
+            binding.modeDescription.text = getString(R.string.mode_bypass_desc)
         }
-        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        binding.proxyModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
                 when (checkedId) {
                     R.id.btnBypassMode -> {
                         pref.proxyMode = Pref.PROXY_MODE_BYPASS
-                        modeDescription.text = getString(R.string.mode_bypass_desc)
+                        binding.modeDescription.text = getString(R.string.mode_bypass_desc)
                     }
                     R.id.btnProxyOnlyMode -> {
                         pref.proxyMode = Pref.PROXY_MODE_PROXY_ONLY
-                        modeDescription.text = getString(R.string.mode_proxy_only_desc)
+                        binding.modeDescription.text = getString(R.string.mode_proxy_only_desc)
                     }
                 }
                 // The routing configuration changed: let a running tunnel reload it.
                 ConfigChangeNotifier.notifyChanged(requireContext())
                 // Reload the app list with the new mode's selections
                 adapter.setProxyMode(pref.proxyMode)
-                reloadList(requireView())
+                reloadList()
             }
         }
 
-        val checkboxShowSystemApps = view.findViewById<MaterialCheckBox>(R.id.checkboxShowSystemApps)
-        checkboxShowSystemApps.isChecked = pref.showSystemApps
-        checkboxShowSystemApps.setOnCheckedChangeListener { _, isChecked ->
+        binding.checkboxShowSystemApps.isChecked = pref.showSystemApps
+        binding.checkboxShowSystemApps.setOnCheckedChangeListener { _, isChecked ->
             pref.showSystemApps = isChecked
-            reloadList(requireView())
+            reloadList()
         }
 
-        view.findViewById<MaterialButton>(R.id.btnClearAll).setOnClickListener {
+        binding.btnClearAll.setOnClickListener {
             adapter.clearAllSelected()
         }
 
-        reloadList(view, showProgress = true)
-        return view
+        reloadList(showProgress = true)
     }
 
-    private fun reloadList(rootView: View, showProgress: Boolean = false) {
-        lifecycleScope.launch {
-            val progressBar = rootView.findViewById<ProgressBar>(R.id.progressBar)
-            if (showProgress) progressBar.visibility = View.VISIBLE
+    override fun onDestroyView() {
+        binding.recyclerView.adapter = null
+        super.onDestroyView()
+        _binding = null
+    }
+
+    private fun reloadList(showProgress: Boolean = false) {
+        // Resolve everything that needs a Context on the main thread; the loader
+        // itself only receives plain values and can run on an IO thread.
+        val packageManager = requireContext().packageManager
+        val selfPackage = requireContext().packageName
+        val showSystemApps = pref.showSystemApps
+        val selectedApps = AppSelectionStore(pref).selected(pref.proxyMode)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            if (showProgress) _binding?.progressBar?.visibility = View.VISIBLE
             try {
                 val appList = withContext(Dispatchers.IO) {
-                    getInstalledApps()
+                    loadInstalledApps(packageManager, selfPackage, showSystemApps, selectedApps)
                 }
                 adapter.setAppList(appList)
             } finally {
-                if (showProgress) progressBar.visibility = View.GONE
+                if (showProgress) _binding?.progressBar?.visibility = View.GONE
             }
         }
     }
 
-    private fun getInstalledApps(): List<PackageInfo> {
-        val pm = requireContext().packageManager
-
-        val packages = pm.getInstalledPackages(
+    private fun loadInstalledApps(
+        packageManager: PackageManager,
+        selfPackage: String,
+        showSystemApps: Boolean,
+        selectedApps: Set<String>,
+    ): List<PackageInfo> {
+        val packages = packageManager.getInstalledPackages(
             PackageManager.MATCH_UNINSTALLED_PACKAGES
                     or PackageManager.GET_PERMISSIONS
                     or PackageManager.GET_PROVIDERS
                     or PackageManager.GET_META_DATA
         )
 
-        val pref = Pref(requireContext())
-        val selectedApps = AppSelectionStore(pref).selected(pref.proxyMode)
-        val showSystemApps = pref.showSystemApps
-
-        var appList = packages
+        return packages
             .filter { packageInfo ->
                 val appInfo = packageInfo.applicationInfo
                 appInfo != null &&
                         (showSystemApps || appInfo.flags and
                                 (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0) &&
                         packageInfo.requestedPermissions?.contains(Manifest.permission.INTERNET) == true &&
-                        packageInfo.packageName != requireActivity().applicationContext.packageName
+                        packageInfo.packageName != selfPackage
             }
-
-        appList = appList.sortedWith(
-            compareBy<PackageInfo>{
-                selectedApps.contains(it.packageName) != true }
-                .thenBy { it.applicationInfo?.loadLabel(pm)?.toString()?.lowercase() ?: it.packageName }
-        )
-
-        return appList
+            .sortedWith(
+                compareBy<PackageInfo> { it.packageName !in selectedApps }
+                    .thenBy {
+                        it.applicationInfo?.loadLabel(packageManager)?.toString()?.lowercase()
+                            ?: it.packageName
+                    }
+            )
     }
 }

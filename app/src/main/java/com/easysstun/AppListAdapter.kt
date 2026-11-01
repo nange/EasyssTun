@@ -2,35 +2,48 @@ package com.easysstun
 
 import android.content.Context
 import android.content.pm.PackageInfo
-import android.util.Log
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.CheckBox
-import android.widget.ImageView
-import android.widget.TextView
 import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
+import com.easysstun.databinding.ItemAppBinding
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Adapter for the per-app proxy list.
+ *
+ * Label and icon loading is owned by the [AppViewHolder]: each bind cancels the
+ * previous load and [onViewRecycled] cancels the active one, so a recycled row
+ * can never show the label/icon of the package it used to display. Labels are
+ * cached per package because filtering reads them for the whole list.
+ */
 class AppListAdapter(
-    private val context: Context,
-    private val lifecycleScope: CoroutineScope
+    context: Context,
+    private val lifecycleScope: CoroutineScope,
 ) : RecyclerView.Adapter<AppListAdapter.AppViewHolder>() {
+    private val appContext = context.applicationContext
+    private val packageManager = appContext.packageManager
+
     private var allApps: List<PackageInfo> = emptyList()
-    private var filterJob: kotlinx.coroutines.Job? = null
-    private var saveJob: kotlinx.coroutines.Job? = null
+    private var filterJob: Job? = null
+    private var saveJob: Job? = null
     private var proxyMode: String = Pref.PROXY_MODE_BYPASS
 
     private val differ = AsyncListDiffer(this, DIFF_CALLBACK)
 
-    private val selectedApps = mutableListOf<String>()
-    private val selection = AppSelectionStore(Pref(context))
+    private val selectedApps = mutableSetOf<String>()
+    private val selection = AppSelectionStore(Pref(appContext))
+
+    /** Package name -> display label; the package list is stable while the screen is open. */
+    private val labelCache = ConcurrentHashMap<String, String>()
 
     init {
         loadSelectedApps()
@@ -56,20 +69,21 @@ class AppListAdapter(
 
     fun filter(query: String) {
         filterJob?.cancel()
+        val apps = allApps
         filterJob = lifecycleScope.launch(Dispatchers.IO) {
             val trimmedQuery = query.trim()
             val filtered = if (trimmedQuery.isEmpty()) {
-                allApps
+                apps
             } else {
-                allApps
+                apps
                     .filter {
-                        val label = it.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: it.packageName
-                        label.contains(trimmedQuery, ignoreCase = true) || it.packageName.contains(trimmedQuery, ignoreCase = true)
+                        val label = labelOf(it)
+                        label.contains(trimmedQuery, ignoreCase = true) ||
+                            it.packageName.contains(trimmedQuery, ignoreCase = true)
                     }
                     .sortedWith(
                         compareByDescending<PackageInfo> {
-                            val label = it.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: it.packageName
-                            label.contains(trimmedQuery, ignoreCase = true)
+                            labelOf(it).contains(trimmedQuery, ignoreCase = true)
                         }
                     )
             }
@@ -80,25 +94,28 @@ class AppListAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AppViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_app, parent, false)
-        return AppViewHolder(view)
+        val binding = ItemAppBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return AppViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: AppViewHolder, position: Int) {
-        val appInfo = differ.currentList[position]
-        holder.bind(appInfo)
-
-
+        holder.bind(differ.currentList[position])
     }
 
-    override fun getItemCount(): Int {
-        return differ.currentList.size
+    override fun getItemCount(): Int = differ.currentList.size
+
+    override fun onViewRecycled(holder: AppViewHolder) {
+        holder.cancelLoad()
+        super.onViewRecycled(holder)
     }
+
+    private fun labelOf(appInfo: PackageInfo): String =
+        labelCache.getOrPut(appInfo.packageName) {
+            appInfo.applicationInfo?.loadLabel(packageManager)?.toString() ?: appInfo.packageName
+        }
 
     private fun saveSelectedApps() {
         val apps = selectedApps.toSet()
-        Log.i("AppListAdapter", "Saving ${apps.size} selected apps for mode=$proxyMode")
         // The store applies the write to the in-memory preferences immediately,
         // so a same-process reader (the VPN service) already sees it; no
         // blocking commit is needed on the main thread.
@@ -108,7 +125,7 @@ class AppListAdapter(
         saveJob?.cancel()
         saveJob = lifecycleScope.launch {
             delay(300)
-            ConfigChangeNotifier.notifyChanged(context)
+            ConfigChangeNotifier.notifyChanged(appContext)
         }
     }
 
@@ -118,44 +135,47 @@ class AppListAdapter(
         notifyItemRangeChanged(0, differ.currentList.size)
     }
 
-    inner class AppViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val appNameTextView: TextView = itemView.findViewById(R.id.appName)
-        val packageNameTextView: TextView = itemView.findViewById(R.id.packageName)
-        val appIconImageView: ImageView = itemView.findViewById(R.id.appIcon)
-        val checkBox: CheckBox = itemView.findViewById(R.id.checkbox)
+    inner class AppViewHolder(
+        private val binding: ItemAppBinding,
+    ) : RecyclerView.ViewHolder(binding.root) {
+        private var loadJob: Job? = null
 
         fun bind(appInfo: PackageInfo) {
-            packageNameTextView.text = appInfo.packageName
-            checkBox.isChecked = selectedApps.contains(appInfo.packageName)
+            binding.packageName.text = appInfo.packageName
+            binding.checkbox.isChecked = appInfo.packageName in selectedApps
 
-            appNameTextView.text = context.getString(R.string.app_name_placeholder)
-            appIconImageView.setImageResource(R.drawable.sync_24px)
+            // Show a placeholder until the asynchronous load completes; a recycled
+            // holder must never keep the previous package's label/icon.
+            binding.appName.text = labelCache[appInfo.packageName]
+                ?: appContext.getString(R.string.app_name_placeholder)
+            binding.appIcon.setImageResource(R.drawable.sync_24px)
 
-            lifecycleScope.launch {
-                val label = withContext(Dispatchers.IO) {
-                    appInfo.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: appInfo.packageName
-                }
-                val icon = withContext(Dispatchers.IO) {
-                    appInfo.applicationInfo?.loadIcon(context.packageManager)
-                }
-
-                // Update UI on the main thread
-                withContext(Dispatchers.Main) {
-                    appNameTextView.text = label
-                    appIconImageView.setImageDrawable(icon)
-                }
-            }
-
-
-            checkBox.setOnClickListener {
-                Log.e("AppListAdapter", "selected " + appInfo.packageName)
-                if (checkBox.isChecked) {
+            binding.checkbox.setOnClickListener {
+                if (binding.checkbox.isChecked) {
                     selectedApps.add(appInfo.packageName)
                 } else {
                     selectedApps.remove(appInfo.packageName)
                 }
                 saveSelectedApps()
             }
+
+            cancelLoad()
+            loadJob = lifecycleScope.launch {
+                val label = withContext(Dispatchers.IO) { labelOf(appInfo) }
+                val icon = withContext(Dispatchers.IO) {
+                    appInfo.applicationInfo?.loadIcon(packageManager)
+                }
+                // The holder may have been rebound or recycled while the package
+                // manager was loading; never overwrite the newer binding.
+                if (!isActive) return@launch
+                binding.appName.text = label
+                binding.appIcon.setImageDrawable(icon)
+            }
+        }
+
+        fun cancelLoad() {
+            loadJob?.cancel()
+            loadJob = null
         }
     }
 

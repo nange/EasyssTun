@@ -215,4 +215,108 @@ class ServerProfileActivityTest {
 
         assertEquals("50", activity.field(R.id.profile_timeout).text.toString())
     }
+
+    @Test
+    fun edit_roundTripsEverySpinnerValue() {
+        val profile = Profile(
+            id = "spinner-profile",
+            name = "Server",
+            server = "example.com",
+            serverPort = 443,
+            password = "secret",
+            encryption = "aes-256-gcm",
+            proxyRule = "direct",
+            outbound = "native",
+            logLevel = "debug",
+            enableQuic = true,
+            ipv6Rule = "disable",
+        )
+        ProfileStore.get(ApplicationProvider.getApplicationContext()).add(profile)
+
+        val activity = launch(profileId = profile.id)
+        activity.save()
+
+        val saved = ProfileStore.get(activity).all().single()
+        assertEquals("aes-256-gcm", saved.encryption)
+        assertEquals("direct", saved.proxyRule)
+        assertEquals("native", saved.outbound)
+        assertEquals("debug", saved.logLevel)
+        assertEquals(true, saved.enableQuic)
+        assertEquals("disable", saved.ipv6Rule)
+    }
+
+    @Test
+    fun save_rejectsADuplicateNameIgnoringCaseAndSurroundingSpace() {
+        ProfileStore.get(ApplicationProvider.getApplicationContext()).add(
+            Profile(
+                id = "existing",
+                name = "Office",
+                server = "office.example.com",
+                serverPort = 443,
+                password = "secret",
+            )
+        )
+        val activity = launch()
+        activity.fillRequired()
+        activity.field(R.id.profile_name).setText("  office  ")
+
+        activity.save()
+
+        assertEquals(
+            "A duplicate name must not create a second profile",
+            1,
+            ProfileStore.get(activity).all().size
+        )
+        assertEquals(
+            activity.getString(R.string.error_name_duplicate, "office"),
+            ShadowToast.getTextOfLatestToast()
+        )
+    }
+
+    @Test
+    fun save_rejectsADuplicateDefaultName() {
+        ProfileStore.get(ApplicationProvider.getApplicationContext()).add(
+            Profile(
+                id = "existing",
+                name = "example.com:443",
+                server = "example.com",
+                serverPort = 443,
+                password = "secret",
+            )
+        )
+        val activity = launch()
+        activity.fillRequired()
+
+        activity.save()
+
+        assertEquals(
+            "A blank name falls back to server:port, which is already taken",
+            1,
+            ProfileStore.get(activity).all().size
+        )
+        assertEquals(
+            activity.getString(R.string.error_name_duplicate, "example.com:443"),
+            ShadowToast.getTextOfLatestToast()
+        )
+    }
+
+    @Test
+    fun save_allowsEditingAProfileWithoutChangingItsName() {
+        val profile = Profile(
+            id = "same-name",
+            name = "Office",
+            server = "example.com",
+            serverPort = 443,
+            password = "secret",
+        )
+        ProfileStore.get(ApplicationProvider.getApplicationContext()).add(profile)
+        val activity = launch(profileId = profile.id)
+        activity.field(R.id.profile_password).setText("new-secret")
+
+        activity.save()
+
+        val saved = ProfileStore.get(activity).all().single()
+        assertEquals("Office", saved.name)
+        assertEquals("new-secret", saved.password)
+    }
 }

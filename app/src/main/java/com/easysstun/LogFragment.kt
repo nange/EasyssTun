@@ -1,102 +1,129 @@
 package com.easysstun
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.easysstun.databinding.FragmentLogBinding
+import com.easysstun.databinding.ItemLogBinding
 import kotlinx.coroutines.launch
 
 
 class LogFragment : Fragment() {
-    private lateinit var recyclerView: RecyclerView
+
+    private var _binding: FragmentLogBinding? = null
+    private val binding get() = checkNotNull(_binding)
+
     private lateinit var logViewModel: LogViewModel
     private lateinit var logAdapter: LogAdapter
 
     private var isAtBottom = true
     private var changingState = false
 
+    /**
+     * Item the viewport is anchored to while an older page is prepended. The
+     * anchor is the [LogItem] instance itself (the store reuses instances), so
+     * it survives new logs arriving before the diff is committed.
+     */
+    private var anchorItem: LogItem? = null
+    private var anchorOffset = 0
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.fragment_log, container, false)
+    ): View {
+        _binding = FragmentLogBinding.inflate(inflater, container, false)
+        return binding.root
     }
-
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         LogStore.ensureStarted(requireContext())
 
-        recyclerView = view.findViewById(R.id.logRecyclerView)
         logAdapter = LogAdapter()
-
-
-        // 设置布局管理器
-        val layoutManager = LinearLayoutManager(requireContext())
-        recyclerView.layoutManager = layoutManager
-
-        recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
-        recyclerView.adapter = logAdapter
-        logViewModel = ViewModelProvider(this).get(LogViewModel::class.java)
+        binding.logRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.logRecyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
+        binding.logRecyclerView.adapter = logAdapter
+        logViewModel = ViewModelProvider(this)[LogViewModel::class.java]
 
         // 观察LiveData以更新RecyclerView
         logViewModel.logItems.observe(viewLifecycleOwner) { logItems ->
-            changingState = true
-            logAdapter.submitList(logItems)
-            recyclerView.stopScroll()
-            if (isAtBottom && logItems.size > 1) {
-                recyclerView.scrollToPosition(logItems.size - 1)
-            }
-            changingState = false
-            // 首屏不足一屏时自动补页（如大字体/行数少）
-            recyclerView.post { fillViewportIfNeeded() }
+            submitList(logItems)
         }
 
-        val fabToBotton = view.findViewById<FloatingActionButton>(R.id.fabToBotton)
-        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+        binding.logRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                    if (changingState)
-                        return
-                    if (!recyclerView.canScrollVertically(1)) {
-                        isAtBottom = true
-                        fabToBotton.hide()
-                    } else {
-                        isAtBottom = false
-                        fabToBotton.show()
-                    }
-                    // 滑到顶部时加载更早的一页日志
-                    if (newState == RecyclerView.SCROLL_STATE_IDLE &&
-                        !recyclerView.canScrollVertically(-1)
-                    ) {
-                        loadOlderLogs()
-                    }
+                if (changingState) return
+                if (!recyclerView.canScrollVertically(1)) {
+                    isAtBottom = true
+                    binding.fabToBotton.hide()
+                } else {
+                    isAtBottom = false
+                    binding.fabToBotton.show()
+                }
+                // 滑到顶部时加载更早的一页日志
+                if (newState == RecyclerView.SCROLL_STATE_IDLE &&
+                    !recyclerView.canScrollVertically(-1)
+                ) {
+                    loadOlderLogs()
+                }
             }
         })
 
-        fabToBotton.setOnClickListener {
+        binding.fabToBotton.setOnClickListener {
             isAtBottom = !isAtBottom
             if (isAtBottom && logAdapter.itemCount > 1) {
-                recyclerView.stopScroll()
-                recyclerView.scrollToPosition(logAdapter.itemCount - 1)
-                fabToBotton.hide()
+                binding.logRecyclerView.stopScroll()
+                binding.logRecyclerView.scrollToPosition(logAdapter.itemCount - 1)
+                binding.fabToBotton.hide()
             }
         }
 
-
         logViewModel.open()
+    }
+
+    override fun onDestroyView() {
+        binding.logRecyclerView.adapter = null
+        super.onDestroyView()
+        _binding = null
+    }
+
+    /**
+     * Hands a new window to the diffing adapter. The scroll adjustments run in
+     * the commit callback because [ListAdapter] applies the list asynchronously;
+     * touching the layout manager before that would use the old item count.
+     */
+    private fun submitList(items: List<LogItem>) {
+        val recyclerView = _binding?.logRecyclerView ?: return
+        val anchor = anchorItem
+        val offset = anchorOffset
+        changingState = true
+        recyclerView.stopScroll()
+        logAdapter.submitList(items) {
+            val layoutManager = _binding?.logRecyclerView?.layoutManager as? LinearLayoutManager
+            if (anchor != null) {
+                // Keep the previously visible item at the same offset after the
+                // older page is prepended.
+                val target = items.indexOfFirst { it === anchor }
+                if (target >= 0) layoutManager?.scrollToPositionWithOffset(target, offset)
+                anchorItem = null
+            } else if (isAtBottom && items.size > 1) {
+                recyclerView.scrollToPosition(items.size - 1)
+            }
+            changingState = false
+            _binding?.logRecyclerView?.post { fillViewportIfNeeded() }
+        }
     }
 
     /**
@@ -105,21 +132,20 @@ class LogFragment : Fragment() {
      */
     private fun loadOlderLogs() {
         if (!logViewModel.canLoadMore()) return
-        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+        val layoutManager = _binding?.logRecyclerView?.layoutManager as? LinearLayoutManager
+            ?: return
         val firstPos = layoutManager.findFirstVisibleItemPosition()
-        val firstView = layoutManager.findViewByPosition(firstPos)
-        val offset = firstView?.top ?: 0
-        val prepended = logViewModel.loadMore()
-        if (prepended > 0 && !isAtBottom) {
-            val target = firstPos + prepended
-            if (target in 0 until logAdapter.itemCount) {
-                layoutManager.scrollToPositionWithOffset(target, offset)
-            }
+        if (firstPos == RecyclerView.NO_POSITION) return
+        anchorItem = logAdapter.currentList.getOrNull(firstPos)
+        anchorOffset = layoutManager.findViewByPosition(firstPos)?.top ?: 0
+        if (logViewModel.loadMore() <= 0) {
+            anchorItem = null
         }
     }
 
     /** 窗口内容不足一屏且仍有更早日志时，继续向前补页直到填满或到顶。 */
     private fun fillViewportIfNeeded() {
+        val recyclerView = _binding?.logRecyclerView ?: return
         if (logViewModel.canLoadMore() && !recyclerView.canScrollVertically(1)) {
             loadOlderLogs()
         }
@@ -127,45 +153,40 @@ class LogFragment : Fragment() {
 }
 
 
-class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
-    private var logItems: List<LogItem> = emptyList()
-
-    @SuppressLint("NotifyDataSetChanged")
-    fun submitList(newList: List<LogItem>) {
-        logItems = newList
-        notifyDataSetChanged()
-    }
+internal class LogAdapter : ListAdapter<LogItem, LogAdapter.LogViewHolder>(DIFF_CALLBACK) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LogViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_log, parent, false)
-        return LogViewHolder(view)
+        val binding = ItemLogBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return LogViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: LogViewHolder, position: Int) {
-        val logItem = logItems[position]
-        holder.bind(logItem)
+        holder.bind(getItem(position))
     }
 
-    override fun getItemCount(): Int {
-        return logItems.size
-    }
-
-    class LogViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val logTimestampTextView: TextView =
-            itemView.findViewById(R.id.logTimestampTextView)
-        private val logLevelTextView: TextView =
-            itemView.findViewById(R.id.logLevelTextView)
-        private val logSourceTextView: TextView =
-            itemView.findViewById(R.id.logSourceTextView)
-        private val logMessageTextView: TextView =
-            itemView.findViewById(R.id.logMessageTextView)
-
+    class LogViewHolder(
+        private val binding: ItemLogBinding,
+    ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(logItem: LogItem) {
-            logTimestampTextView.text = logItem.time
-            logLevelTextView.text = logItem.level
-            logSourceTextView.text = logItem.source
-            logMessageTextView.text = logItem.message
+            binding.logTimestampTextView.text = logItem.time
+            binding.logLevelTextView.text = logItem.level
+            binding.logSourceTextView.text = logItem.source
+            binding.logMessageTextView.text = logItem.message
+        }
+    }
+
+    private companion object {
+        /**
+         * The window is rebuilt from the same [LogItem] instances (appends add
+         * new ones, paging reuses the stored ones), so identity is the stable
+         * key and the mutable fields are compared by value.
+         */
+        val DIFF_CALLBACK = object : DiffUtil.ItemCallback<LogItem>() {
+            override fun areItemsTheSame(oldItem: LogItem, newItem: LogItem): Boolean =
+                oldItem === newItem
+
+            override fun areContentsTheSame(oldItem: LogItem, newItem: LogItem): Boolean =
+                oldItem == newItem
         }
     }
 }
