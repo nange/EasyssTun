@@ -5,8 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Port-parity tests for easyss `selfupdate.HasNewVersion`: rc numbers must be
- * compared numerically, because the semver spec orders `rc9` above `rc19`.
+ * 与 easyss 的 selfupdate.HasNewVersion 对齐：rc 数字必须按数值比较，否则 rc9 会排在 rc19 之后。
  */
 class UpdateVersionTest {
 

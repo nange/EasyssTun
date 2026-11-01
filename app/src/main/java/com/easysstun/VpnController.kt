@@ -8,46 +8,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Outcome of [VpnController.connect]. */
 internal sealed interface ConnectRequest {
-    /** The service start was issued; the state is [VpnState.Connecting]. */
+    /** 启动已下发，此时状态为 [VpnState.Connecting]。 */
     data object Started : ConnectRequest
 
-    /** The system must grant the VPN permission before the tunnel can start. */
+    /** 需先经系统授权；结果回传给 [VpnController.onPermissionResult]。 */
     data class NeedsPermission(val intent: Intent) : ConnectRequest
 
-    /** A tunnel is already coming up, running, being switched or stopping. */
+    /** 隧道已在进行中（含 Stopping）：命令被忽略。 */
     data object AlreadyActive : ConnectRequest
 
-    /** No (matching) server profile is configured, so there is nothing to connect to. */
     data object NoProfile : ConnectRequest
 }
 
 /**
- * Process-wide owner of the VPN lifecycle.
- *
- * This is the single writer of [VpnState]; the UI only reads [state] and issues
- * the three commands [connect] / [disconnect] / [switchTo]. The service reports
- * facts back through the `onService*` callbacks. Keeping the state here — and
- * not in the fragment — is what makes a rotation during a server switch keep
- * showing "switching" instead of dropping back to a stale UI.
- *
- * [Pref.userWantsVpn] is the persisted *intent* and is only written on an
- * explicit user action (start, stop, denied permission) or a system revocation;
- * the service never writes it. A failed start therefore stays visible as
- * [VpnState.Failed] instead of silently flipping the intent off. [VpnState] is
- * process-local, so a failure does not outlive the process: after a restart the
- * state is [VpnState.Idle] again and [resume] may retry the connection the user
- * still asked for.
- *
- * A fresh process starts [VpnState.Idle] even when [Pref.userWantsVpn] is true:
- * the tunnel lives in this very process, so it cannot survive a process death.
- * The intent is what lets the system restart the service (`START_STICKY`, or
- * [ServiceReceiver] on boot); once that happens the service drives
- * Connecting → Running through [onServiceStarting] / [onServiceRunning].
- *
- * All mutators are `@Synchronized`: the service reports from its IO startup
- * coroutine while the UI issues commands from the main thread.
+ * [VpnState] 的唯一写入方：状态只在进程内有效，[Pref.userWantsVpn] 仅是用户意图（服务从不写）；所有改状态的方法都 `@Synchronized`，因为服务从 IO 协程上报、UI 从主线程下命令。
  */
 internal class VpnController private constructor(
     private val appContext: Context,
@@ -58,19 +33,15 @@ internal class VpnController private constructor(
     private val _state = MutableStateFlow<VpnState>(VpnState.Idle)
     val state: StateFlow<VpnState> = _state.asStateFlow()
 
-    /** Set once the current [VpnState.Failed] has been shown to the user. */
+    /** 当前 [VpnState.Failed] 是否已展示；每次状态迁移都会复位。 */
     private var failureConsumed = false
 
-    /** True once a start Intent was issued for the current [VpnState.Connecting]. */
+    /** 当前 [VpnState.Connecting] 是否已下发启动 Intent；resume 据此避免重复启动。 */
     private var startIssued = false
 
-    // ── Commands (UI → controller) ──────────────────────────────
+    // ── 命令（UI → 控制器） ──────────────────────────────
 
-    /**
-     * Starts the tunnel for [profileId] (or the active profile when null).
-     * Idempotent: a second request while the tunnel is engaged is ignored, so a
-     * re-render can never issue a duplicate start.
-     */
+    /** 幂等：隧道已在进行时重复调用被忽略，重复渲染不会重复启动；[profileId] 为 null 时用当前配置档。 */
     @Synchronized
     fun connect(profileId: String? = null): ConnectRequest {
         val current = _state.value
@@ -97,7 +68,7 @@ internal class VpnController private constructor(
         return ConnectRequest.Started
     }
 
-    /** Result of the system VPN permission dialog launched for [ConnectRequest.NeedsPermission]. */
+    /** 系统 VPN 授权结果；当前不是 Connecting 时忽略，避免覆盖更新的状态。 */
     @Synchronized
     fun onPermissionResult(granted: Boolean) {
         val current = _state.value
@@ -106,8 +77,7 @@ internal class VpnController private constructor(
             return
         }
         if (!granted) {
-            // The user explicitly declined: drop the intent instead of leaving a
-            // "connecting" UI behind.
+            // 用户明确拒绝：清掉意图，否则 UI 会停在「连接中」。
             Log.i(TAG, "onPermissionResult: permission denied, returning to Idle")
             pref.userWantsVpn = false
             setState(VpnState.Idle)
@@ -116,21 +86,7 @@ internal class VpnController private constructor(
         startServiceNow(current.profileId)
     }
 
-    /**
-     * Recovery hook for the screen, called whenever it becomes visible:
-     *
-     *  - a [ConnectRequest.NeedsPermission] whose result never came back (the
-     *    requesting activity was destroyed while the system dialog was up) would
-     *    otherwise leave the UI in [VpnState.Connecting] forever;
-     *  - a persisted intent ([Pref.userWantsVpn]) with no tunnel and no startup
-     *    in flight means the process was rebuilt without the service coming
-     *    back (force-stop, a system kill that skipped the `START_STICKY`
-     *    restart). That is the one place the intent is turned back into a
-     *    connection.
-     *
-     * [VpnState.Failed] is deliberately not retried: after a failure the next
-     * attempt is the user's explicit call.
-     */
+    /** 屏幕可见时的恢复钩子：补发丢失的授权结果（否则 UI 永远停在 [VpnState.Connecting]），并把持久化意图还原成连接；[VpnState.Failed] 刻意不重试。 */
     @Synchronized
     fun resume(): ConnectRequest {
         when (val current = _state.value) {
@@ -151,7 +107,6 @@ internal class VpnController private constructor(
         }
     }
 
-    /** Stops the tunnel and clears the persisted intent. */
     @Synchronized
     fun disconnect() {
         pref.userWantsVpn = false
@@ -161,18 +116,12 @@ internal class VpnController private constructor(
                 sendDisconnectIntent()
             }
             is VpnState.Failed -> setState(VpnState.Idle)
-            // Nothing to tear down, but a residual service instance may still be
-            // alive (e.g. a start that aborted before reporting); the disconnect
-            // intent makes it finalize itself.
+            // 无隧道可拆，但可能有残留服务实例（启动中途放弃）；仍发断开意图让它自清。
             VpnState.Idle, VpnState.Stopping -> sendDisconnectIntent()
         }
     }
 
-    /**
-     * Selects [profileId]. While a tunnel is engaged this tears the current one
-     * down and rebuilds it for the new profile; while idle it is a plain
-     * configuration change.
-     */
+    /** 选中 [profileId]：隧道进行中先拆旧再建新，空闲时只是改配置。 */
     @Synchronized
     fun switchTo(profileId: String) {
         val target = profiles.find(profileId)
@@ -188,7 +137,7 @@ internal class VpnController private constructor(
         val engaged = _state.value.isEngaged
         profiles.select(target.id)
         if (!engaged) {
-            // Selecting a server while the tunnel is down is not a VPN command.
+            // 隧道未运行时选服务器只是改配置；顺带把 Failed 复位，避免残留失败态。
             if (_state.value is VpnState.Failed) setState(VpnState.Idle)
             return
         }
@@ -197,9 +146,9 @@ internal class VpnController private constructor(
         sendDisconnectIntent()
     }
 
-    // ── Service facts (service → controller) ────────────────────
+    // ── 服务上报的事实（服务 → 控制器） ────────────────────
 
-    /** The service is about to build a tunnel for [profileId]. */
+    /** 服务即将为 [profileId] 建隧道；Stopping/Switching 期间的上报被忽略，避免把正在拆的状态拉回 Connecting。 */
     @Synchronized
     internal fun onServiceStarting(profileId: String) {
         when (_state.value) {
@@ -209,42 +158,32 @@ internal class VpnController private constructor(
             )
             else -> {
                 setState(VpnState.Connecting(profileId))
-                // The service is already starting; a screen resume must not
-                // re-issue the start.
+                // 服务已在启动：置位后 resume 不会再下发一次启动。
                 startIssued = true
             }
         }
     }
 
-    /** The tunnel is fully up and serving traffic for [profileId]. */
+    /** 隧道已完全可用；Stopping/Switching 期间到达的是上一次启动的迟到上报，忽略。 */
     @Synchronized
     internal fun onServiceRunning(profileId: String) {
         when (_state.value) {
             is VpnState.Stopping, is VpnState.Switching -> {
-                // The user stopped (or started replacing) the tunnel while the
-                // last startup step was in flight.
+                // 最后一次启动还在途中时用户已停止或切换：这是迟到的上报，丢弃。
                 Log.w(TAG, "onServiceRunning($profileId) ignored in state ${_state.value}")
             }
             else -> setState(VpnState.Running(profileId))
         }
     }
 
-    /**
-     * The service finished tearing down (it is already stopping itself). This is
-     * where the second half of a server switch happens: the new profile is
-     * started only after the old tunnel is completely gone.
-     *
-     * @return true when a follow-up start was issued, i.e. the service instance
-     *   that is stopping is immediately replaced. The service uses this to tell
-     *   a planned replacement from a system-initiated destroy.
-     */
+    /** 服务已拆完并在自停。切换的第二段在此：旧隧道彻底消失后才启动新配置档；返回 true 表示已补发启动，服务据此区分计划内替换与系统销毁。 */
     @Synchronized
     internal fun onServiceStopped(): Boolean {
         when (val current = _state.value) {
             is VpnState.Switching -> {
                 val target = current.toProfileId
                 if (profiles.find(target) == null) {
-                    // The target was deleted while the switch was in flight.
+                    // 目标配置档在切换途中被删：放弃切换，回落 Idle。
                     Log.w(
                         TAG,
                         "switch ${current.fromProfileId} -> $target abandoned: target no longer exists"
@@ -258,31 +197,21 @@ internal class VpnController private constructor(
                 startServiceNow(target)
                 return true
             }
-            // Keep the failure visible: the UI still has to show its dialog.
+            // 保留失败态：UI 还要弹错误对话框，不能被 Idle 覆盖。
             is VpnState.Failed -> Unit
             else -> setState(VpnState.Idle)
         }
         return false
     }
 
-    /** The service could not start (or lost) the tunnel; [message] is user-facing. */
+    /** 服务启动失败或隧道丢失；[message] 是可直接展示给用户的文案。 */
     @Synchronized
     internal fun onServiceFailed(message: String, profileId: String?) {
         Log.w(TAG, "service failed (profile=$profileId): $message")
         setState(VpnState.Failed(message, profileId))
     }
 
-    /**
-     * The service instance is gone without having reported a stop. This happens
-     * when the system takes the service away mid-startup/mid-teardown, or when
-     * the teardown coroutine was cancelled by `onDestroy` before it could
-     * finalize. Falling back to [VpnState.Idle] is what keeps the home screen
-     * from freezing on "connecting"/"stopping" with a disabled button.
-     *
-     * A service that is being replaced by a server switch does not call this
-     * (see [onServiceStopped]); a failed start has already reported
-     * [VpnState.Failed] and keeps it.
-     */
+    /** 服务实例消失却没上报停止（系统中途回收，或 onDestroy 取消了收尾协程）：回落到 Idle，否则首页会卡在连接中/停止中且按钮禁用。切换替换与已失败的启动不会走到这里。 */
     @Synchronized
     internal fun onServiceDestroyed() {
         when (val current = _state.value) {
@@ -294,7 +223,7 @@ internal class VpnController private constructor(
         }
     }
 
-    /** The system revoked the VPN permission (another VPN took over, or the user revoked it). */
+    /** 系统收回 VPN 授权（其他 VPN 接管或用户撤销）：清意图，进行中的隧道转入 Stopping。 */
     @Synchronized
     fun onPermissionRevoked() {
         Log.w(TAG, "VPN permission revoked by the system")
@@ -302,10 +231,7 @@ internal class VpnController private constructor(
         if (_state.value.isEngaged) setState(VpnState.Stopping)
     }
 
-    /**
-     * Returns the current failure message exactly once, so a re-render or a
-     * rotation cannot show the same dialog twice.
-     */
+    /** 失败文案只返回一次：重复渲染或旋转不会重复弹框。 */
     @Synchronized
     fun consumeFailure(): String? {
         val failure = _state.value as? VpnState.Failed ?: return null
@@ -314,7 +240,7 @@ internal class VpnController private constructor(
         return failure.message
     }
 
-    // ── Internals ───────────────────────────────────────────────
+    // ── 内部实现 ───────────────────────────────────────────────
 
     private fun resolveProfile(profileId: String?): Profile? =
         if (profileId == null) profiles.active() else profiles.find(profileId)
@@ -322,15 +248,13 @@ internal class VpnController private constructor(
     private fun setState(next: VpnState) {
         val previous = _state.value
         if (previous == next) return
-        // Every transition invalidates the one-shot failure latch. A repeated
-        // report of the very same failure is a no-op above, so the dialog is
-        // never shown twice for one failure.
+        // 任何状态迁移都复位一次性失败锁存；同一失败的重复上报被上面的相等判断挡掉，
+        // 因此一次失败只弹一次框。
         failureConsumed = false
-        // A new Connecting phase has not issued its start Intent yet.
+        // 新的 Connecting 阶段尚未下发启动 Intent。
         if (previous !is VpnState.Connecting || next !is VpnState.Connecting) startIssued = false
         Log.i(TAG, "vpn state: $previous -> $next")
-        // The local proxy is usable exactly while the tunnel is running; this is
-        // the readiness signal the updater waits for.
+        // 本地代理只在 Running 时可用：这是更新检查等待的就绪信号。
         TunnelState.update(next is VpnState.Running)
         _state.value = next
     }
@@ -365,7 +289,7 @@ internal class VpnController private constructor(
         @Volatile
         private var instance: VpnController? = null
 
-        /** Process-wide instance; the VPN service and the UI share one state. */
+        /** 进程级单例：VPN 服务与 UI 共享同一份状态。 */
         fun get(context: Context): VpnController {
             instance?.let { return it }
             return synchronized(this) {
@@ -377,7 +301,7 @@ internal class VpnController private constructor(
             }
         }
 
-        /** Drops the singleton so tests start from a clean [VpnState.Idle]. */
+        /** 仅供测试：丢弃单例，让下一个用例从 [VpnState.Idle] 开始。 */
         internal fun resetForTests() {
             synchronized(this) { instance = null }
         }

@@ -5,15 +5,8 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
-// 签名配置：优先读本地 keystore.properties，其次读 CI 环境变量
-//
-// 注意：keystore.properties.example 里的 storeFile 是 /path/to/your.keystore.jks 占位值。
-// 若把模板直接复制成 keystore.properties 却没填真实信息，旧逻辑仍会注册 release 签名配置，
-// 构建要到 :app:validateSigningRelease 才报 "Keystore file '/path/to/your.keystore.jks'
-// not found for signing config 'release'"，容易被误判成环境/工具链问题。因此这里区分三种情况：
-//   1) 文件不存在                       → 未配置，产出未签名 APK（CI 则走环境变量，见下）
-//   2) 存在但 storeFile 仍是占位值/为空 → 视为未配置，warn 后产出未签名 APK
-//   3) 存在且填了真实路径               → 正常签名；路径不存在则在配置阶段直接给出明确报错
+// 签名配置：优先本地 keystore.properties，其次 CI 环境变量。
+// 占位值/空值视为未配置（否则要到 validateSigningRelease 才报错）；真实路径不存在则在配置阶段直接报错。
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 def localStoreFile = null
@@ -203,12 +196,7 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }
 
-// ---------------------------------------------------------------------------
-// Auto-download of a prebuilt AAR from a GitHub release, shared by the two
-// native dependencies below. A pinned version uses the direct asset URL and
-// skips the API call; without a pin the latest release is resolved through the
-// GitHub API (GITHUB_TOKEN is used when present to avoid rate limiting).
-// ---------------------------------------------------------------------------
+// 两个 native AAR 共用的下载逻辑：锁定版本走直链，未锁定则经 GitHub API 取 latest（有 GITHUB_TOKEN 时带上以免限流）。
 def downloadAar = { String repo, String version, String assetName, File targetFile ->
     def downloadUrl
     def releaseTag
@@ -254,8 +242,7 @@ def downloadAar = { String repo, String version, String assetName, File targetFi
     }
 }
 
-// libeasyss comes from nange/easyss; the pinned version in version.properties
-// avoids the API call on a fresh checkout.
+// libeasyss 来自 nange/easyss；version.properties 锁定版本可避免全新 checkout 时的 API 调用。
 task downloadLibeasyssAar {
     def targetFile = file("libs/libeasyss.aar")
 
@@ -269,15 +256,12 @@ task downloadLibeasyssAar {
     }
 }
 
-// Trigger download before any build variant (needed for lint, test, and actual builds)
+// 任何构建变体（lint/test/assemble）之前都要先把 AAR 下载好。
 afterEvaluate {
     tasks.named('preBuild').configure { dependsOn downloadLibeasyssAar, downloadHevSocks5TunnelAar }
 }
 
-// ---------------------------------------------------------------------------
-// hev-socks5-tunnel comes from the upstream heiher/hev-socks5-tunnel release
-// (2.18.0 and later ship an official AAR, so the old fork is not needed).
-// ---------------------------------------------------------------------------
+// hev-socks5-tunnel 来自上游 heiher/hev-socks5-tunnel（2.18.0 起官方 Release 直接提供 AAR）。
 task downloadHevSocks5TunnelAar {
     def targetFile = file("libs/hev-socks5-tunnel.aar")
 

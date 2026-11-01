@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Cleartext HTTP is only allowed for the loopback services the app talks to:
-   the libeasyss stats/update proxy on 127.0.0.1 (and localhost). Everything
-   else must use TLS, replacing the former global usesCleartextTraffic flag.
+   仅对本机回环服务放行明文 HTTP：127.0.0.1/localhost 上的 libeasyss stats/更新代理；
+   其余一律 TLS（取代原来的全局 usesCleartextTraffic）。
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />

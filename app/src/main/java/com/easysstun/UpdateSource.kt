@@ -30,27 +30,17 @@ private const val DOWNLOAD_READ_TIMEOUT_MS = 30_000
 private const val MAX_RELEASE_BODY_BYTES = 1 shl 20
 private const val BUFFER_SIZE = 64 * 1024
 
-/** Network access for the updater; faked in unit tests. */
+/** 更新器的网络访问抽象，单测中替换为假实现。 */
 internal interface UpdateSource {
     suspend fun fetchLatestRelease(): Release
 
-    /** Streams the APK to [dest] and reports progress as (downloaded, total). */
+    /** 把 APK 流式写入 [dest]，进度以 (downloaded, total) 回调。 */
     suspend fun download(asset: ApkAsset, dest: File, onProgress: (Long, Long) -> Unit)
 }
 
-/**
- * GitHub-backed [UpdateSource].
- *
- * Mirrors easyss `selfupdate.Client`: when the VPN (libeasyss) is running, the
- * local HTTP proxy on `127.0.0.1:<socksPort+1000>` is tried first and a direct
- * connection is the fallback. The app's own traffic is excluded from the TUN,
- * so without this fallback a blocked network could never fetch an update.
- *
- * The proxy route is gated on [TunnelState.ready] rather than
- * `Pref.userWantsVpn`: the latter records the user's intent and is set
- * before `Mobile.start()` runs, so it would advertise a port that is not
- * listening yet.
- */
+/** GitHub 上的 [UpdateSource]，对齐 easyss `selfupdate.Client`：优先走本地代理 `127.0.0.1:<socksPort+1000>`，
+ * 失败回退直连（App 自身流量不走 TUN，无兜底时被墙网络永远拉不到更新）。
+ * 代理路由只认 [TunnelState.ready]，不用 `Pref.userWantsVpn`：后者只是用户意图，端口可能还没监听。 */
 internal class GitHubUpdateSource(
     private val profiles: ProfileStore,
     private val proxyPortProvider: () -> Int? = {
@@ -181,7 +171,7 @@ internal class GitHubUpdateSource(
                 }
                 val error = httpError(status)
                 if (status in 500..599) {
-                    // Server-side hiccup: try the other route before giving up.
+                    // 服务端 5xx 属临时故障：换另一条路由再试。
                     lastError = UpdateException(error, "http $status")
                     Log.w(TAG, "check via ${routeName(port)} failed: HTTP $status")
                     continue
@@ -233,23 +223,14 @@ internal class GitHubUpdateSource(
     }
 }
 
-/**
- * Free space pre-check. StorageManager#getAllocatableBytes would consider
- * clearable cache of other apps, but the APK lands in our own cache dir, so
- * the plain value is an adequate early warning; the write itself is still
- * authoritative.
- */
+/** 仅做空间预检：APK 落在本应用 cacheDir，用 usableSpace 足够；最终仍以写入结果为准。 */
 @SuppressLint("UsableSpace")
 private fun usableSpace(dir: File): Long = dir.usableSpace
 
 private fun routeName(proxyPort: Int?): String =
     if (proxyPort != null) "local proxy $LOOPBACK:$proxyPort" else "direct"
 
-/**
- * Transport failures and corrupt streams are worth retrying on the other route
- * (a tunnel-side 5xx is common when the VPN is up); HTTP 4xx and local errors
- * are not.
- */
+/** 传输失败与流损坏值得换路由重试（VPN 起来时隧道侧 5xx 常见）；4xx 与本地错误不重试。 */
 private fun isRetryable(error: UpdateError): Boolean = when (error) {
     UpdateError.Network, UpdateError.ChecksumMismatch -> true
     is UpdateError.Http -> error.code >= 500

@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Backup rules for devices before Android 12.
-
-   Server profiles store the proxy password in plain text in the default
-   SharedPreferences, so the whole sharedpref domain is excluded from backup
-   instead of letting a cloud backup or a device transfer carry credentials.
+   Android 12 之前的备份规则：配置档密码以明文存在默认 SharedPreferences，
+   因此整个 sharedpref 域排除备份，避免凭据随云备份或换机迁移外流。
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="." />

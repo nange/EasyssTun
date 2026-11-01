@@ -6,7 +6,7 @@
     android:layout_margin="14dp"
     android:orientation="vertical">
 
-    <!-- Server profiles; the adapter owns one card per profile. -->
+    <!-- 服务器配置档列表：每个配置档一张卡片，由 adapter 渲染。 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/server_profiles_list"
         android:layout_width="match_parent"
@@ -14,7 +14,7 @@
         android:layout_weight="1"
         android:clipToPadding="false" />
 
-    <!-- Add New Server button -->
+    <!-- 新增服务器按钮 -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/add_server_button"
         style="@style/Widget.Material3.Button.TonalButton"

@@ -8,57 +8,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 
-/**
- * Repository of the user's server profiles.
- *
- * Owns everything about profiles that used to live in [Pref]: the serialized
- * list, the active profile pointer, and the rule that the pointer never dangles
- * ([select] ignores unknown ids, and deleting the active profile falls back to
- * the first survivor, clearing the pointer only when the last profile goes).
- * Adding a profile does not change the selection.
- *
- * The list is stored under [SERVER_PROFILES]. [LEGACY_SERVER_PROFILES] is the key
- * the pre-store builds wrote; it is copied into [SERVER_PROFILES] when the store
- * is created and then left untouched, so a build that is downgraded (and only
- * understands the old, string-typed JSON) still finds its profiles.
- *
- * That snapshot is frozen: a profile deleted by this build can reappear after a
- * downgrade, and a profile change made while downgraded is not carried back. The
- * snapshot is dropped as soon as the last profile is deleted — downgrade
- * compatibility is meaningless then, and the snapshot still holds the profiles'
- * plaintext passwords.
- *
- * Mutations are persisted through the key/value layer of [Pref] and bump
- * [changes] only after every related key has been written, so a collector
- * resumed inline by the change event always observes the post-mutation snapshot.
- * The store never broadcasts anything itself: whether a change means the running
- * tunnel has to reload its configuration is a separate decision, taken
- * explicitly by the caller through [ConfigChangeNotifier].
- */
+/** 服务器配置档仓库。active id 永不悬空：select 忽略未知 id，删除当前项回退到首个幸存项，删空才清指针；add 不改选中。
+ * changes 在所有相关键写完后才自增，内联恢复的收集者总能读到变更后的快照；隧道是否重载由调用方经 [ConfigChangeNotifier] 决定。
+ * [LEGACY_SERVER_PROFILES] 是旧版写入的冻结快照（降级后按它读取，本版删掉的配置档会复现）；删空时清除，避免残留明文密码。 */
 internal class ProfileStore private constructor(private val pref: Pref) {
 
-    /** Bumped after every mutation so observers can reload the profile list. */
+    /** 每次变更后自增，观察者据此重载列表。 */
     private val revision = MutableStateFlow(0L)
 
-    /**
-     * Change event for the stored profiles. The current revision is emitted to
-     * every new collector, so a screen that starts observing after the change
-     * still refreshes once.
-     */
+    /** 变更事件：新收集者会立刻收到当前 revision，因此变更之后才开始观察的界面仍会刷新一次。 */
     val changes: StateFlow<Long> = revision.asStateFlow()
 
-    /**
-     * Raw payload that already failed to decode. Keeps a corrupt store from
-     * logging on every read (the log viewer reads the active profile regularly).
-     */
+    /** 已解码失败的原始 payload：同一份内容只打一次日志，避免日志界面频繁读当前配置档时刷屏。 */
     @Volatile
     private var corruptPayload: String? = null
 
-    /**
-     * All stored profiles in insertion order. A corrupt payload reads as an
-     * empty list (and is logged once) instead of crashing every screen that
-     * lists profiles; the user can still create a new profile from the form.
-     */
+    /** 全部配置档，按插入顺序。payload 损坏时读作空列表并只记一次日志，避免每个列配置档的界面崩溃；用户仍可从表单新建。 */
     fun all(): List<Profile> {
         val json = pref.getString(SERVER_PROFILES) ?: return emptyList()
         return try {
@@ -71,7 +36,7 @@ internal class ProfileStore private constructor(private val pref: Pref) {
 
     fun find(id: String): Profile? = all().firstOrNull { it.id == id }
 
-    /** The profile the tunnel would connect to, or null when none is selected. */
+    /** 隧道实际连接的配置档；未选中时为 null。 */
     fun active(): Profile? = activeId()?.let(::find)
 
     fun activeId(): String? = pref.getString(ACTIVE_SERVER_ID)
@@ -91,11 +56,7 @@ internal class ProfileStore private constructor(private val pref: Pref) {
         save(profiles)
     }
 
-    /**
-     * Deletes [id]. When it was the active profile, the first remaining profile
-     * becomes active so a configured app never ends up with profiles but no
-     * selection; only deleting the last profile clears the pointer.
-     */
+    /** 删除 [id]：删的是当前项时把指针移到首个幸存项，只有删空才清空指针，避免出现有配置档却无选中。 */
     fun delete(id: String) {
         val profiles = all()
         val remaining = profiles.filterNot { it.id == id }
@@ -103,19 +64,14 @@ internal class ProfileStore private constructor(private val pref: Pref) {
             Log.w(TAG, "delete($id): no such profile, ignoring")
             return
         }
-        // Move the pointer before emitting: a collector resumed inline by the
-        // change event must observe the post-delete snapshot, not the id that
-        // just disappeared.
+        // 先移指针再发事件：内联恢复的收集者必须看到删除后的快照，而不是刚消失的 id。
         if (activeId() == id) {
             pref.putString(ACTIVE_SERVER_ID, remaining.firstOrNull()?.id)
         }
         save(remaining)
     }
 
-    /**
-     * Points the active-profile pointer at [id]. Unknown ids are ignored so the
-     * pointer can never dangle.
-     */
+    /** 把指针指向 [id]；未知 id 忽略，指针因此永不悬空。 */
     fun select(id: String) {
         if (find(id) == null) {
             Log.w(TAG, "select($id): no such profile, ignoring")
@@ -125,15 +81,7 @@ internal class ProfileStore private constructor(private val pref: Pref) {
         notifyChanged()
     }
 
-    /**
-     * One-time migration of the pre-store key, run while the process-wide
-     * instance is being created. Doing it there (instead of on the first read)
-     * keeps [all] a pure read and rules out a background reader overwriting a
-     * profile that another thread wrote between its read and its write.
-     *
-     * The legacy key is deliberately left in place: it is the frozen snapshot a
-     * downgraded build reads.
-     */
+    /** 旧 key 的一次性迁移，在实例创建时执行而非首次读取：[all] 才能保持纯读，也避免读-改-写期间覆盖其他线程的写入。 */
     private fun migrateLegacyStore() {
         if (pref.getString(SERVER_PROFILES) != null) return
         val legacy = pref.getString(LEGACY_SERVER_PROFILES) ?: return
@@ -150,9 +98,7 @@ internal class ProfileStore private constructor(private val pref: Pref) {
     private fun save(profiles: List<Profile>) {
         pref.putString(SERVER_PROFILES, appJson.encodeToString(profiles))
         if (profiles.isEmpty()) {
-            // Downgrade compatibility is meaningless without profiles, and the
-            // frozen snapshot still holds the profiles' plaintext passwords:
-            // drop it once the user has deleted everything.
+            // 没有配置档时降级兼容无意义，而冻结快照仍含明文密码：删空即清除。
             pref.remove(LEGACY_SERVER_PROFILES)
         }
         notifyChanged()
@@ -165,29 +111,25 @@ internal class ProfileStore private constructor(private val pref: Pref) {
     companion object {
         private const val TAG = LogTags.PROFILE_STORE
 
-        /** Current profile-store key (typed JSON: numbers and booleans). */
+        /** 当前存储 key：JSON 里数字与布尔是原生类型。 */
         const val SERVER_PROFILES = "server_profiles_v2"
 
-        /**
-         * Key written by builds before the typed model. Read once for migration
-         * and kept so a downgraded build can still read its profiles.
-         */
+        /** 类型化模型之前的旧 key：只读一次用于迁移，之后保留给降级版本读取。 */
         const val LEGACY_SERVER_PROFILES = "server_profiles"
 
-        /** Unchanged: the pointer is a plain profile id in both formats. */
+        /** key 未变：新旧两种格式下指针都是纯配置档 id。 */
         const val ACTIVE_SERVER_ID = "active_server_id"
 
         @Volatile
         private var instance: ProfileStore? = null
 
-        /** Process-wide instance: a mutation must be visible to every screen. */
+        /** 进程内唯一实例：一次变更必须对所有界面可见。 */
         fun get(context: Context): ProfileStore {
             instance?.let { return it }
             return synchronized(this) {
                 instance ?: run {
                     val created = ProfileStore(Pref(context.applicationContext))
-                    // Migrate before publishing: a caller that observes the
-                    // instance must never see a half-migrated store.
+                    // 先迁移再发布实例：观察者不能看到半迁移的仓库。
                     created.migrateLegacyStore()
                     instance = created
                     created

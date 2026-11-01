@@ -7,11 +7,11 @@ internal const val UPDATE_REPO = "nange/EasyssTun"
 internal const val LATEST_RELEASE_API = "https://api.github.com/repos/$UPDATE_REPO/releases/latest"
 internal const val RELEASES_PAGE = "https://github.com/$UPDATE_REPO/releases/latest"
 
-/** Subset of the GitHub release API response the updater needs. */
+/** 更新器用到的 GitHub release API 字段子集。 */
 @Serializable
 internal data class Release(
     @SerialName("tag_name") val tagName: String = "",
-    /** Release notes; GitHub may omit it or send null. */
+    /** 发布说明；GitHub 可能省略或返回 null。 */
     val body: String? = null,
     @SerialName("html_url") val htmlUrl: String = "",
     val assets: List<ReleaseAsset> = emptyList(),
@@ -22,11 +22,11 @@ internal data class ReleaseAsset(
     val name: String = "",
     @SerialName("browser_download_url") val downloadUrl: String = "",
     val size: Long = 0,
-    /** GitHub-provided digest, e.g. `sha256:...`; null on older releases. */
+    /** GitHub 提供的摘要，形如 `sha256:...`；旧 release 为 null。 */
     val digest: String? = null,
 )
 
-/** Metadata parsed out of an APK asset name produced by `app/build.gradle`. */
+/** 从 `app/build.gradle` 生成的 APK 资产名中解析出的元数据。 */
 internal data class ParsedApk(
     val versionName: String,
     val versionCode: Int,
@@ -35,7 +35,7 @@ internal data class ParsedApk(
     val name: String,
 )
 
-/** A release APK that matches this device, plus where to fetch and how to verify it. */
+/** 匹配本机的 release APK，含下载地址与校验信息。 */
 internal data class ApkAsset(
     val versionName: String,
     val versionCode: Int,
@@ -51,10 +51,8 @@ internal fun decodeRelease(body: String): Release? =
         .getOrNull()
         ?.takeIf { it.tagName.isNotBlank() }
 
-/**
- * Parses the release asset contract documented in AGENTS.md:
- * `EasyssTun_v{versionName}_{versionCode}_{abi}_{variant}_{yyyyMMdd}.apk`.
- */
+/** 解析资产命名契约（见 AGENTS.md）：
+ * `EasyssTun_v{versionName}_{versionCode}_{abi}_{variant}_{yyyyMMdd}.apk`。 */
 internal object ApkNames {
     private val PATTERN =
         Regex("""^EasyssTun_v([^_]+)_(\d+)_([A-Za-z0-9-]+)_(release|debug)_\d{8}\.apk$""")
@@ -72,11 +70,8 @@ internal object ApkNames {
     }
 }
 
-/**
- * Picks the release APK for this device: only `release` variants, only ABIs in
- * [supportedAbis] (a future universal APK is accepted as the last resort), and
- * the highest versionCode wins when several match.
- */
+/** 选包约束：只要 `release` 变体、ABI 必须在 [supportedAbis] 内（`all`/`universal` 作为最后兜底），
+ * 多个命中时取 versionCode 最大者。 */
 internal fun pickApk(release: Release, supportedAbis: List<String>): ApkAsset? {
     val candidates = release.assets.mapNotNull { asset ->
         val parsed = ApkNames.parse(asset.name) ?: return@mapNotNull null

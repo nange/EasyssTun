@@ -34,8 +34,7 @@ class MainFragment : Fragment() {
     companion object {
         private const val TAG = LogTags.MAIN
 
-        // Process-level guard: the version banner is a startup line, not a
-        // per-view one (the home fragment view is re-created on navigation).
+        // 进程级标记：版本横幅是启动行而非每视图一次；首页视图在导航后会被重建。
         private var versionLogged = false
     }
 
@@ -59,9 +58,7 @@ class MainFragment : Fragment() {
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        // The controller is the only place that knows whether the tunnel is
-        // still wanted; it reverts to Idle (and clears the persisted intent)
-        // when the user declines.
+        // 是否仍需要隧道由控制器判定：用户拒绝时它回到 Idle 并清掉持久化意图。
         controller.onPermissionResult(result.resultCode == Activity.RESULT_OK)
     }
 
@@ -103,11 +100,8 @@ class MainFragment : Fragment() {
         bindUpdateCard()
         logVersionOnce()
 
-        // The VPN state is process-wide (VpnController), so collecting it here
-        // survives rotation and re-entry without any fragment-side bookkeeping:
-        // the first emission already renders the correct state. Collection is
-        // paused while the screen is stopped so a failure dialog never pops up
-        // in the background; onResume() renders the current state on return.
+        // 状态是进程级的：首次发射即渲染正确状态，旋转/重入无需 Fragment 记账。
+        // 只在 STARTED 收集：屏幕停止时暂停，失败弹框不会在后台弹出。
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 controller.state.collect { renderState(it) }
@@ -133,40 +127,34 @@ class MainFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // The server list and the per-app routing can change while this screen
-        // is in the background (profile edit/delete, app list, proxy mode), so
-        // refresh the configuration-dependent parts and re-render the current
-        // state.
+        // 后台期间服务器列表与分应用路由都可能变（增删配置档、分应用、代理模式），
+        // 所以重刷配置相关部分并重渲染当前状态。
         serverSpinner?.refresh()
         updateAppListCard()
         renderState(controller.state.value)
-        // Recovers a dropped permission result, and turns the persisted
-        // "user wants the VPN" intent back into a connection when this process
-        // has no tunnel left (force-stop / kill without a service restart).
+        // 补发丢失的授权结果，并在本进程已无隧道时把持久化意图还原成连接（强杀后服务未重启）。
         val resumed = controller.resume()
         if (resumed is ConnectRequest.NeedsPermission) {
             vpnPermissionLauncher.launch(resumed.intent)
         }
     }
 
-    // ── Server spinner ──────────────────────────────────────────
+    // ── 服务器下拉框 ──────────────────────────────────────────
 
     private fun onServerSelected(profile: Profile) {
         val state = controller.state.value
         if (profile.id == profiles.activeId() && state !is VpnState.Switching) {
             return
         }
-        // The controller is the only writer of the active profile: it either
-        // selects it (tunnel down) or runs the stop/start switch (tunnel up).
+        // 当前配置档的唯一写入方是控制器：隧道关闭时只改选中，开启时走停/启切换。
         controller.switchTo(profile.id)
         if (!state.isEngaged) {
-            // A plain selection emits no state change, so refresh the
-            // configuration-dependent UI here.
+            // 纯选择不产生状态迁移，配置相关 UI 只能在这里手动刷新。
             renderState(controller.state.value)
         }
     }
 
-    // ── Connect / disconnect ────────────────────────────────────
+    // ── 连接 / 断开 ────────────────────────────────────
 
     private fun setup() {
         serverSpinner?.refresh()
@@ -201,7 +189,7 @@ class MainFragment : Fragment() {
         }
     }
 
-    // ── Rendering (pure: never issues VPN commands) ─────────────
+    // ── 渲染（纯渲染，不下发 VPN 命令） ─────────────
 
     private fun renderState(state: VpnState) {
         if (_binding == null) return
@@ -213,9 +201,7 @@ class MainFragment : Fragment() {
             is VpnState.Idle -> renderStopped()
             is VpnState.Failed -> {
                 renderStopped()
-                // The failure is explained exactly once. Only consume it when the
-                // dialog can actually be shown, so a failure that arrives while
-                // the screen is finishing is still reported on the next visit.
+                // 失败只解释一次：只在确实能弹框时消费，屏幕结束时到达的失败留到下次可见再报。
                 if (isAdded && !requireActivity().isFinishing) {
                     val message = controller.consumeFailure()
                     if (message != null) {
@@ -226,9 +212,8 @@ class MainFragment : Fragment() {
                     }
                 }
             }
-            // Connecting/switching can be cancelled: the service may be slow or
-            // never report back, and a disabled button would leave the user with
-            // no way out. Stopping is already the way out.
+            // Connecting/Switching 可取消：服务可能很慢或永不上报，禁用按钮会让用户无路可退。
+            // Stopping 本身就是出路，故不可取消。
             is VpnState.Connecting -> renderBusy(R.string.service_connecting, cancellable = true)
             is VpnState.Switching -> renderBusy(R.string.service_switching, cancellable = true)
             VpnState.Stopping -> renderBusy(R.string.service_stopping, cancellable = false)
@@ -238,8 +223,7 @@ class MainFragment : Fragment() {
 
     private fun renderStopped() {
         binding.serviceButton.text = getString(R.string.service_enable)
-        // The active profile can be deleted while the tunnel keeps running, so
-        // "is anything configured" is re-read on every render.
+        // 当前配置档可能在隧道运行期间被删，故每次渲染都重新读一次是否已配置。
         binding.serviceButton.isEnabled = profiles.active() != null
         binding.serviceButton.icon = getDrawable(
             mContext, R.drawable.ic_outline_play_arrow_24
@@ -319,11 +303,7 @@ class MainFragment : Fragment() {
         )
     }
 
-    /**
-     * Logs the app/libeasyss version banner once per process. The banner used to
-     * be rendered below the statistics card; the home update card now shows the
-     * app version, while the libeasyss build stays visible in the log viewer.
-     */
+    /** 每个进程只记一次版本横幅：首页更新卡片显示 App 版本，libeasyss 构建版本只在日志里看。 */
     private fun logVersionOnce() {
         if (versionLogged) return
         versionLogged = true
@@ -332,12 +312,7 @@ class MainFragment : Fragment() {
         }
     }
 
-    /**
-     * Shows the specific error text of the last failed start (native error from
-     * the Go side, or a localised precondition message). Guarded against a
-     * finishing/detached activity so the dialog never throws BadTokenException
-     * (e.g. when the failure surfaces while the app is backgrounded).
-     */
+    /** 展示上次启动失败的具体文案（native 错误或前置条件）；已防 isAdded/isFinishing，避免后台弹框抛 BadTokenException。 */
     private fun showStartFailedDialog(errorMessage: String, profileName: String?) {
         if (!isAdded || requireActivity().isFinishing) {
             Log.w(TAG, "showStartFailedDialog: fragment not added or activity finishing, skipping dialog. Error: $errorMessage")
@@ -356,16 +331,15 @@ class MainFragment : Fragment() {
                 .show()
     }
 
-    // ── Stats polling ───────────────────────────────────────────
+    // ── 统计轮询 ───────────────────────────────────────────
 
     private fun startStatsPolling() {
         if (statsPollingJob?.isActive == true) return
         statsBinder?.setVisible(true)
         statsPollingJob =
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                    // The state is only Running after waitForSocksReady() and
-                    // TProxyStartService succeeded, so the endpoint is already
-                    // serving; a failed fetch simply retries on the next tick.
+                    // Running 意味着 waitForSocksReady() 与 TProxyStartService 均已成功，端点必然在服务；
+                    // 拉取失败等下一拍重试即可。
                     fetchAndUpdateStats()
                     AppState.isForeground.collectLatest { isForeground ->
                         val interval = if (isForeground) 2_000L else 30_000L
@@ -381,14 +355,12 @@ class MainFragment : Fragment() {
     private fun stopStatsPolling() {
         statsPollingJob?.cancel()
         statsPollingJob = null
-        // Hide stats card when service is stopped
         statsBinder?.setVisible(false)
     }
 
     private suspend fun fetchAndUpdateStats() {
-        // Stats endpoint port follows the active profile's SOCKS port + 1000
-        // (e.g. default 4080 -> 5080). Recompute each fetch so a server switch
-        // that restarts the service with a new profile is picked up.
+        // stats 端点端口 = 当前配置档 SOCKS 端口 + 1000（默认 4080 → 5080）；
+        // 每次拉取都重算，切换服务器重启服务后能立刻跟上。
         val statsUrl = profiles.active()?.statsUrl() ?: Profile.defaultStatsUrl()
         val snapshot = statsClient.fetch(statsUrl)
         withContext(Dispatchers.Main) {

@@ -24,10 +24,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          # The action defaults to 'tools platform-tools', but the legacy
-          # 'tools' package no longer exists in the SDK repository (cmdline-tools
-          # 20 fails to resolve it) and aborts setup. Install platform-tools
-          # only; AGP downloads the platform/build-tools it needs.
+          # 只装 platform-tools：action 默认的 'tools' 包已从 SDK 仓库移除，会让 setup 直接失败。
           packages: 'platform-tools'
 
       - name: Setup Gradle

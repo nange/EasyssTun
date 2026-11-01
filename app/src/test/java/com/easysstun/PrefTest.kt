@@ -16,14 +16,10 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Tests for the key/value preference layer.
- *
- * The server profile repository and the per-app selection no longer live here;
- * they are covered by [ProfileStoreTest] and [AppSelectionStoreTest].
+ * 覆盖偏好键值层；配置档仓库与分应用选择分别在 [ProfileStoreTest]、[AppSelectionStoreTest]。
  */
 @RunWith(AndroidJUnit4::class)
-// The sdk must be pinned explicitly: Robolectric reads the app manifest (binary
-// resources are enabled) and rejects the unsupported targetSdk 37 otherwise.
+// 必须显式钉住 sdk：Robolectric 读 App manifest（二进制资源已启用），targetSdk 37 不被支持。
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class PrefTest {
 
@@ -73,7 +69,7 @@ class PrefTest {
             Pref.PROXY_MODE_PROXY_ONLY,
             sharedPreferences.getString(Pref.PROXY_MODE_KEY, null),
         )
-        // A new Pref instance (same process, same file) sees the value.
+        // 同进程同文件的新 Pref 实例能读到该值。
         assertEquals(Pref.PROXY_MODE_PROXY_ONLY, Pref(context).proxyMode)
     }
 
@@ -104,7 +100,6 @@ class PrefTest {
         assertEquals(1_700_000_000_000L, pref.updateLastCheckAt)
         assertEquals(170, pref.updateDismissedVersionCode)
 
-        // New Pref instance reads the same default SharedPreferences.
         val reloaded = Pref(context)
         assertEquals(false, reloaded.updateAutoCheck)
         assertEquals(1_700_000_000_000L, reloaded.updateLastCheckAt)

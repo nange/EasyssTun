@@ -21,11 +21,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowVpnService
 
 /**
- * Tests for the process-wide VPN state machine.
- *
- * These replace the old broadcast-based contract tests: the three custom
- * broadcasts (STARTED / STOPPED / START_FAILED) are gone, and the service now
- * reports the same facts directly to [VpnController].
+ * 守护进程级 VPN 状态机：UI 只读 [VpnController] 的 StateFlow，服务只上报事实，状态写入全部收敛在控制器内。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -74,7 +70,7 @@ class VpnControllerTest {
         return shadowOf(application).allStartedServices
     }
 
-    // ── Commands ────────────────────────────────────────────────
+    // ── 命令 ────────────────────────────────────────────
 
     @Test
     fun initialState_isIdle() {
@@ -194,8 +190,7 @@ class VpnControllerTest {
         controller.connect()
         assertTrue(startedServiceIntents().isEmpty())
 
-        // The activity that launched the dialog was destroyed, so no result was
-        // delivered; the permission has since been granted.
+        // 拉起权限对话框的 Activity 已被销毁，结果没回传；此时权限已授予。
         ShadowVpnService.setPrepareResult(null)
         assertEquals(ConnectRequest.Started, controller.resume())
 
@@ -213,7 +208,7 @@ class VpnControllerTest {
         assertEquals("a resume must not issue a second start", 1, startedServiceIntents().size)
     }
 
-    // ── Service facts ───────────────────────────────────────────
+    // ── 服务上报的事实 ───────────────────────────────────
 
     @Test
     fun onServiceRunning_marksRunningAndPublishesTunnelReadiness() {
@@ -387,7 +382,7 @@ class VpnControllerTest {
         controller.onServiceRunning(profile.id)
         assertTrue(TunnelState.ready.value)
 
-        // ConfigChangeNotifier restart: the service rebuilds the tunnel from the stores.
+        // ConfigChangeNotifier 触发重启：服务会从各仓库重建隧道。
         controller.onServiceStarting(profile.id)
 
         assertEquals(VpnState.Connecting(profile.id), controller.state.value)
@@ -407,7 +402,7 @@ class VpnControllerTest {
         assertNull("the same failure must not re-arm the dialog", controller.consumeFailure())
     }
 
-    // ── Server switch ───────────────────────────────────────────
+    // ── 服务器切换 ───────────────────────────────────────
 
     @Test
     fun switchTo_whileRunning_stopsFirstAndStartsTheNewProfileAfterwards() {
@@ -509,7 +504,7 @@ class VpnControllerTest {
         assertEquals(VpnState.Idle, controller.state.value)
     }
 
-    // ── Process rebuild ─────────────────────────────────────────
+    // ── 进程重建 ────────────────────────────────────────
 
     @Test
     fun freshProcess_startsIdleAndResumesFromThePersistedIntent() {
@@ -517,13 +512,12 @@ class VpnControllerTest {
         profiles.select(profile.id)
         pref.userWantsVpn = true
 
-        // A new process cannot inherit the tunnel: the VPN service lives in it,
-        // so the state starts Idle instead of fabricating a connection.
+        // 新进程继承不到隧道（VPN 服务随旧进程消亡），状态从 Idle 起算，不能伪造连接。
         VpnController.resetForTests()
         val rebuilt = VpnController.get(context)
         assertEquals(VpnState.Idle, rebuilt.state.value)
 
-        // The persisted intent is what brings it back when the screen opens.
+        // 界面打开时靠持久化的意图恢复。
         assertEquals(ConnectRequest.Started, rebuilt.resume())
         assertEquals(VpnState.Connecting(profile.id), rebuilt.state.value)
         assertEquals(EasyssVpnService.ACTION_CONNECT, startedServiceIntents().single().action)

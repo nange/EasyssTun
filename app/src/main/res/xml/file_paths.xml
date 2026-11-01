@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Downloaded update APKs live in cacheDir/updates and are exposed to the
-         system installer through FileProvider (see AndroidManifest.xml). -->
+    <!-- 下载的更新 APK 存放在 cacheDir/updates，只经 FileProvider 交给系统安装器（见 AndroidManifest.xml）。 -->
     <cache-path name="updates" path="updates/" />
 </paths>

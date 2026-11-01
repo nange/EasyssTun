@@ -143,7 +143,7 @@
                 style="@style/Card"
                 android:orientation="vertical">
 
-                <!-- Header -->
+                <!-- 头部 -->
                 <LinearLayout
                     android:id="@+id/stats_header"
                     android:layout_width="match_parent"
@@ -177,7 +177,7 @@
                         app:tint="@color/teal_700" />
                 </LinearLayout>
 
-                <!-- Stats grid: 4 columns, label-on-top -->
+                <!-- 统计网格：4 列，标签在上 -->
                 <LinearLayout
                     android:id="@+id/stats_grid"
                     android:layout_width="match_parent"
@@ -185,7 +185,7 @@
                 android:layout_marginTop="8dp"
                 android:orientation="vertical">
 
-                    <!-- Row 1: always visible — RTT (hero) | DL Speed | UL Speed | TCP Conns -->
+                    <!-- 第一行：始终可见 —— 延迟（主指标）| 下载速度 | 上传速度 | TCP 连接数 -->
                     <androidx.constraintlayout.widget.ConstraintLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content">
@@ -297,7 +297,7 @@
 
                     </androidx.constraintlayout.widget.ConstraintLayout>
 
-                    <!-- Expandable section: hidden by default -->
+                    <!-- 可展开区域：默认隐藏 -->
                     <LinearLayout
                         android:id="@+id/stats_expandable"
                         android:layout_width="match_parent"
@@ -305,7 +305,7 @@
                         android:orientation="vertical"
                         android:visibility="gone">
 
-                        <!-- Row 2: Peak DL | Peak UL | Sent | Received -->
+                        <!-- 第二行：峰值下载 | 峰值上传 | 发送 | 接收 -->
                         <androidx.constraintlayout.widget.ConstraintLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -418,7 +418,7 @@
 
                         </androidx.constraintlayout.widget.ConstraintLayout>
 
-                        <!-- Row 3: Priority Conns | Bulk Conns | Priority Active | Bulk Active -->
+                        <!-- 第三行：优先连接 | 普通连接 | 优先活跃流 | 普通活跃流 -->
                         <androidx.constraintlayout.widget.ConstraintLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -531,7 +531,7 @@
 
                         </androidx.constraintlayout.widget.ConstraintLayout>
 
-                        <!-- Row 4: Active | Degraded | Rotated | Probe Slow -->
+                        <!-- 第四行：活跃流 | 连接退化 | 新连接替换 | 探测慢速 -->
                         <androidx.constraintlayout.widget.ConstraintLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -644,7 +644,7 @@
 
                         </androidx.constraintlayout.widget.ConstraintLayout>
 
-                        <!-- Row 5: Uptime (label 1 col, value 3 cols) -->
+                        <!-- 第五行：运行时间（标签 1 列，数值 3 列） -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -691,7 +691,7 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- In-app update: current version, check/download and status -->
+        <!-- 应用内更新：当前版本、检查/下载与状态 -->
         <com.easysstun.UpdateCardView
             android:id="@+id/update_card"
             style="@style/mCard"

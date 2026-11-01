@@ -27,8 +27,7 @@ import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
-// Robolectric reads the app manifest (binary resources enabled) and rejects
-// the unsupported targetSdk 37 unless the sdk is pinned explicitly.
+// Robolectric 会读 App manifest（二进制资源已启用），必须显式钉住 sdk，否则 targetSdk 37 不被支持。
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class UpdateManagerTest {
 
@@ -80,7 +79,7 @@ class UpdateManagerTest {
         var downloadError: UpdateException? = null,
         var downloadBytes: ByteArray = ByteArray(16),
         val gate: CompletableDeferred<Unit>? = null,
-        /** Suspends the next fetch so a test can act while a check is in flight. */
+        /** 挂起下一次 fetch，便于在检查进行中操作。 */
         var fetchGate: CompletableDeferred<Unit>? = null,
     ) : UpdateSource {
         var fetchCount = 0
@@ -88,8 +87,7 @@ class UpdateManagerTest {
 
         override suspend fun fetchLatestRelease(): Release {
             fetchCount++
-            // Capture the outcome before suspending: a test may flip
-            // [fetchError] while this call is parked on the gate.
+            // 先取走结果再挂起：测试可能在本调用停在 gate 上时改 [fetchError]。
             val error = fetchError
             val gate = fetchGate.also { fetchGate = null }
             gate?.await()
@@ -192,8 +190,7 @@ class UpdateManagerTest {
     @Test
     fun autoCheckWaitsForTheTunnelInsteadOfGoingDirect() = runTest {
         val source = FakeSource(release = release())
-        // backgroundScope: the pending grace-period job must be dropped at the
-        // end of the test instead of being awaited.
+        // backgroundScope：宽限期任务在测试结束时直接丢弃，不等待。
         val manager = manager(source, backgroundScope, tunnelReady = MutableStateFlow(false))
 
         manager.autoCheck()
@@ -236,7 +233,7 @@ class UpdateManagerTest {
         assertEquals(1, source.fetchCount)
         assertTrue(manager.state.value is UpdateState.Available)
 
-        // The grace-period fallback was superseded and must not check again.
+        // 宽限期的兜底检查已被取代，不能再检查一次。
         advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
         advanceUntilIdle()
         assertEquals(1, source.fetchCount)
@@ -252,12 +249,12 @@ class UpdateManagerTest {
         assertEquals(1, source.fetchCount)
         assertTrue(manager.state.value is UpdateState.Failed)
 
-        // A second launch-time check is still rate-limited...
+        // 第二次启动检查仍受节流限制。
         manager.autoCheck()
         advanceUntilIdle()
         assertEquals(1, source.fetchCount)
 
-        // ...but the tunnel coming up retries right away through the proxy.
+        // 隧道就绪则立即经代理重试。
         source.fetchError = null
         source.release = release()
         manager.onTunnelReady()
@@ -278,8 +275,7 @@ class UpdateManagerTest {
         val tunnelReady = MutableStateFlow(false)
         val manager = manager(source, this, tunnelReady = tunnelReady)
 
-        // The grace period fires a direct check that is still in flight when the
-        // tunnel comes up; that readiness event must not be dropped.
+        // 宽限期先发了一次直连检查，隧道在它未完成时起来；该就绪事件不能被丢弃。
         manager.autoCheck()
         advanceTimeBy(LAUNCH_FALLBACK_DELAY_MS + 1)
         runCurrent()
@@ -313,8 +309,7 @@ class UpdateManagerTest {
 
         tunnelReady.value = true
         manager.onTunnelReady()
-        // The VPN is dropped again before the in-flight check finishes, so the
-        // queued retry would be a proxy-less check that bypasses the throttle.
+        // 检查未完成前 VPN 又断开：此时排队的重试会变成绕过节流的直连检查，必须丢弃。
         tunnelReady.value = false
         gate.complete(Unit)
         advanceUntilIdle()
@@ -558,8 +553,7 @@ class UpdateManagerTest {
         assertEquals(UpdateAction.DOWNLOAD, failed.action)
         assertEquals(170, failed.release?.versionCode)
 
-        // Retry resumes the download of the same release instead of running a
-        // new check (which is what an `activeRelease` field used to decide).
+        // 重试继续下载同一个 release，不重新检查：失败状态自带 release 即可判断。
         source.downloadError = null
         manager.retryLastAction()
         advanceUntilIdle()

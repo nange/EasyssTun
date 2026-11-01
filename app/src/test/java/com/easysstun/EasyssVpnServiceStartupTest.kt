@@ -12,10 +12,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 
 /**
- * Tests for the proxy-readiness probe used by the startup sequence
- * (waitForSocksReady / probeSocksAccept). The clock and probe are injected,
- * so no real SOCKS5 server or Android VPN is required; the probe test speaks
- * a minimal real SOCKS5 greeting over a local socket.
+ * 覆盖启动序列的就绪探测（waitForSocksReady / probeSocksAccept）：时钟与 probe 注入，无需外部 SOCKS5 服务或 Android VPN。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -72,7 +69,7 @@ class EasyssVpnServiceStartupTest {
 
     @Test
     fun probeSocksAccept_acceptsRealSocks5Greeting() {
-        // Minimal SOCKS5 server: reply "05 00" (no auth) to any greeting.
+        // 最小 SOCKS5 服务端：对任意问候回 "05 00"（免认证）。
         val serverSocket = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
         val port = serverSocket.localPort
         val thread = Thread {
@@ -97,8 +94,7 @@ class EasyssVpnServiceStartupTest {
 
     @Test
     fun probeSocksAccept_rejectsNonSocksReply() {
-        // A TCP listener that answers with garbage instead of a SOCKS5
-        // method selection must fail the probe.
+        // 回垃圾数据而非 SOCKS5 方法选择的 TCP 监听器必须让探测失败。
         val serverSocket = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
         val port = serverSocket.localPort
         val thread = Thread {

@@ -1,49 +1,27 @@
 package com.easysstun
 
-/**
- * The one and only description of what the VPN is doing.
- *
- * Before this type existed the home screen reconstructed the tunnel state from
- * `Pref.userWantsVpn` (the user's *intent*, which outlives the tunnel),
- * three ad-hoc broadcasts, and a handful of fragment fields
- * (`isConnecting` / `isSwitchingServer` / `pendingServerProfileId` /
- * `statsServiceReady`). Those sources could disagree — most visibly after a
- * rotation during a server switch, when the pending target lived only in the
- * fragment.
- *
- * [VpnController] owns the single [kotlinx.coroutines.flow.StateFlow] of this
- * type; the UI only renders it and the service only reports facts into it.
- */
+/** VPN 在做什么的唯一描述；[VpnController] 持有它的唯一 [kotlinx.coroutines.flow.StateFlow]，UI 只渲染、服务只上报事实。 */
 internal sealed interface VpnState {
 
-    /** No tunnel, no startup in flight; the user has not asked for one (or it failed). */
+    /** 无隧道、无启动在途；进程重建后即使 [Pref.userWantsVpn] 为 true 也先回到这里。 */
     data object Idle : VpnState
 
-    /** A tunnel is being built for [profileId]. */
+    /** 正在为 [profileId] 建隧道；此时可能仍在等系统授权。 */
     data class Connecting(val profileId: String?) : VpnState
 
-    /** The tunnel is up and serving traffic for [profileId]. */
+    /** 隧道已为 [profileId] 建成并转发流量；本地 stats 端点此时才可用。 */
     data class Running(val profileId: String?) : VpnState
 
-    /** The tunnel is being replaced: torn down for [fromProfileId], rebuilt for [toProfileId]. */
+    /** 隧道正在替换：先拆 [fromProfileId]，再建 [toProfileId]。 */
     data class Switching(val fromProfileId: String?, val toProfileId: String) : VpnState
 
-    /** The tunnel is being torn down after the user asked to stop. */
+    /** 正在拆除；期间到达的启动/运行上报都会被丢弃。 */
     data object Stopping : VpnState
 
-    /**
-     * The last start attempt failed with [message] (native error text, or a
-     * localised precondition message). The service is already down; the state
-     * is kept so the UI can surface the error exactly once instead of silently
-     * falling back to "stopped".
-     */
+    /** 上次启动失败（[message] 已可直接展示）；服务已停，保留此态以便 UI 只提示一次。 */
     data class Failed(val message: String, val profileId: String?) : VpnState
 
-    /**
-     * True while a tunnel is coming up, is up, or is being replaced. Used to
-     * decide whether the spinner/commands must be locked; it deliberately does
-     * not include [Stopping] (nothing is being served any more).
-     */
+    /** 隧道在启动、运行或替换中（用于锁定下拉框与命令）；刻意不含 [Stopping]，此时已无流量在服务。 */
     val isEngaged: Boolean
         get() = this is Connecting || this is Running || this is Switching
 }

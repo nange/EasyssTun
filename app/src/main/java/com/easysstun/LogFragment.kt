@@ -30,11 +30,7 @@ class LogFragment : Fragment() {
     private var isAtBottom = true
     private var changingState = false
 
-    /**
-     * Item the viewport is anchored to while an older page is prepended. The
-     * anchor is the [LogItem] instance itself (the store reuses instances), so
-     * it survives new logs arriving before the diff is committed.
-     */
+    /** 补页时视口锚定的项；锚点用 [LogItem] 实例本身，日志追加不会换实例，diff 提交前仍能定位。 */
     private var anchorItem: LogItem? = null
     private var anchorOffset = 0
 
@@ -57,13 +53,13 @@ class LogFragment : Fragment() {
         binding.logRecyclerView.adapter = logAdapter
         logViewModel = ViewModelProvider(this)[LogViewModel::class.java]
 
-        // 观察LiveData以更新RecyclerView
         logViewModel.logItems.observe(viewLifecycleOwner) { logItems ->
             submitList(logItems)
         }
 
         binding.logRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                // submitList 里的 stopScroll 也会触发回调，提交期间用 changingState 屏蔽，避免误判 isAtBottom 与重复补页。
                 if (changingState) return
                 if (!recyclerView.canScrollVertically(1)) {
                     isAtBottom = true
@@ -72,7 +68,7 @@ class LogFragment : Fragment() {
                     isAtBottom = false
                     binding.fabToBotton.show()
                 }
-                // 滑到顶部时加载更早的一页日志
+                // 到顶就补一页；列表不足一屏时 canScrollVertically(-1) 同样为 false。
                 if (newState == RecyclerView.SCROLL_STATE_IDLE &&
                     !recyclerView.canScrollVertically(-1)
                 ) {
@@ -99,11 +95,7 @@ class LogFragment : Fragment() {
         _binding = null
     }
 
-    /**
-     * Hands a new window to the diffing adapter. The scroll adjustments run in
-     * the commit callback because [ListAdapter] applies the list asynchronously;
-     * touching the layout manager before that would use the old item count.
-     */
+    /** 滚动修正放在提交回调里：[ListAdapter] 异步应用列表，提前动 LayoutManager 拿到的还是旧条目数。 */
     private fun submitList(items: List<LogItem>) {
         val recyclerView = _binding?.logRecyclerView ?: return
         val anchor = anchorItem
@@ -113,8 +105,6 @@ class LogFragment : Fragment() {
         logAdapter.submitList(items) {
             val layoutManager = _binding?.logRecyclerView?.layoutManager as? LinearLayoutManager
             if (anchor != null) {
-                // Keep the previously visible item at the same offset after the
-                // older page is prepended.
                 val target = items.indexOfFirst { it === anchor }
                 if (target >= 0) layoutManager?.scrollToPositionWithOffset(target, offset)
                 anchorItem = null
@@ -126,10 +116,7 @@ class LogFragment : Fragment() {
         }
     }
 
-    /**
-     * 在列表顶部向前加载更早的一页日志，并保持视口锚定在加载前
-     * 的第一条可见项上（loadMore 通过 setValue 同步触发列表更新）。
-     */
+    /** 向前补一页并锚定加载前的首条可见项：loadMore 经 setValue 同步更新列表，锚点必须提前取。 */
     private fun loadOlderLogs() {
         if (!logViewModel.canLoadMore()) return
         val layoutManager = _binding?.logRecyclerView?.layoutManager as? LinearLayoutManager
@@ -143,7 +130,7 @@ class LogFragment : Fragment() {
         }
     }
 
-    /** 窗口内容不足一屏且仍有更早日志时，继续向前补页直到填满或到顶。 */
+    /** 不足一屏时补一页；补页后经 submitList 的 post 回调再次进入，直到填满或没有更早日志。 */
     private fun fillViewportIfNeeded() {
         val recyclerView = _binding?.logRecyclerView ?: return
         if (logViewModel.canLoadMore() && !recyclerView.canScrollVertically(1)) {
@@ -176,11 +163,7 @@ internal class LogAdapter : ListAdapter<LogItem, LogAdapter.LogViewHolder>(DIFF_
     }
 
     private companion object {
-        /**
-         * The window is rebuilt from the same [LogItem] instances (appends add
-         * new ones, paging reuses the stored ones), so identity is the stable
-         * key and the mutable fields are compared by value.
-         */
+        /** 窗口复用同一批 [LogItem] 实例（补页不复制），故用引用相等判同一项，内容按值比较。 */
         val DIFF_CALLBACK = object : DiffUtil.ItemCallback<LogItem>() {
             override fun areItemsTheSame(oldItem: LogItem, newItem: LogItem): Boolean =
                 oldItem === newItem
@@ -192,11 +175,7 @@ internal class LogAdapter : ListAdapter<LogItem, LogAdapter.LogViewHolder>(DIFF_
 }
 
 
-/**
- * Holds the visible window into a [LogCapture]: the window always spans
- * `[windowStart, capture.endIndex)`, starting with the latest page on open.
- * Scrolling up prepends older pages; new logs always append at the tail.
- */
+/** 日志页窗口始终覆盖 `[windowStart, capture.endIndex)`：打开时取最新一页，回看旧日志时前插，新日志只追加在尾部。 */
 internal class LogViewModel(
     private val capture: LogCapture = LogStore.capture,
 ) : ViewModel() {
@@ -204,22 +183,19 @@ internal class LogViewModel(
     private val _logItems = MutableLiveData<List<LogItem>>(emptyList())
     val logItems: LiveData<List<LogItem>> get() = _logItems
 
-    /** Capture-stream index of window[0]. */
     private var windowStart = 0
-    /** Capture-stream index one past the last synced item (== store endIndex). */
+    // 已同步进窗口的采集流下标（不含）；与 capture.endIndex 的差值就是待追加的新日志。
     private var windowEndIndex = 0
     private var opened = false
 
     init {
-        // Every store append (or eviction) triggers a resync; intermediate
-        // emissions may be skipped, but each resync reads the current store
-        // state so the window always converges.
+        // 每次追加或淘汰都触发重同步；中间通知可能被跳过，但每次重同步都读当前仓库状态，
+        // 窗口最终收敛。
         viewModelScope.launch {
             capture.updates.collect { resync() }
         }
     }
 
-    /** Show the latest page; called when the log screen opens. Idempotent. */
     fun open() {
         if (opened) return
         opened = true
@@ -231,15 +207,11 @@ internal class LogViewModel(
         _logItems.value = window.toList()
     }
 
-    /**
-     * Prepend the next older page of logs. Returns how many items were
-     * actually prepended (0 when nothing older is available).
-     */
     fun loadMore(): Int {
         if (!opened) return 0
         val front = capture.frontIndex
         if (windowStart < front) {
-            // Eviction passed the front of our window: rebuild from the retained range
+            // 淘汰已越过窗口起点：按保留区间重建，返回 0 让调用方丢弃锚点。
             rebuildWindow()
             return 0
         }
@@ -253,7 +225,6 @@ internal class LogViewModel(
         return older.size
     }
 
-    /** True when an older page is still available. */
     fun canLoadMore(): Boolean = opened && windowStart > capture.frontIndex
 
     private fun resync() {

@@ -17,11 +17,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
- * Characterisation tests for the service's configuration preconditions.
- *
- * They pin the new contract: the service reports a failure through
- * [VpnController] and stops itself, but it never writes [Pref.userWantsVpn] —
- * the persisted intent belongs to the user (and the controller).
+ * 守护服务的配置前置条件：失败经 [VpnController] 上报并自行停止，但绝不写 [Pref.userWantsVpn]——持久化意图属于用户。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -78,8 +74,7 @@ class EasyssVpnServiceConfigTest {
 
     @Test
     fun disconnectWhileIdle_stopsTheResidualServiceInstance() {
-        // Nothing was ever started: `pref` is not even initialised here. This is
-        // the "idle ACTION_DISCONNECT left a service instance behind" bug.
+        // 从未启动过（pref 未初始化）：空闲的 ACTION_DISCONNECT 也必须 finalize 残留实例。
         val result = service.onStartCommand(
             Intent(EasyssVpnService.ACTION_DISCONNECT),
             0,

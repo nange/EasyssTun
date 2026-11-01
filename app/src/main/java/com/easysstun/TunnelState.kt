@@ -6,17 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Process-wide readiness of the local easyss proxy.
- *
- * [EasyssVpnService] flips this to true only after the SOCKS5 listener answered
- * a real handshake ([EasyssVpnService.waitForSocksReady]) and the tunnel is
- * serving, so it is a strictly stronger signal than `Pref.userWantsVpn`,
- * which records the user's *intent* and is set before `Mobile.start()` has even
- * run. The in-app updater uses it to pick the local HTTP proxy route instead of
- * a direct connection that a censored network would drop.
- *
- * Defaults to false and lives in memory: the VPN runs in this same process, so
- * a fresh process never has a tunnel.
+ * 本地 easyss 代理就绪：仅当 SOCKS5 真实握手成功（[EasyssVpnService.waitForSocksReady]）且隧道已服务才为 true，强于只代表用户意图的 `Pref.userWantsVpn`；更新器据此走本地代理。
  */
 object TunnelState {
 
@@ -27,7 +17,7 @@ object TunnelState {
 
     fun update(ready: Boolean) {
         if (_ready.value == ready) return
-        // Debug level: VpnState already reports start/stop at INFO.
+        // Debug 级别：start/stop 已由 VpnState 以 INFO 上报，避免重复刷屏。
         Log.d(TAG, "tunnel ready -> $ready")
         _ready.value = ready
     }

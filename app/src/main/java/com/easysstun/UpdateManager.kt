@@ -19,16 +19,13 @@ import kotlinx.coroutines.withTimeout
 
 private const val TAG = LogTags.UPDATER
 
-/** Automatic checks run at most once per this interval. */
+/** 自动检查的最短间隔：24h 窗口，单位毫秒。 */
 internal const val AUTO_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
 
-/** After a failed automatic check, do not retry on every Activity recreation. */
+/** 失败后的重试节流：避免每次 Activity 重建都打网络，单位毫秒。 */
 internal const val AUTO_CHECK_RETRY_INTERVAL_MS = 10L * 60 * 1000
 
-/**
- * How long a launch-time check waits for the tunnel to come up before falling
- * back to a direct connection. Covers users who never start the VPN at all.
- */
+/** 冷启动等待隧道就绪的上限（60s）；超时后直连兜底，覆盖从不连 VPN 的用户。 */
 internal const val LAUNCH_FALLBACK_DELAY_MS = 60L * 1000
 
 internal const val CHECK_TIMEOUT_MS = 15_000L
@@ -80,16 +77,12 @@ internal sealed interface UpdateState {
         val action: UpdateAction,
         val error: UpdateError,
         val manual: Boolean,
-        /** The release whose download failed; null for a failed check. */
+        /** 下载失败的 release；检查失败时为 null。 */
         val release: AvailableRelease? = null,
     ) : UpdateState
 }
 
-/**
- * Everything [UpdateManager] needs from its host. Bundled so the manager has a
- * single collaborator instead of an eleven-argument constructor, and so tests
- * can build a fake environment with one named object.
- */
+/** UpdateManager 所需的全部宿主依赖；测试可用一个命名对象整体构造假环境。 */
 internal data class UpdateEnvironment(
     val context: Context,
     val pref: Pref,
@@ -104,26 +97,9 @@ internal data class UpdateEnvironment(
     val tunnelReady: StateFlow<Boolean>,
 )
 
-/**
- * Application-scoped update orchestration: throttled check against the GitHub
- * release API, download + verification, and exposure of the progress as a
- * [StateFlow] so an Activity/Fragment can render it and survive rotation.
- *
- * Automatic checks are tunnel-aware: the request goes through the local
- * libeasyss HTTP proxy, so when the tunnel is not serving yet the check waits
- * for [TunnelState.ready] instead of racing a possibly censored direct
- * connection at cold start.
- *
- * Threading: the Activity drives [autoCheck]/[checkNow]/[downloadAndInstall]
- * from the main thread while the tunnel watcher ([observeTunnel]) calls
- * [onTunnelReady] from an IO thread, so every entry point that touches
- * [job]/[fallbackJob]/[lastAutoAttemptAt]/[pendingTunnelCheck] is
- * `@Synchronized`; helpers that read them must only be called while holding
- * that monitor.
- *
- * Every dependency is injectable for unit tests; production code builds an
- * instance through [create] from [EasyssTunApplication].
- */
+/** 进程级更新编排：节流检查、下载校验，状态经 [StateFlow] 交给 UI。
+ * 隧道未就绪时挂起等 [TunnelState.ready]；[job]/[fallbackJob] 等字段只在持锁（`@Synchronized`）时读写，
+ * [observeTunnel] 从 IO 线程回调。 */
 internal class UpdateManager internal constructor(
     private val env: UpdateEnvironment,
 ) {
@@ -145,7 +121,7 @@ internal class UpdateManager internal constructor(
     private var job: Job? = null
     private var fallbackJob: Job? = null
 
-    /** Set when the tunnel became ready while another check was still in flight. */
+    /** 检查进行中隧道就绪时置位；当前任务结束后补一次走代理的检查。 */
     private var pendingTunnelCheck = false
 
     private var promptedVersionCode = 0
@@ -171,33 +147,19 @@ internal class UpdateManager internal constructor(
                     tunnelReady = TunnelState.ready,
                 )
             )
-            // The updater outlives any Activity, so it cannot rely on the
-            // receivers MainFragment registers: watch the process-wide tunnel
-            // state instead and run the deferred check the moment it is up.
+            // 更新器生命周期长于 Activity，不能依赖 MainFragment 注册的接收器：改订阅进程级隧道状态。
             manager.observeTunnel()
             return manager
         }
     }
 
-    /**
-     * Subscribes to [tunnelReady] and runs the deferred check whenever the
-     * tunnel becomes available. Returns the watcher job so tests can stop it.
-     */
+    /** 订阅 [tunnelReady]，就绪即补跑挂起的检查；返回 watcher Job 供测试取消。 */
     internal fun observeTunnel(): Job = scope.launch {
         tunnelReady.collect { ready -> if (ready) onTunnelReady() }
     }
 
-    /**
-     * Silent launch-time check. Skipped in debug builds, when the user turned
-     * automatic checks off, while another check/download is running, or when
-     * the last successful check is younger than [AUTO_CHECK_INTERVAL_MS].
-     *
-     * When the tunnel is already serving the check runs immediately through the
-     * local proxy. Otherwise it is deferred to [onTunnelReady] so the request
-     * does not race a blocked direct connection at cold start; a direct attempt
-     * still happens after [LAUNCH_FALLBACK_DELAY_MS] for users who never start
-     * the VPN.
-     */
+    /** 启动时静默检查：debug、关闭自动检查、已有任务或未满 [AUTO_CHECK_INTERVAL_MS] 均跳过。
+     * 隧道已就绪立刻走本地代理；否则挂起到 [onTunnelReady]（避免冷启动直连被墙），[LAUNCH_FALLBACK_DELAY_MS] 后仍无隧道才直连兜底。 */
     @Synchronized
     fun autoCheck() {
         if (isDebugBuild) return
@@ -211,10 +173,9 @@ internal class UpdateManager internal constructor(
             startCheck(manual = false)
             return
         }
-        // Do not arm a grace period that is already known to end in a no-op.
+        // 已被节流时不要起一个注定空跑的宽限期。
         if (isRetryThrottled()) return
-        // Already waiting for the tunnel: an Activity recreation must not
-        // restart the grace period.
+        // 已在等隧道：Activity 重建不能重置宽限期。
         if (fallbackJob?.isActive == true) return
         Log.i(TAG, "auto update check deferred until the tunnel is up")
         fallbackJob = scope.launch {
@@ -223,23 +184,14 @@ internal class UpdateManager internal constructor(
         }
     }
 
-    /**
-     * Runs the deferred automatic check once the tunnel is serving.
-     *
-     * This is the moment the proxy route is known to work, so it supersedes the
-     * grace period in [autoCheck] and bypasses [isRetryThrottled]: a direct
-     * launch-time attempt that just failed must not block the retry that now has
-     * a working route. When another check is still in flight the request is
-     * queued instead of dropped, because that in-flight check is most likely the
-     * doomed direct one started before the tunnel came up.
-     */
+    /** 隧道就绪时补跑自动检查：此刻代理路由可用，故取消宽限期并绕过 [isRetryThrottled]，
+     * 刚失败的直连尝试不得挡住这次重试；已有检查在飞则排队。 */
     @Synchronized
     internal fun onTunnelReady() {
         if (isDebugBuild || !pref.updateAutoCheck) return
         if (!checkDue()) return
         if (isBusy()) {
-            // An in-flight check started before the tunnel came up is probably
-            // the doomed direct one; queue a proxy retry for when it finishes.
+            // 在飞的检查多半是隧道起来前的直连，排队等它结束后补一次代理重试。
             pendingTunnelCheck = true
             return
         }
@@ -250,7 +202,7 @@ internal class UpdateManager internal constructor(
         startCheck(manual = false)
     }
 
-    /** The grace period expired without the tunnel: fall back to a direct check. */
+    /** 宽限期到点仍无隧道：直连兜底检查。 */
     @Synchronized
     private fun fireFallbackCheck() {
         if (tunnelReady.value || isDebugBuild || !pref.updateAutoCheck) return
@@ -260,27 +212,21 @@ internal class UpdateManager internal constructor(
         startCheck(manual = false)
     }
 
-    /**
-     * Clears [job] and runs the tunnel-readiness retry that arrived while a check
-     * was in flight. The flag is consumed before re-entering so it cannot loop,
-     * and [onTunnelReady] re-checks [checkDue] so a successful in-flight check
-     * makes the retry a no-op.
-     */
+    /** 清空 [job] 并补跑在飞期间到达的隧道就绪重试；先消费标志再重入以免自循环，
+     * [onTunnelReady] 会重查 [checkDue]，在飞检查已成功时补跑自动落空。 */
     @Synchronized
     private fun onJobFinished(finished: Job?) {
         if (job === finished) job = null
         if (!pendingTunnelCheck) return
         pendingTunnelCheck = false
-        // The tunnel may have gone away while the check was in flight; retrying
-        // now would silently fall back to a direct, throttle-bypassing check.
+        // 隧道可能在检查期间断开；此时重试会静默退回绕过节流的直连检查。
         if (!tunnelReady.value) return
-        // A verified APK owns the UI state: a retry must not replace it with
-        // Checking (only reachable if checkDue() flipped during a long download).
+        // 已校验的 APK 占用 UI 状态：重试不得把它覆盖成 Checking（长下载期间 checkDue 可能翻转）。
         if (_state.value is UpdateState.ReadyToInstall) return
         onTunnelReady()
     }
 
-    /** User-triggered check; bypasses the throttle and the "already prompted" guard. */
+    /** 用户手动检查：绕过节流与「已提示」守卫。 */
     @Synchronized
     fun checkNow() {
         if (isDebugBuild) return
@@ -291,7 +237,7 @@ internal class UpdateManager internal constructor(
         startCheck(manual = true)
     }
 
-    /** Downloads the release found by the last check, verifies it and hands it to the UI. */
+    /** 下载上次检查到的 release，校验通过后交给 UI。 */
     @Synchronized
     fun downloadAndInstall() {
         val release = releaseOf(_state.value) ?: return
@@ -324,7 +270,7 @@ internal class UpdateManager internal constructor(
                         failDownload(UpdateError.MetadataMismatch, release)
                 }
             } catch (e: Exception) {
-                // A real cancellation must propagate; a timeout is a failure.
+                // 真正的取消必须向上传播；超时按失败处理。
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 failDownload(errorOf(e), release)
             } finally {
@@ -334,11 +280,7 @@ internal class UpdateManager internal constructor(
         }
     }
 
-    /**
-     * Clears [UpdateState.ReadyToInstall] once the system installer has been
-     * opened: the file stays in the cache, but re-rendering the state (resume,
-     * rotation) must not relaunch the installer the user just dismissed.
-     */
+    /** 系统安装器打开后清掉 [UpdateState.ReadyToInstall]：文件仍在缓存，但恢复/旋转重渲染不得再次拉起安装器。 */
     @Synchronized
     fun markInstallLaunched() {
         if (_state.value is UpdateState.ReadyToInstall) {
@@ -346,7 +288,7 @@ internal class UpdateManager internal constructor(
         }
     }
 
-    /** Cancels an in-flight download and removes the partial file. */
+    /** 取消在飞下载，半成品由协程的 finally 清理。 */
     @Synchronized
     fun cancelDownload() {
         job?.cancel()
@@ -354,16 +296,13 @@ internal class UpdateManager internal constructor(
         _state.value = UpdateState.Idle
     }
 
-    /** Remembers the version the user asked not to be prompted about. */
+    /** 记录用户选择跳过的 versionCode，持久化后不再提示。 */
     @Synchronized
     fun dismissVersion(versionCode: Int) {
         pref.updateDismissedVersionCode = versionCode
     }
 
-    /**
-     * Returns true exactly once per version (per process) so rotation does not
-     * re-open the "update available" dialog; skipped versions never prompt.
-     */
+    /** 每个版本（进程内）只返回一次 true，避免旋转重开「有更新」弹窗；已跳过的版本恒为 false。 */
     @Synchronized
     fun consumePrompt(versionCode: Int): Boolean {
         if (pref.updateDismissedVersionCode == versionCode) return false
@@ -372,7 +311,7 @@ internal class UpdateManager internal constructor(
         return true
     }
 
-    /** Re-runs whatever failed last: the check, or the download of the known release. */
+    /** 重试上次失败的动作：检查，或已知 release 的下载。 */
     @Synchronized
     fun retryLastAction() {
         when (val failed = _state.value as? UpdateState.Failed) {
@@ -385,11 +324,7 @@ internal class UpdateManager internal constructor(
         }
     }
 
-    /**
-     * The release carried by the current state, if any. The state is the only
-     * place a release lives, so a retry after a failure does not need a second
-     * `activeRelease` field that could disagree with what the UI shows.
-     */
+    /** release 只存在于状态里，避免额外的 `activeRelease` 字段与 UI 显示不一致。 */
     private fun releaseOf(state: UpdateState): AvailableRelease? = when (state) {
         is UpdateState.Available -> state.release
         is UpdateState.Downloading -> state.release
@@ -398,34 +333,22 @@ internal class UpdateManager internal constructor(
         UpdateState.Idle, UpdateState.Checking, is UpdateState.UpToDate -> null
     }
 
-    /** Only called while holding this instance's monitor (see the class KDoc). */
+    /** 只在持有本实例锁时调用（见类注释）。 */
     private fun isBusy(): Boolean = job?.isActive == true
 
-    /**
-     * True once [AUTO_CHECK_INTERVAL_MS] has elapsed since the last successful
-     * check. Only called while holding this instance's monitor (see the class KDoc).
-     */
+    /** 距上次成功检查满 [AUTO_CHECK_INTERVAL_MS] 才到期；只在持锁时调用。 */
     private fun checkDue(): Boolean {
         val lastCheck = pref.updateLastCheckAt
         return lastCheck <= 0 || clock() - lastCheck >= AUTO_CHECK_INTERVAL_MS
     }
 
-    /**
-     * A failed check (offline, proxy down) leaves [Pref.updateLastCheckAt]
-     * untouched, so rate-limit the retry instead of hitting the network on every
-     * Activity recreation. Only called while holding this instance's monitor.
-     */
+    /** 检查失败不写 [Pref.updateLastCheckAt]，故用 [AUTO_CHECK_RETRY_INTERVAL_MS] 节流重试，避免每次 Activity 重建都打网络。 */
     private fun isRetryThrottled(): Boolean {
         if (lastAutoAttemptAt == 0L) return false
         return clock() - lastAutoAttemptAt < AUTO_CHECK_RETRY_INTERVAL_MS
     }
 
-    /**
-     * Maps a check/download failure to the UI error model.
-     * [TimeoutCancellationException] is a [CancellationException] subclass, so
-     * timeouts are classified here before the coroutine decides whether a
-     * cancellation is a real one.
-     */
+    /** [TimeoutCancellationException] 是 [CancellationException] 子类，必须在这里先归为失败，否则会被当成取消吞掉。 */
     private fun errorOf(e: Throwable): UpdateError = when (e) {
         is TimeoutCancellationException -> UpdateError.Network
         is UpdateException -> e.error
@@ -447,7 +370,7 @@ internal class UpdateManager internal constructor(
                 _state.value = result
                 Log.i(TAG, "check finished: ${result::class.simpleName}")
             } catch (e: Exception) {
-                // A real cancellation must propagate; a timeout is a failure.
+                // 真正的取消必须向上传播；超时按失败处理。
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 _state.value = UpdateState.Failed(UpdateAction.CHECK, errorOf(e), manual)
             } finally {
@@ -480,8 +403,7 @@ internal class UpdateManager internal constructor(
             codeNewer && nameNewer -> UpdateState.Available(available)
             !codeNewer && !nameNewer -> UpdateState.UpToDate(currentVersionName)
             else -> {
-                // versionCode and versionName disagree: the release is inconsistent,
-                // so refuse to offer an install the package manager would reject.
+                // versionCode 与 versionName 不一致：拒绝提示安装，否则包管理器会拒装。
                 Log.w(
                     TAG,
                     "inconsistent release ${release.tagName}: codeNewer=$codeNewer nameNewer=$nameNewer",

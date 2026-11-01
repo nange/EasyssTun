@@ -4,10 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Tests for the bounded log buffer ([LogBuffer]): append, eviction and
- * capture-stream index clamping.
- */
+/** 覆盖有界日志缓冲 [LogBuffer]：追加、淘汰与 capture 流的下标钳制。 */
 class LogBufferTest {
 
     private fun item(i: Int) = LogItem("msg$i", "12:00", "src", "INFO")
@@ -35,7 +32,7 @@ class LogBufferTest {
     fun sliceRange_clampsBelowFrontIndex() {
         val buffer = LogBuffer(5)
         repeat(7) { buffer.append(item(it)) }
-        // frontIndex = 2; requesting below the front clamps to the front.
+        // frontIndex = 2：请求起点低于 front 时钳到 front。
         assertEquals(listOf("msg2", "msg3"), buffer.sliceRange(0, 4).map { it.message })
     }
 

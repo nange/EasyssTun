@@ -12,7 +12,7 @@
     <string name="skipped_app_list">Skipped %s Applications</string>
     <string name="skipped_apps_title">Skipped Apps</string>
 
-    <!-- Foreground notification -->
+    <!-- 前台通知 -->
     <string name="notification_connecting">Connecting…</string>
     <string name="notification_stats_text">RTT %1$s · DL %2$s</string>
     <string name="notification_stats_unavailable">RTT — · DL —</string>
@@ -20,11 +20,11 @@
     <string name="choose_app_to_bypass">Tap to select SKIP applications.</string>
     <string name="easyss_configure">Configure</string>
 
-    <!-- Stats Card -->
+    <!-- 统计卡片 -->
     <string name="stats_title">Statistics</string>
     <string name="stats_loading">Loading statistics…</string>
     <string name="stats_unavailable">Statistics not available</string>
-    <!-- Stats labels (label-on-top layout) -->
+    <!-- 统计标签（上下结构布局） -->
     <string name="stats_dl_label">DL</string>
     <string name="stats_ul_label">UL</string>
     <string name="stats_rtt_label">RTT</string>
@@ -46,7 +46,7 @@
     <string name="applist_title">App Proxy Settings</string>
     <string name="log_title">Easyss Log</string>
 
-    <!-- App proxy mode -->
+    <!-- 应用代理模式 -->
     <string name="mode_bypass_selected">Bypass Selected</string>
     <string name="mode_proxy_only_selected">Proxy Only Selected</string>
     <string name="mode_bypass_desc">Checked apps will bypass the proxy. All other apps go through the proxy.</string>
@@ -63,7 +63,7 @@
     <string name="start_failed_title">Start Failed</string>
     <string name="start_failed_title_named">Start Failed: %1$s</string>
 
-    <!-- Tunnel startup errors shown in the start-failure dialog -->
+    <!-- 启动失败弹窗中的隧道启动错误 -->
     <string name="error_no_active_profile">No server profile configured</string>
     <string name="error_start_service_failed">Could not start the VPN service</string>
     <string name="error_write_tproxy_config">Could not write the tunnel configuration</string>
@@ -73,7 +73,7 @@
     <string name="error_tproxy_start">The tunnel engine failed to start</string>
 
 
-    <!-- Server profile form -->
+    <!-- 服务器配置表单 -->
     <string name="title_server_profile">Server Profile</string>
     <string name="section_basic">Basic</string>
     <string name="section_protocol_settings">Protocol Settings</string>
@@ -114,13 +114,13 @@
     <string name="button_save">Save</string>
     <string name="button_delete">Delete</string>
 
-    <!-- Misc -->
+    <!-- 其他 -->
     <string name="search_hint">Search</string>
     <string name="add_new_server">Add New Configuration</string>
     <string name="active_badge">Active</string>
     <string name="log_menu_title">Log</string>
     <string name="fab_scroll_to_bottom">Scroll to bottom</string>
-    <!-- Delete confirmation dialog -->
+    <!-- 删除确认对话框 -->
     <string name="delete_confirm_title">Confirm Delete</string>
     <string name="delete_confirm_message">Are you sure you want to delete this server profile?</string>
     <string name="delete_confirm_message_active">The VPN is currently using this server. Deleting it will disconnect the VPN.</string>
@@ -128,7 +128,7 @@
     <string name="delete_confirm_negative">Cancel</string>
     <string name="delete_success">Profile deleted</string>
 
-    <!-- In-app update (GitHub release) -->
+    <!-- 应用内更新（GitHub Release） -->
     <string name="update_section_title">Updates</string>
     <string name="update_current_version">Current version: v%1$s (%2$d)</string>
     <string name="update_auto_check">Check for updates on startup</string>

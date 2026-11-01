@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Chinese labels for the profile-form spinners. Only the display arrays are
-   translated; the matching `*_value` arrays hold the stable values persisted in
-   the profile and stay identical in every locale.
+   配置表单下拉框的中文显示文案；只翻译显示数组，配对的 `*_value` 数组存持久化值，各语言保持一致。
 -->
 <resources>
     <string-array name="easyss_proxyrule_list">

@@ -5,19 +5,7 @@ import org.junit.Test
 import java.lang.reflect.Modifier
 
 /**
- * Guards the JNI contract of the prebuilt hev-socks5-tunnel AAR.
- *
- * The AAR ships its Java binding class, and the natives are registered to that
- * exact class at load time
- * (JNI_OnLoad -> FindClass("hev/htproxy/TProxyService") + RegisterNatives).
- * Upgrading the AAR without matching that contract makes System.loadLibrary
- * fail with UnsatisfiedLinkError at runtime, so the class, the native method
- * names/signatures, and their staticness are pinned here. A missing binding
- * class fails the build earlier, at Kotlin compile time.
- *
- * The class is inspected with Class.forName(initialize = false) so the binding
- * class's static initializer (System.loadLibrary) is NOT triggered under
- * Robolectric, where no Android .so is available.
+ * 守护 hev-socks5-tunnel AAR 的 JNI 契约：native 在 JNI_OnLoad 中按 `hev/htproxy/TProxyService` 类名与静态 `TProxyXxx` 签名注册，AAR 不匹配则运行时 UnsatisfiedLinkError；`Class.forName(initialize = false)` 避免触发静态块 System.loadLibrary（Robolectric 无 .so）。
  */
 class TProxyJniContractTest {
 

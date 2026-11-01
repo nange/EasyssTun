@@ -1,8 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Home update card switch: a compact 48x24dp toggle. These library
-         dimens are only consumed by MaterialSwitch, and it is the app's
-         only switch. -->
+    <!-- 首页更新卡片的开关：紧凑的 48x24dp；这些库 dimens 只被 MaterialSwitch（应用里唯一的开关）使用。 -->
     <dimen name="mtrl_switch_thumb_size" tools:ignore="UnusedResources" tools:override="true">24dp</dimen>
     <dimen name="mtrl_switch_track_height" tools:ignore="UnusedResources" tools:override="true">24dp</dimen>
     <dimen name="mtrl_switch_track_width" tools:ignore="UnusedResources" tools:override="true">48dp</dimen>

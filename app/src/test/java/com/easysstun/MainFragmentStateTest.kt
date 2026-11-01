@@ -27,12 +27,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowVpnService
 
-/**
- * Characterisation tests for the home screen's connect/disconnect state
- * machine. The screen is a pure renderer of [VpnState], so these tests drive
- * the process-wide [VpnController] (the service's reports) and assert what the
- * user sees.
- */
+/** 首页只渲染 [VpnState]：用例直接驱动进程级 [VpnController] 的状态上报，断言用户所见。 */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class MainFragmentStateTest {
@@ -116,7 +111,7 @@ class MainFragmentStateTest {
     fun start_entersConnectingStateUntilServiceReportsRunning() {
         val profile = addProfile("A")
         ProfileStore.get(context).select(profile.id)
-        // Recreate so the fragment picks up the profile added after launch.
+        // 启动后再添加的配置档需重建视图才能被读取。
         recreate()
 
         button().performClick()
@@ -132,7 +127,6 @@ class MainFragmentStateTest {
         )
         assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
 
-        // The service reports a fully established tunnel.
         vpn.onServiceRunning(profile.id)
         idle()
 
@@ -147,7 +141,7 @@ class MainFragmentStateTest {
         ProfileStore.get(context).select(profile.id)
         recreate()
 
-        // Start, then cancel through the same button (the real entry point).
+        // 通过同一个按钮完成开始与取消，走真实入口。
         button().performClick()
         idle()
         assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
@@ -160,7 +154,6 @@ class MainFragmentStateTest {
         )
         assertFalse("stopping is not cancellable", button().isEnabled)
 
-        // The service finished tearing down.
         vpn.onServiceStopped()
         idle()
 
@@ -179,8 +172,7 @@ class MainFragmentStateTest {
         idle()
         assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
 
-        // The system took the service away mid-startup: the screen must not stay
-        // frozen on "connecting" with no way out.
+        // 启动途中服务被系统回收：界面不能卡在连接中且无路可退。
         vpn.onServiceDestroyed()
         idle()
 
@@ -200,16 +192,14 @@ class MainFragmentStateTest {
         spinner().setSelection(1)
         idle()
 
-        // Selecting a different server asks the controller for a switch: the
-        // target becomes the active profile immediately (so a process death
-        // resumes on it) while the old tunnel is torn down first.
+        // 切换时目标配置档立即置为 active（进程被杀也能续上），旧隧道先拆除。
         assertEquals(activity.getString(R.string.service_switching), serviceTitle())
         assertEquals(activity.getString(R.string.service_cancel), button().text.toString())
         assertTrue("a switch can be cancelled", button().isEnabled)
         assertFalse("the spinner is disabled while switching", spinner().isEnabled)
         assertEquals("B", ProfileStore.get(context).active()?.name)
 
-        // The old tunnel is gone: the switch continues with the new profile.
+        // 旧隧道停止后，切换继续用新配置档连接。
         vpn.onServiceStopped()
         idle()
         assertEquals("B", ProfileStore.get(context).active()?.name)
@@ -233,7 +223,7 @@ class MainFragmentStateTest {
         spinner().setSelection(1)
         idle()
 
-        // The pending target lives in VpnState now, not in the fragment.
+        // 待切换目标存放在 [VpnState] 中，旋转后仍能恢复。
         recreate()
         assertEquals(activity.getString(R.string.service_switching), serviceTitle())
         assertFalse(spinner().isEnabled)
@@ -286,7 +276,7 @@ class MainFragmentStateTest {
         assertEquals(activity.getString(R.string.service_enable), button().text.toString())
         assertTrue(button().isEnabled)
 
-        // A rotation must not pop the same dialog again.
+        // 旋转后不得再次弹出同一个失败对话框。
         recreate()
         assertSame("the failure must be reported only once", dialog, ShadowDialog.getLatestDialog())
     }

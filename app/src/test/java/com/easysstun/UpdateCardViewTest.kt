@@ -28,8 +28,7 @@ class UpdateCardViewTest {
 
     private val applicationContext: Context = ApplicationProvider.getApplicationContext()
 
-    // Material widgets require the app's Material theme; the Robolectric
-    // application context does not carry it.
+    // Material 控件需要 App 主题，Robolectric 的 application context 不带。
     private val context: Context =
         ContextThemeWrapper(applicationContext, R.style.Theme)
 
@@ -95,8 +94,7 @@ class UpdateCardViewTest {
         view.bind(manager, Pref(applicationContext), owner)
         assertSame(manager, boundManagerOf(view))
 
-        // Detach: the state job is cancelled and the binding forgotten, so a
-        // later bind() with the same manager/owner is not skipped.
+        // detach 会取消状态订阅并忘记绑定，之后用同一 manager/owner 再 bind() 才不会被跳过。
         val onDetached = View::class.java.getDeclaredMethod("onDetachedFromWindow")
         onDetached.isAccessible = true
         onDetached.invoke(view)

@@ -22,8 +22,7 @@ import org.robolectric.shadows.ShadowLog
 import java.util.UUID
 
 /**
- * Tests for the server profile repository: CRUD, the active-profile invariant
- * and the change event observers use to reload the list.
+ * 覆盖配置档仓库：CRUD、active id 不变量，以及列表重载所依赖的变更事件。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -48,7 +47,7 @@ class ProfileStoreTest {
         ProfileStore.resetForTests()
     }
 
-    /** Recreates the process-wide store, as a fresh process start would. */
+    /** 重建进程级仓库，模拟冷启动。 */
     private fun recreateStore(): ProfileStore {
         ProfileStore.resetForTests()
         return ProfileStore.get(context).also { store = it }
@@ -223,8 +222,7 @@ class ProfileStoreTest {
 
     @Test
     fun all_readsProfilesWrittenByLegacyBuilds() {
-        // Exact shape written by builds before the typed model: every numeric
-        // field is a string and the QUIC flag is "true"/"false".
+        // 旧版本落盘的形态：数字字段是字符串，QUIC 是 "true"/"false"。
         val legacyJson = """
             [{
                 "id": "legacy",
@@ -274,7 +272,7 @@ class ProfileStoreTest {
             """[{"id":"legacy","name":"Legacy","server":"s","serverPort":"443","password":"pw"}]""",
         )
         recreateStore()
-        // Drop the migrated copy: a read must not migrate (write) again.
+        // 删掉已迁移的副本：读取不得再次迁移（写）。
         pref.remove(ProfileStore.SERVER_PROFILES)
 
         assertTrue(store.all().isEmpty())
@@ -340,8 +338,7 @@ class ProfileStoreTest {
         store.add(profile("id2"))
         store.select("id2")
 
-        // An undispatched collector resumes inline inside the change event, which
-        // is exactly the case where a pointer written after the event is missed.
+        // 未调度的收集器会在变更事件里内联恢复，指针若写在事件之后就会被漏掉。
         val seen = mutableListOf<String?>()
         val job = CoroutineScope(Dispatchers.Unconfined).launch {
             store.changes.drop(1).collect { seen += store.activeId() }
@@ -430,7 +427,7 @@ class ProfileStoreTest {
         store.add(added)
         store.select("id1")
 
-        // A fresh process would build a new store over the same prefs file.
+        // 新进程会在同一份 prefs 文件上新建仓库。
         ProfileStore.resetForTests()
         val reloaded = ProfileStore.get(context)
 

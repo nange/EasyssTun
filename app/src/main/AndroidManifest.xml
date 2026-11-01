@@ -26,9 +26,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme">
 
-        <!-- BOOT_COMPLETED is a protected broadcast sent by the system, which is
-             still delivered to a non-exported receiver; keeping it closed means
-             no other app can trigger a VPN start. -->
+        <!-- BOOT_COMPLETED 是系统发送的受保护广播，非导出接收器同样能收到；
+             保持非导出，其他应用就无法触发 VPN 启动。 -->
         <receiver
             android:name=".ServiceReceiver"
             android:enabled="true"
@@ -69,8 +68,7 @@
                 android:value=".MainActivity" />
         </activity>
 
-        <!-- In-app update: the downloaded APK in cacheDir/updates is shared with
-             the system installer through this provider only. -->
+        <!-- 应用内更新：cacheDir/updates 里的 APK 只经这个 FileProvider 交给系统安装器。 -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -15,7 +15,7 @@ private const val TAG = LogTags.UPDATER
 private const val UPDATE_DIR = "updates"
 private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
 
-/** Result of validating a downloaded APK before handing it to the system installer. */
+/** 下载 APK 交给系统安装器前的校验结果。 */
 internal sealed interface InstallCheck {
     data object Ok : InstallCheck
     data object InvalidApk : InstallCheck
@@ -24,13 +24,8 @@ internal sealed interface InstallCheck {
     data object SignerMismatch : InstallCheck
 }
 
-/**
- * Installs downloaded APKs through the system package installer.
- *
- * Signature comparison is the last line of defence: HTTPS and the GitHub API
- * authenticate the download, but only the signing certificate proves the APK
- * can update this particular installation.
- */
+/** 经系统包安装器安装已下载的 APK；签名比对是最后一道防线：HTTPS/API 只证明来源，
+ * 只有签名证书能证明该 APK 可覆盖安装到本机。 */
 internal object UpdateInstaller {
 
     fun updateDir(context: Context): File = File(context.cacheDir, UPDATE_DIR)
@@ -63,9 +58,8 @@ internal object UpdateInstaller {
         context: Context,
         apk: File,
         expectedVersionCode: Int,
-        // Injectable for unit tests: the PackageInfoFlags overload of
-        // getPackageArchiveInfo() parses the APK directly, bypassing
-        // Robolectric's shadow, so tests supply the archive metadata.
+        // 可注入以便单测：PackageInfoFlags 版 getPackageArchiveInfo() 直接解析 APK，
+        // 绕过 Robolectric 的 shadow，测试只能自行提供 archive 元数据。
         archiveInfo: (String) -> PackageInfo? = { path ->
             context.packageManager.getPackageArchiveInfo(path, signingFlags())
         },
@@ -91,7 +85,7 @@ internal object UpdateInstaller {
         return if (archiveSigners == installedSigners) InstallCheck.Ok else InstallCheck.SignerMismatch
     }
 
-    /** Deletes previously downloaded APKs and interrupted `.part` files. */
+    /** 清理历史下载的 APK 与中断的 `.part` 文件。 */
     fun cleanup(context: Context) {
         val dir = updateDir(context)
         val files = dir.listFiles() ?: return

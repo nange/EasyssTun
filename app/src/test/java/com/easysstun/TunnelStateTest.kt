@@ -20,14 +20,13 @@ class TunnelStateTest {
 
     @After
     fun tearDown() {
-        // TunnelState is a process-wide singleton; leave it as the app starts.
+        // TunnelState 是进程级单例，测试后复位，避免污染其他用例。
         TunnelState.update(false)
     }
 
     @Test
     fun updateFalseIsNotReady() {
-        // The singleton cannot be observed in its pristine state once another
-        // test ran, so this asserts the transition rather than the default.
+        // 其他用例跑过后单例已不是初始态，因此断言状态迁移而非默认值。
         TunnelState.update(false)
 
         assertFalse(TunnelState.ready.value)

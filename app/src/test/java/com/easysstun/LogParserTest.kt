@@ -5,9 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Tests for the pure logcat line parsing in [LogParser].
- */
+/** 覆盖 [LogParser] 的纯 logcat 行解析。 */
 class LogParserTest {
 
     @Test
@@ -23,8 +21,7 @@ class LogParserTest {
 
     @Test
     fun parseLine_slogWrappedInLogcat() {
-        // Go slog lines arrive wrapped by logcat; the slog pattern must win
-        // over the standard android.util.Log pattern.
+        // Go slog 行会被 logcat 包一层；slog 模式必须优先于标准 android.util.Log 模式。
         val item = LogParser.parseLine(
             "07-25 10:30:45.123  1234  5678 I GoLog   : time=2026-07-19T19:08:48.135+08:00 level=WARN source=core msg=slow dial"
         )
@@ -36,8 +33,7 @@ class LogParserTest {
 
     @Test
     fun parseLine_slogQuotedMessage_isUnquoted() {
-        // slog quotes values containing spaces; the quotes are not part of the
-        // message. Attributes written after msg= stay attached to it.
+        // slog 会给含空格的值加引号，引号不属于消息；msg= 之后的属性仍归入消息。
         val item = LogParser.parseLine(
             "07-25 10:30:45.123  1234  5678 I GoLog   : " +
                 "time=2026-07-19T19:08:48.135+08:00 level=INFO source=runner/runner.go:133 " +
@@ -65,11 +61,9 @@ class LogParserTest {
 
     @Test
     fun unquoteSlogValue_leavesPlainAndTruncatedValues() {
-        // No quotes: nothing to do.
         assertEquals("plain", LogParser.unquoteSlogValue("plain"))
-        // Truncated by the stdout→logcat bridge: keep the raw text.
+        // 被 stdout→logcat 桥截断的值原样保留。
         assertEquals("\"cut off", LogParser.unquoteSlogValue("\"cut off"))
-        // Escaped newline inside a quoted value.
         assertEquals("a\nb", LogParser.unquoteSlogValue("\"a\\nb\""))
     }
 

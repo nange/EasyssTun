@@ -5,8 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Tests for the startup version banner ([versionBanner]) that libeasyss itself
- * does not print through its gomobile binding.
+ * 覆盖启动版本横幅 [versionBanner]：libeasyss 的 gomobile 绑定不会打印该信息，只能由 App 侧补上。
  */
 class VersionInfoTest {
 
@@ -16,8 +15,7 @@ class VersionInfoTest {
 
         assertTrue(banner.startsWith("EasyssTun v${BuildConfig.VERSION_NAME} ("))
         assertTrue(banner.contains("| libeasyss "))
-        // Some version must follow the label (the native library usually cannot
-        // be loaded in unit tests, in which case it degrades to "unknown").
+        // 标签后必须有版本号：单测里 native 库通常加载失败，此时退化为 "unknown"。
         assertFalse(banner.endsWith("libeasyss "))
     }
 
@@ -28,8 +26,7 @@ class VersionInfoTest {
 
     @Test
     fun versionLogTag_isCapturedByLogStore() {
-        // The banner is only visible in the viewer while its tag is part of the
-        // logcat filter LogStore starts with.
+        // 只有 tag 在 LogStore 启动的 logcat 过滤列表里，横幅才看得到。
         assertTrue(LogTags.ALL.contains(VERSION_LOG_TAG))
     }
 }

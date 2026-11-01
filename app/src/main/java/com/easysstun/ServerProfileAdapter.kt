@@ -8,16 +8,8 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.easysstun.databinding.ItemServerProfileBinding
 
-/** One row of the server list: the profile plus whether it is the active one. */
 internal data class ServerProfileItem(val profile: Profile, val isActive: Boolean)
 
-/**
- * RecyclerView adapter for the server profile list.
- *
- * The list used to be rebuilt by inflating a card per profile into a
- * [android.widget.LinearLayout] on every store change, including hand-computed
- * margins; the adapter reuses views and lets [ListAdapter] diff the rows.
- */
 internal class ServerProfileAdapter(
     private val onClick: (Profile) -> Unit,
 ) : ListAdapter<ServerProfileItem, ServerProfileAdapter.ViewHolder>(DIFF_CALLBACK) {
@@ -49,8 +41,7 @@ internal class ServerProfileAdapter(
                 profile.server
             }
             binding.serverActiveBadge.visibility = if (item.isActive) View.VISIBLE else View.GONE
-            // Rows are recycled, so the inactive background must be restored
-            // explicitly instead of relying on a freshly inflated card.
+            // 行会被回收：非 active 背景必须显式重置，不能依赖新建卡片的默认值。
             binding.root.setCardBackgroundColor(
                 context.getColor(
                     if (item.isActive) {

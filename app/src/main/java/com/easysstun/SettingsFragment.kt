@@ -42,9 +42,8 @@ class SettingsFragment : Fragment() {
             startActivity(Intent(context, ServerProfileActivity::class.java))
         }
 
-        // The store emits on every profile mutation, and replays the current
-        // revision when the screen starts, so returning from the profile form
-        // refreshes the list without an onResume() hook.
+        // 仓库在每次配置档变更时发射，并在 STARTED 时重放当前值，
+        // 因此从编辑页返回无需 onResume() 也能刷新列表。
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 profiles.changes.collect { refreshServerList() }

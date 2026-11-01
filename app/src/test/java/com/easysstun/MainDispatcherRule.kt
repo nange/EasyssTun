@@ -10,8 +10,7 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 
 /**
- * Sets Dispatchers.Main to a test dispatcher so viewModelScope-based code
- * (LogViewModel) runs deterministically in plain JVM unit tests.
+ * 把 Dispatchers.Main 换成测试调度器，使依赖 viewModelScope 的代码（LogViewModel）在纯 JVM 单测中确定性执行。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainDispatcherRule(

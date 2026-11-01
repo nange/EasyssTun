@@ -4,16 +4,9 @@ import io.github.nange.easyss.config.SimpleConfig
 import kotlinx.serialization.Serializable
 import java.util.Locale
 
-/**
- * One saved server profile.
- *
- * The numeric knobs ([serverPort], [socksPort], [timeout]) and the QUIC flag
- * ([enableQuic]) are typed. Builds before this model existed stored all of them
- * as strings, so each field is decoded by a lenient serializer that accepts both
- * representations and normalizes them on write; see [LenientIntSerializer] and
- * [LenientBooleanSerializer]. `null` means "not configured": the native config
- * then applies its own default instead of a value the user never chose.
- */
+/** 一个已保存的服务器配置档。[serverPort]、[socksPort]、[timeout] 与 QUIC 开关是类型化字段，
+ * 旧版本把它们存成字符串，故用 [LenientIntSerializer]/[LenientBooleanSerializer] 解码兼容、写入时归一化；
+ * `null` 表示未配置，由 native 侧自身默认值兜底，而不是沿用用户从未选择的值。 */
 @Serializable
 data class Profile(
     val id: String,
@@ -39,70 +32,37 @@ data class Profile(
     val timeout: Int? = DEFAULT_TIMEOUT,
 ) {
     companion object {
-        /**
-         * Local SOCKS port prefilled for new profiles and used as the fallback
-         * when a stored profile carries no (or an unparseable) port.
-         */
+        /** 新建配置档预填的本地 SOCKS 端口；已存配置档端口缺失或无法解析时也用它兜底。 */
         const val DEFAULT_SOCKS_PORT = 4080
         const val STATS_PORT_OFFSET = 1000
 
-        /**
-         * Base timeout (seconds) prefilled for new profiles and applied when the
-         * profile leaves `timeout` blank. Matches the native default
-         * (`config.DefaultTimeout` in easyss, also the `-t` startup flag default).
-         */
+        /** 新建配置档预填的超时秒数；配置档 timeout 为空时同样套用。与 easyss 的 `config.DefaultTimeout`（`-t` 默认值）一致。 */
         const val DEFAULT_TIMEOUT = 30
 
-        /**
-         * Legal range (seconds) of the native timeout knob: easyss derives every
-         * idle/dial/DNS/rotation timeout from it and documents 15-60 as the
-         * accepted range. The form rejects anything outside it, so a saved profile
-         * always applies exactly what the user typed.
-         */
+        /** native 超时的合法区间（秒）：easyss 的 idle/dial/DNS/轮换超时都由它派生，只接受 15-60。 */
         const val MIN_TIMEOUT_SECONDS = 15
         const val MAX_TIMEOUT_SECONDS = 60
 
         private const val STATS_URL_FORMAT = "http://127.0.0.1:%d/stats"
 
-        /**
-         * Stats URL for the default SOCKS port (i.e. 5080), used when no active
-         * profile is available.
-         */
+        /** 默认 SOCKS 端口对应的统计 URL（即 5080），无当前配置档时使用。 */
         fun defaultStatsUrl(): String =
             String.format(Locale.ROOT, STATS_URL_FORMAT, DEFAULT_SOCKS_PORT + STATS_PORT_OFFSET)
     }
 
-    /**
-     * The local HTTP stats endpoint port, derived from the SOCKS port
-     * (matches the easyss native convention: HTTPPort = SocksPort + 1000).
-     */
+    /** 本地 HTTP 统计端口，由 SOCKS 端口派生：easyss 约定 HTTPPort = SocksPort + 1000。 */
     fun statsPort(): Int = (socksPort ?: DEFAULT_SOCKS_PORT) + STATS_PORT_OFFSET
 
-    /**
-     * The local HTTP stats endpoint URL, e.g. http://127.0.0.1:5080/stats
-     * for the default SOCKS port 4080.
-     */
+    /** 本地 HTTP 统计端点 URL，如 http://127.0.0.1:5080/stats。 */
     fun statsUrl(): String = String.format(Locale.ROOT, STATS_URL_FORMAT, statsPort())
 
-    /**
-     * The base timeout (seconds) handed to the native config, i.e. the equivalent
-     * of the easyss `-t/--timeout` startup flag. A missing or (hand-edited)
-     * out-of-range value becomes 0, which makes libeasyss fall back to its own
-     * default instead of pinning a value the user never chose.
-     */
+    /** 交给 native 的基础超时（秒），等价 easyss 的 `-t/--timeout`：缺失或越界（手改）返回 0，由 libeasyss 自身默认值兜底。 */
     fun timeoutSeconds(): Int =
         timeout?.takeIf { it in MIN_TIMEOUT_SECONDS..MAX_TIMEOUT_SECONDS } ?: 0
 }
 
-/**
- * Parses the timeout field of the profile form (seconds). Surrounding whitespace
- * is ignored; a blank field means "not configured".
- *
- * @return the timeout in seconds, `0` when the field is blank (the native default
- *         then applies), or `null` when the text is not a whole number within
- *         [Profile.MIN_TIMEOUT_SECONDS, Profile.MAX_TIMEOUT_SECONDS] and must be
- *         reported as an input error by the caller.
- */
+/** 解析表单里的超时（秒）：忽略首尾空白，空串返回 0 表示未配置，由 native 默认值兜底。
+ * 非整数或超出 [Profile.MIN_TIMEOUT_SECONDS]..[Profile.MAX_TIMEOUT_SECONDS] 返回 `null`，调用方须当作输入错误上报。 */
 fun parseTimeoutSeconds(raw: String): Int? {
     val text = raw.trim()
     if (text.isEmpty()) return 0
@@ -110,27 +70,16 @@ fun parseTimeoutSeconds(raw: String): Int? {
     return seconds.takeIf { it in Profile.MIN_TIMEOUT_SECONDS..Profile.MAX_TIMEOUT_SECONDS }
 }
 
-/**
- * Parses a port typed into the profile form. Surrounding whitespace is ignored.
- *
- * @return the port, or `null` when [raw] is blank or is not a whole number in
- *         1..65535. Callers that allow a blank field (the local SOCKS port)
- *         check the raw text to tell "not configured" from "invalid".
- */
+/** 解析表单里的端口：忽略首尾空白，空串或非 1..65535 的整数返回 `null`。
+ * 允许留空的调用方（本地 SOCKS 端口）要另看原文才能区分「未配置」与「非法」。 */
 fun parsePortOrNull(raw: String): Int? {
     val text = raw.trim()
     if (text.isEmpty()) return null
     return text.toIntOrNull()?.takeIf { it in 1..65535 }
 }
 
-/**
- * Builds a SimpleConfig for the AAR-based easyss proxy from this profile.
- *
- * Pure: the auxiliary files (custom CA, direct/proxy rules) are written by
- * [ProfileConfigWriter] beforehand, and [paths] tells this function where they
- * are. [paths] is required on purpose: a caller that forgot to write the files
- * must not silently start with a config that drops them.
- */
+/** 由配置档构造 AAR 版 easyss 的 SimpleConfig。纯函数：辅助文件（自定义 CA、直连/代理规则）由 [ProfileConfigWriter] 预先写出，
+ * [paths] 指明位置且故意必填——忘了写文件的调用方不能静默启动一份丢掉这些文件的配置。 */
 internal fun Profile.buildSimpleConfig(paths: ProfileConfigPaths): SimpleConfig {
     val config = SimpleConfig()
 
@@ -152,8 +101,7 @@ internal fun Profile.buildSimpleConfig(paths: ProfileConfigPaths): SimpleConfig 
 
     config.setLocalPort((socksPort ?: Profile.DEFAULT_SOCKS_PORT).toLong())
 
-    // Same knob as the easyss `-t/--timeout` startup flag: the base timeout all
-    // idle/dial timeouts are derived from. 0 keeps the native default.
+    // 与 easyss 的 `-t/--timeout` 是同一个旋钮：所有 idle/dial 超时由它派生，0 沿用 native 默认值。
     config.setTimeout(timeoutSeconds().toLong())
 
     if (paths.customCa != null) {

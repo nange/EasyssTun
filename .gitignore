@@ -21,7 +21,7 @@ kotlin-profile
 # agent worktrees（见 AGENTS.md「Git 工作流」）
 .agents/worktrees/
 
-# signing
+# 签名文件
 keystore.properties
 *.jks
 *.keystore

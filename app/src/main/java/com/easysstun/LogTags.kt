@@ -1,17 +1,12 @@
 package com.easysstun
 
 /**
- * Every logcat tag the app writes under, in one place.
- *
- * The in-app log viewer runs `logcat -s <tags>` with [ALL]; a tag missing from
- * this list is silently dropped before it can be parsed. Keeping the constants
- * here — instead of a private TAG per file plus a hand-maintained array —
- * makes that coupling visible: adding a logger means adding its tag to [ALL].
+ * 应用全部 logcat tag。日志页用 [ALL] 生成 `logcat -s` 过滤列表：新增 logger 必须把 tag 加进 [ALL]，漏登记会被静默丢弃。
  */
 internal object LogTags {
     const val APP_STATE = "AppState"
     const val APP_SELECTION = "AppSelectionStore"
-    /** Tag the Go runtime gives to libeasyss's own logcat output. */
+    /** libeasyss 的 Go runtime 输出的 tag，不是应用代码写入的。 */
     const val GO = "GoLog"
     const val LOG_STORE = "LogStore"
     const val MAIN = "MainFragment"
@@ -23,7 +18,6 @@ internal object LogTags {
     const val UPDATER = "Updater"
     const val VPN_CONTROLLER = "VpnController"
 
-    /** Tags captured by the in-app log viewer. */
     val ALL: List<String> = listOf(
         APP_STATE,
         APP_SELECTION,

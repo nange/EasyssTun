@@ -14,12 +14,7 @@ import java.io.File
 
 private const val TAG = LogTags.UPDATER
 
-/**
- * Owns every updater dialog for one [FragmentActivity]: the "update available"
- * prompt, the download progress, and the error/permission guidance. Created by
- * MainActivity, which is also the host of the settings screen, so the same
- * dialogs serve both the launch-time check and a manual check from settings.
- */
+/** 持有某个 [FragmentActivity] 的全部更新弹窗（可用/进度/错误/授权）；由 MainActivity 创建，启动检查与设置页手动检查共用。 */
 internal class UpdateDialogs(
     private val activity: FragmentActivity,
     private val manager: UpdateManager,
@@ -52,8 +47,7 @@ internal class UpdateDialogs(
             }
             is UpdateState.Failed -> {
                 dismissProgress()
-                // StateFlow replays the latest value on resume; only surface a
-                // failure once (a retry goes through Checking and resets this).
+                // StateFlow 恢复时会重放最新值：失败只提示一次（重试经过 Checking 会重置）。
                 if (state != lastFailedState) {
                     lastFailedState = state
                     if (state.manual) {
@@ -66,11 +60,10 @@ internal class UpdateDialogs(
         }
     }
 
-    /** Called from the host's onResume: continues an install after the user returns from settings. */
+    /** 由宿主的 onResume 调用：用户从设置页返回后继续安装。 */
     fun onResume() {
         if (pendingInstall != null) {
-            // Returning from the "install unknown apps" screen (or simply
-            // resuming) gives the user another chance to grant the permission.
+            // 从「安装未知应用」页返回或普通恢复时，给用户再授权一次的机会。
             unknownSourcesPrompted = false
             maybeLaunchInstall()
         }
@@ -246,7 +239,7 @@ internal class UpdateDialogs(
     private fun isAlive(): Boolean = !activity.isFinishing && !activity.isDestroyed
 }
 
-/** Inline status line for the settings card; null hides the line. */
+/** 设置卡片的行内状态文案；null 表示隐藏该行。 */
 internal fun updateStatusText(context: Context, state: UpdateState): String? = when (state) {
     UpdateState.Idle -> null
     UpdateState.Checking -> context.getString(R.string.update_checking)

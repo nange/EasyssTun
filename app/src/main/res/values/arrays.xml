@@ -1,5 +1,4 @@
 <resources>
-    <!-- Reply Preference -->
 
     <string-array name="bypass_private_route">
         <item>1.0.0.0/8</item>

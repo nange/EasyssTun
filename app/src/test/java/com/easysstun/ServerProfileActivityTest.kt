@@ -19,8 +19,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 
 /**
- * Tests for the server profile form: parameter fields must be saved without
- * surrounding whitespace, and the timeout parameter must reach the profile.
+ * 覆盖配置档表单：各参数字段保存前去掉首尾空白，超时参数必须落到配置档。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -191,10 +190,10 @@ class ServerProfileActivityTest {
         val server = activity.field(R.id.profile_server)
         server.setText("  example.com  ")
 
-        // Focus gained: keep the text untouched so typing never fights the caret.
+        // 获得焦点时不动文本，避免与光标位置打架。
         server.onFocusChangeListener.onFocusChange(server, true)
         assertEquals("  example.com  ", server.text.toString())
-        // Focus lost: strip the stray whitespace right away.
+        // 失焦时立即去掉多余空白。
         server.onFocusChangeListener.onFocusChange(server, false)
         assertEquals("example.com", server.text.toString())
     }

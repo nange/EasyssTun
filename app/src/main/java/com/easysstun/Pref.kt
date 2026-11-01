@@ -5,20 +5,9 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 
-/**
- * Typed key/value access to the app's SharedPreferences.
- *
- * This class stores preferences and nothing else. The server profile repository
- * lives in [ProfileStore], the per-app routing selection in [AppSelectionStore]
- * and the config files handed to the native stack in [ProfileConfigWriter].
- * Those are built on the generic key/value helpers at the bottom, so every
- * stored key is defined next to the data model that owns it instead of leaking
- * through this class.
- *
- * The raw [SharedPreferences] handle is private on purpose: callers go through a
- * typed accessor (or one of the stores above), which keeps the stored
- * representation — and the migrations between its versions — in one place.
- */
+/** SharedPreferences 的类型化键值访问，只做偏好读写：服务器配置档在 [ProfileStore]，分应用选择在 [AppSelectionStore]，
+ * native 配置文件在 [ProfileConfigWriter]；它们复用底部的通用键值方法，key 定义在各自数据模型旁边。
+ * [SharedPreferences] 句柄刻意私有：调用方走类型化访问器，存储表示与版本迁移才集中在一处。 */
 class Pref(context: Context) {
     companion object {
         const val SERVICE_ENABLED = "enable"
@@ -34,15 +23,9 @@ class Pref(context: Context) {
     private val prefs: SharedPreferences =
         PreferenceManager.getDefaultSharedPreferences(context)
 
-    /**
-     * The user's persisted *intent*: true while they want the VPN to be up.
-     *
-     * This is deliberately not a liveness flag — [VpnState] owns that. It is
-     * written only by explicit user actions (start, stop, denied permission) and
-     * by system reconciliation ([ServiceReceiver] on boot, [VpnController] on
-     * revoke), never by the service on its own. The stored key keeps its old
-     * name so existing installations keep their setting.
-     */
+    /** 用户持久化的「意图」：true 表示希望 VPN 处于连接状态。这不是存活标志，存活由 [VpnState] 负责。
+     * 只由明确的用户操作（连接、断开、拒绝授权）与系统对账（[ServiceReceiver] 开机、[VpnController] 撤权）写入，服务自身从不写。
+     * key 沿用旧名，老安装的设置在升级后继续有效。 */
     var userWantsVpn: Boolean
         get() = prefs.getBoolean(SERVICE_ENABLED, false)
         set(value) {
@@ -55,43 +38,36 @@ class Pref(context: Context) {
             prefs.edit { putBoolean(SHOW_SYSTEM_APPS, value) }
         }
 
-    /** Whether a release check runs once per [AUTO_CHECK_INTERVAL_MS] on app start. */
+    /** 启动时是否每 [AUTO_CHECK_INTERVAL_MS] 检查一次新版本。 */
     var updateAutoCheck: Boolean
         get() = prefs.getBoolean(UPDATE_AUTO_CHECK, true)
         set(value) {
             prefs.edit { putBoolean(UPDATE_AUTO_CHECK, value) }
         }
 
-    /** Timestamp of the last successful release check; 0 means "never checked". */
+    /** 上次成功检查更新的时间戳；0 表示从未检查。 */
     var updateLastCheckAt: Long
         get() = prefs.getLong(UPDATE_LAST_CHECK_AT, 0L)
         set(value) {
             prefs.edit { putLong(UPDATE_LAST_CHECK_AT, value) }
         }
 
-    /** versionCode the user chose to skip; 0 means "nothing skipped". */
+    /** 用户选择跳过的 versionCode；0 表示未跳过。 */
     var updateDismissedVersionCode: Int
         get() = prefs.getInt(UPDATE_DISMISSED_VERSION_CODE, 0)
         set(value) {
             prefs.edit { putInt(UPDATE_DISMISSED_VERSION_CODE, value) }
         }
 
-    /**
-     * Per-app routing mode: [PROXY_MODE_BYPASS] (route everything except the
-     * selected apps) or [PROXY_MODE_PROXY_ONLY] (route only the selected apps).
-     *
-     * The setter is a plain preference write. It does not notify the running
-     * tunnel: a caller that changed the routing configuration on purpose calls
-     * [ConfigChangeNotifier] itself, so a write never restarts the tunnel behind
-     * the caller's back.
-     */
+    /** 分应用路由模式：[PROXY_MODE_BYPASS] 放行选中应用之外的流量，[PROXY_MODE_PROXY_ONLY] 只代理选中应用。
+     * setter 只写偏好、不通知运行中的隧道：需要重载的调用方自己调 [ConfigChangeNotifier]，写入不会替调用方重启隧道。 */
     var proxyMode: String
         get() = prefs.getString(PROXY_MODE_KEY, PROXY_MODE_BYPASS) ?: PROXY_MODE_BYPASS
         set(value) {
             prefs.edit { putString(PROXY_MODE_KEY, value) }
         }
 
-    // ── Key/value primitives used by the data-model stores ───────
+    // ── 供各数据模型仓库使用的键值原语 ───────
 
     internal fun getString(key: String, defaultValue: String? = null): String? =
         prefs.getString(key, defaultValue)

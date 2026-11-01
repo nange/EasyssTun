@@ -23,8 +23,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class StatsBinderTest {
 
-    // Material widgets need the app theme; the Robolectric application context
-    // does not carry it.
+    // Material 控件需要 App 主题，Robolectric 的 application context 不带。
     private val context: Context = ContextThemeWrapper(
         ApplicationProvider.getApplicationContext(),
         R.style.Theme,
@@ -148,8 +147,7 @@ class StatsBinderTest {
             binding.statsExpandable.layoutParams.height,
         )
 
-        // Give the section a real height: without layout the collapse path
-        // takes the height==0 early return and never runs onAnimationEnd.
+        // 先给区块真实高度：未布局时折叠走 height==0 提前返回，不会触发 onAnimationEnd。
         binding.statsExpandable.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),

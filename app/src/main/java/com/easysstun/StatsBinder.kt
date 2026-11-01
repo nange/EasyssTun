@@ -12,15 +12,7 @@ import android.widget.TextView
 import com.easysstun.databinding.FragmentMainBinding
 import java.util.Locale
 
-/**
- * Renders the home screen's statistics card and owns its expand/collapse
- * animation.
- *
- * The binder is recreated with the fragment view; the expanded flag lives in
- * the fragment so navigating away and back keeps the card open. It never
- * fetches anything: [StatsClient] produces a [StatsSnapshot] and the fragment
- * hands it over on the main thread.
- */
+/** 展开状态由 Fragment 持有，实例随视图重建；本类不取数，只渲染主线程交来的 [StatsSnapshot]。 */
 internal class StatsBinder(
     private val binding: FragmentMainBinding,
     initiallyExpanded: Boolean = false,
@@ -31,25 +23,19 @@ internal class StatsBinder(
 
     init {
         binding.statsHeader.setOnClickListener {
-            // The grid is hidden while the tunnel is down; toggling it there
-            // would leave the card in a state the user cannot see.
+            // 隧道未运行时网格是隐藏的；此时切换展开会留下用户看不见的状态。
             if (binding.statsGrid.visibility != View.VISIBLE) return@setOnClickListener
             setExpanded(!isExpanded, animate = true)
         }
         applyExpandedState()
     }
 
-    /** Shows or hides the whole grid (the header stays visible). */
     fun setVisible(visible: Boolean) {
         binding.statsGrid.visibility = if (visible) View.VISIBLE else View.GONE
         if (visible) applyExpandedState()
     }
 
-    /**
-     * Renders a successful sample. Visibility is owned by the caller through
-     * [setVisible]: a late sample must not re-show a card the fragment has
-     * already hidden when the tunnel stopped.
-     */
+    /** 可见性由调用方通过 [setVisible] 控制：隧道停止后迟到的样本不得把卡片重新显示出来。 */
     fun render(snapshot: StatsSnapshot) {
         binding.statsAvgRttMs.text = String.format(Locale.ROOT, "%.1fms", snapshot.avgRttMs)
         binding.statsDownloadSpeed.text = stripByteUnit(snapshot.downloadSpeed)
@@ -70,11 +56,7 @@ internal class StatsBinder(
         binding.statsUptime.text = formatDuration(snapshot.uptimeSeconds)
     }
 
-    /**
-     * Renders the "endpoint not reachable" state: the hero slot carries the
-     * status message and every other value is cleared so stale numbers from
-     * the previous sample are not mistaken for live data.
-     */
+    /** 端点不可达时清空其余数值：避免上次样本的过期数字被当成实时数据。 */
     fun renderUnavailable() {
         binding.statsAvgRttMs.text = binding.root.context.getString(R.string.stats_unavailable)
         clear(
@@ -130,11 +112,7 @@ internal class StatsBinder(
             .start()
     }
 
-    /**
-     * Animates the expandable section's height. The layout height is reset to
-     * `WRAP_CONTENT` when the animation ends so a font-size or rotation change
-     * cannot clip the content at a stale pixel height.
-     */
+    /** 动画结束后高度重置为 `WRAP_CONTENT`：否则字体或旋转变化会按过期像素高度裁切内容。 */
     private fun animateHeight(expand: Boolean) {
         val view = binding.statsExpandable
         if (expand) {

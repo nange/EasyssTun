@@ -17,16 +17,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowVpnService
 
-/**
- * Tests for ServiceReceiver: boot-completed auto-start logic.
- *
- * Since VpnService.prepare() and startForegroundService() require a real Android
- * environment, we focus on verifying the branching logic:
- *   - BOOT_COMPLETED + userWantsVpn=true + active profile → tries to start
- *   - BOOT_COMPLETED + userWantsVpn=true + no active profile → does not start
- *   - BOOT_COMPLETED + userWantsVpn=false → does nothing
- *   - Non-BOOT_COMPLETED action               → does nothing
- */
+/** 覆盖 ServiceReceiver 的分支走向：`VpnService.prepare()` 与 `startForegroundService()` 依赖真实系统，只断言是否发起启动。 */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])
 class ServiceReceiverTest {
@@ -55,23 +46,20 @@ class ServiceReceiverTest {
 
     @Test
     fun onReceive_bootCompleted_serviceDisabled_doesNotStart() {
-        // Confirm service is disabled
         pref.userWantsVpn = false
         assertFalse("Service should be disabled", pref.userWantsVpn)
 
         val receiver = ServiceReceiver()
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
 
-        // This should not throw and should not change service state
         receiver.onReceive(context, intent)
 
-        // Service should remain disabled (no start attempted)
         assertFalse("Service should still be disabled after broadcast", pref.userWantsVpn)
     }
 
     @Test
     fun onReceive_bootCompleted_serviceEnabled_attemptsStart() {
-        // Set a valid profile so the service would have something to connect to
+        // 必须有 active 配置档，否则接收器会清标记并放弃启动。
         val profile = Profile(
             id = "boot-test-id",
             name = "Boot Test Server",
@@ -85,8 +73,7 @@ class ServiceReceiverTest {
 
         val application = context as Application
         shadowOf(application).clearStartedServices()
-        // Force VpnService.prepare() to report that permission is already granted,
-        // so the receiver takes the direct startForegroundService() branch.
+        // prepare() 返回 null 表示已授权，接收器才会走直接启动分支。
         ShadowVpnService.setPrepareResult(null)
 
         val receiver = ServiceReceiver()
@@ -126,10 +113,8 @@ class ServiceReceiverTest {
         val receiver = ServiceReceiver()
         val intent = Intent("some.other.action")
 
-        // Should silently return without doing anything
         receiver.onReceive(context, intent)
 
-        // Verify nothing changed — prefs should still be intact
         assertTrue("Service should still be enabled after non-boot broadcast", pref.userWantsVpn)
     }
 
@@ -138,12 +123,9 @@ class ServiceReceiverTest {
         pref.userWantsVpn = true
 
         val receiver = ServiceReceiver()
-        val intent = Intent() // No action set
-
-        // Should not crash
+        val intent = Intent()
         receiver.onReceive(context, intent)
 
-        // Service state unchanged
         assertTrue("Service should still be enabled", pref.userWantsVpn)
     }
 }

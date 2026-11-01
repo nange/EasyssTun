@@ -5,32 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 
-/**
- * Single entry point for "the persisted tunnel configuration changed, reload it".
- *
- * The preference setters ([Pref.proxyMode], [AppSelectionStore.setSelected]) and
- * the profile form are plain writes: they never restart the tunnel behind the
- * caller's back. A caller that changed the configuration of a running tunnel on
- * purpose calls [notifyChanged] after the write. This is the only place that
- * sends the signal, and [ACTION_CONFIG_CHANGED] is the only action
- * [EasyssVpnService] listens to.
- */
+/** 配置变更的唯一广播出口：setter 只写存储、不会自动重启隧道，运行中的隧道须由调用方显式 [notifyChanged]。 */
 internal object ConfigChangeNotifier {
 
-    /** In-app intent action telling a running VPN service to reload its config. */
+    /** 应用内动作：运行中的 [EasyssVpnService] 只监听这一个动作。 */
     const val ACTION_CONFIG_CHANGED = "com.easysstun.action.CONFIG_CHANGED"
 
-    /**
-     * Asks a running [EasyssVpnService] to reload the persisted configuration.
-     * The broadcast is addressed to this package only.
-     */
     fun notifyChanged(context: Context) {
         context.sendBroadcast(
             Intent(ACTION_CONFIG_CHANGED).setPackage(context.packageName)
         )
     }
 
-    /** Registers [receiver] for [ACTION_CONFIG_CHANGED] (non-exported). */
+    /** 以非导出方式注册：只接收本应用发出的广播。 */
     fun register(context: Context, receiver: BroadcastReceiver) {
         context.registerReceiver(
             receiver,

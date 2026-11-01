@@ -17,14 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Adapter for the per-app proxy list.
- *
- * Label and icon loading is owned by the [AppViewHolder]: each bind cancels the
- * previous load and [onViewRecycled] cancels the active one, so a recycled row
- * can never show the label/icon of the package it used to display. Labels are
- * cached per package because filtering reads them for the whole list.
- */
+/** 分应用代理列表：标签/图标异步加载，重绑与回收都会取消上一次加载，标签按包名缓存供过滤读取。 */
 class AppListAdapter(
     context: Context,
     private val lifecycleScope: CoroutineScope,
@@ -42,7 +35,7 @@ class AppListAdapter(
     private val selectedApps = mutableSetOf<String>()
     private val selection = AppSelectionStore(Pref(appContext))
 
-    /** Package name -> display label; the package list is stable while the screen is open. */
+    /** 包名 → 显示名缓存：过滤要对整表读标签，不能每次现查。 */
     private val labelCache = ConcurrentHashMap<String, String>()
 
     init {
@@ -64,9 +57,7 @@ class AppListAdapter(
 
     fun setAppList(list: List<PackageInfo>) {
         allApps = list
-        // The list is reloaded after mode/system-app changes, and an installed
-        // app may have been updated in the meantime; re-read labels instead of
-        // showing a stale one from the previous load.
+        // 重新加载可能发生在应用升级之后：清掉缓存，避免继续显示过期标签。
         labelCache.clear()
         differ.submitList(list)
     }
@@ -120,12 +111,10 @@ class AppListAdapter(
 
     private fun saveSelectedApps() {
         val apps = selectedApps.toSet()
-        // The store applies the write to the in-memory preferences immediately,
-        // so a same-process reader (the VPN service) already sees it; no
-        // blocking commit is needed on the main thread.
+        // 写入先落在内存中的偏好，同进程读者（VPN 服务）立刻可见，
+        // 因此主线程无需阻塞式 commit。
         selection.setSelected(proxyMode, apps)
-        // Debounce only the reload signal to avoid rapid VPN restarts while the
-        // user is ticking apps one by one.
+        // 只对重载信号做防抖：用户逐个勾选时避免隧道反复重启。
         saveJob?.cancel()
         saveJob = lifecycleScope.launch {
             delay(300)
@@ -148,8 +137,7 @@ class AppListAdapter(
             binding.packageName.text = appInfo.packageName
             binding.checkbox.isChecked = appInfo.packageName in selectedApps
 
-            // Show a placeholder until the asynchronous load completes; a recycled
-            // holder must never keep the previous package's label/icon.
+            // 异步加载完成前显示占位；回收的 holder 绝不能残留上一个包的标签/图标。
             binding.appName.text = labelCache[appInfo.packageName]
                 ?: appContext.getString(R.string.app_name_placeholder)
             binding.appIcon.setImageResource(R.drawable.sync_24px)
@@ -169,8 +157,8 @@ class AppListAdapter(
                 val icon = withContext(Dispatchers.IO) {
                     appInfo.applicationInfo?.loadIcon(packageManager)
                 }
-                // The holder may have been rebound or recycled while the package
-                // manager was loading; never overwrite the newer binding.
+                // 加载期间 holder 可能已被重绑或回收：`isActive` 为假时不能再写入，
+                // 否则会覆盖新绑定。
                 if (!isActive) return@launch
                 binding.appName.text = label
                 binding.appIcon.setImageDrawable(icon)

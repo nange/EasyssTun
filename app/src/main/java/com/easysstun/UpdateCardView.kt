@@ -13,15 +13,8 @@ import com.google.android.material.card.MaterialCardView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/**
- * Update section on the home screen: app version, automatic-check toggle,
- * check/download actions and a one-line status.
- *
- * The view owns no update state; everything is rendered from
- * [UpdateManager.state]. Modal dialogs (available/progress/errors) stay in
- * [UpdateDialogs], hosted by MainActivity, so checks triggered here also keep
- * working while the user navigates to other screens.
- */
+/** 首页「软件更新」卡片：版本号、自动检查开关、检查/下载与状态行。
+ * 本视图不持有更新状态，全部渲染自 [UpdateManager.state]；弹窗在 [UpdateDialogs]，故离开本页后检查仍继续。 */
 class UpdateCardView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -40,8 +33,7 @@ class UpdateCardView @JvmOverloads constructor(
             BuildConfig.VERSION_CODE,
         )
         if (BuildConfig.DEBUG) {
-            // The release APK has a different applicationId/signature, so an
-            // in-app update can never apply to a debug build.
+            // debug 包 applicationId 带后缀且签名不同，应用内更新装不上，直接禁用。
             binding.updateAutoCheckSwitch.isEnabled = false
             binding.updateCheckButton.isEnabled = false
             binding.updateDownloadButton.visibility = View.GONE
@@ -50,7 +42,7 @@ class UpdateCardView @JvmOverloads constructor(
         }
     }
 
-    /** Binds to the process-scoped updater; called again whenever a new fragment view is created. */
+    /** 绑定进程级更新器；每次新建 Fragment 视图都会重新调用。 */
     internal fun bind(manager: UpdateManager, pref: Pref, owner: LifecycleOwner) {
         if (boundManager === manager && boundOwner === owner) return
         stateJob?.cancel()
@@ -62,7 +54,6 @@ class UpdateCardView @JvmOverloads constructor(
         binding.updateAutoCheckSwitch.setOnCheckedChangeListener { _, checked ->
             pref.updateAutoCheck = checked
         }
-        // Let taps on the label toggle the switch as well.
         binding.updateAutoCheckRow.setOnClickListener {
             binding.updateAutoCheckSwitch.toggle()
         }
@@ -89,10 +80,8 @@ class UpdateCardView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         stateJob?.cancel()
         stateJob = null
-        // bind() early-returns when the same manager/owner is passed again, so
-        // the binding must be forgotten here: a view that is detached and
-        // re-attached (e.g. moved to another parent) would otherwise never
-        // re-subscribe to the state flow.
+        // 必须在这里忘掉绑定：bind() 对相同 manager/owner 会提前返回，
+        // 否则视图 detach 再 attach 后永远不会重新订阅 state。
         boundManager = null
         boundOwner = null
         super.onDetachedFromWindow()

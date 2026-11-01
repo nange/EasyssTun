@@ -11,9 +11,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Guards the action-only service Intent contract: the service and the UI run
- * in the same process, so connection configuration must be read from Pref
- * rather than serialized into the Intent.
+ * 守护「Intent 只带 action」契约：服务与 UI 同进程，连接配置一律从 Pref 读取，不得序列化进 Intent。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(manifest = Config.NONE, sdk = [Build.VERSION_CODES.TIRAMISU])

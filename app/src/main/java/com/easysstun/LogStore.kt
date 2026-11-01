@@ -22,36 +22,22 @@ import java.util.regex.Pattern
 
 data class LogItem(val message: String, var time: String, var source: String, var level: String)
 
-/**
- * Pure logcat line parsing, extracted from the UI layer so it can be unit
- * tested. The regexes and formats are unchanged from the original LogFragment
- * implementation.
- */
 object LogParser {
 
-    // Written to logcat right before the LogStore reader starts; everything
-    // before it belongs to an earlier process run and is dropped.
+    // 采集启动前先写这一行；缓冲区里它之前的内容属于更早的进程，全部丢弃。
     const val MARKER = "===== log capture started ====="
 
-    // Pattern A: Go slog format within the logcat message payload
-    // Matches: time=... level=... source=... msg=...
+    // 按此顺序尝试：slog 行外面也套着 logcat 包装，先匹配 slog 才能拿到结构化字段。
     private val LOG_PATTERN_SLOG =
         Pattern.compile("time=([^ ]+) level=([^ ]+) source=([^ ]+) msg=(.*)")
 
-    // Pattern B: Fallback for EasyssVpnService direct log lines
-    // Captures logcat wrapper: date, time, level char, and msg=... content
     private val LOG_PATTERN_FALLBACK =
         Pattern.compile("^(\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+easyss\\s+:\\s+msg=(.*)$")
 
-    // Pattern C: Standard android.util.Log logcat output format
-    // Captures: date, time, level char, tag, message
-    // Example: "07-25 10:30:45.123  1234  5678 I EasyssVpnServiceDiag: onStartCommand..."
     private val LOG_PATTERN_STANDARD =
         Pattern.compile("^(\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+\\d+\\s+\\d+\\s+([VDIWEF])\\s+(\\S+)\\s*:\\s*(.*)$")
 
-    /** Parse one raw logcat line, or null when no known format matches. */
     fun parseLine(line: String): LogItem? {
-        // Try Go slog pattern first
         var matcher = LOG_PATTERN_SLOG.matcher(line)
         if (matcher.find()) {
             val isoTime = matcher.group(1) ?: ""
@@ -60,7 +46,6 @@ object LogParser {
             val msg = unquoteSlogValue(matcher.group(4) ?: "")
             return LogItem(msg, formatTime(isoTime), source, level)
         }
-        // Try fallback pattern for EasyssVpnService lines
         matcher = LOG_PATTERN_FALLBACK.matcher(line)
         if (matcher.find()) {
             val logDate = matcher.group(1) ?: ""
@@ -69,7 +54,6 @@ object LogParser {
             val msg = matcher.group(4) ?: ""
             return LogItem(msg, "$logDate $logTime", "", mapLevelChar(levelChar))
         }
-        // Try standard android.util.Log pattern for app-side logs
         matcher = LOG_PATTERN_STANDARD.matcher(line)
         if (matcher.find()) {
             val logDate = matcher.group(1) ?: ""
@@ -82,15 +66,7 @@ object LogParser {
         return null
     }
 
-    /**
-     * Undo slog's text-handler quoting for an attribute value. slog writes a
-     * Go-quoted string whenever the value contains a space, `=` or a quote —
-     * which is the common case for `msg=` (`msg="[EASYSS] client core ready"`)
-     * — and appends any further attributes after it on the same line, so only
-     * the leading quoted value is unescaped here and the remainder is kept.
-     * Values that are not quoted (a single word, or a line truncated by the
-     * stdout→logcat bridge) are returned unchanged.
-     */
+    /** 还原 slog 的引号转义；值含空格、`=` 或引号时 slog 会加引号，未加引号的值原样返回。 */
     fun unquoteSlogValue(value: String): String {
         if (!value.startsWith('"')) return value
         val out = StringBuilder(value.length)
@@ -106,31 +82,26 @@ object LogParser {
                     'r' -> { out.append('\r'); i += 2; continue }
                 }
             } else if (c == '"') {
-                // Closing quote: keep the attributes slog wrote after the value.
+                // 闭合引号之后是 slog 追加的其它属性，原样保留。
                 out.append(value, i + 1, value.length)
                 return out.toString()
             }
             out.append(c)
             i++
         }
-        // Unterminated quote: the entry was cut off, keep the raw value.
+        // 引号未闭合说明该行被截断，原样返回。
         return value
     }
 
-    /**
-     * Convert ISO 8601 timestamp to display format: "MM-DD HH:MM:SS.mmm"
-     * Input:  "2026-07-19T19:08:48.135+08:00"
-     * Output: "07-19 19:08:48.135"
-     */
+    /** ISO 8601 转显示格式 "MM-DD HH:MM:SS.mmm"；不含 'T' 的时间串原样返回。 */
     fun formatTime(isoTime: String): String {
         val t = isoTime.indexOf('T')
         if (t < 0) return isoTime
-        val datePart = isoTime.substring(5, 10)  // "07-19"
+        val datePart = isoTime.substring(5, 10)
         val timePart = isoTime.substring(t + 1).takeWhile { c -> c != '+' && c != '-' && c != 'Z' }
         return "$datePart $timePart"
     }
 
-    /** Map logcat level character to readable level string. */
     fun mapLevelChar(c: String): String = when (c) {
         "V" -> "VERBOSE"
         "D" -> "DEBUG"
@@ -141,7 +112,7 @@ object LogParser {
         else -> c
     }
 
-    /** Map a level string to numeric severity for filtering (higher = more severe). */
+    /** 级别转过滤用数值，越大越严重；标度必须与 [LogStore] 的阈值一致，改一处要同步另一处。 */
     fun levelSeverity(level: String): Int = when (level.uppercase()) {
         "VERBOSE" -> 2
         "DEBUG" -> 3
@@ -149,23 +120,18 @@ object LogParser {
         "WARN", "WARNING" -> 5
         "ERROR" -> 6
         "FATAL" -> 7
-        else -> 4  // Default to INFO
+        else -> 4
     }
 
-    /** True when the line carries the capture-start marker (see [MARKER]). */
     fun isStartMarker(line: String): Boolean = line.contains(MARKER)
 }
 
-/**
- * Thread-safe bounded buffer for parsed log items. Items keep a logical index
- * in the capture stream; when the buffer is full the oldest items are dropped
- * and [frontIndex] advances, so readers can tell how much history was lost.
- */
+// 定长环形缓冲：条目保留采集流中的逻辑下标，淘汰最旧项时 frontIndex 前移，
+// 读取方据此判断丢了多少历史。
 class LogBuffer(private val capacity: Int) {
     private val items = ArrayDeque<LogItem>()
     private var droppedCount = 0
 
-    /** Append one item; drops the oldest when over capacity. Returns the new size. */
     @Synchronized
     fun append(item: LogItem): Int {
         items.addLast(item)
@@ -185,14 +151,9 @@ class LogBuffer(private val capacity: Int) {
     val size: Int
         @Synchronized get() = items.size
 
-    /** Capture-stream index of the oldest retained item (0 until eviction). */
     val frontIndex: Int
         @Synchronized get() = droppedCount
 
-    /**
-     * Copy of the retained items whose capture-stream indices fall in
-     * [fromIndex, toIndex); both bounds are clamped to the retained range.
-     */
     @Synchronized
     fun sliceRange(fromIndex: Int, toIndex: Int): List<LogItem> {
         val from = maxOf(fromIndex, droppedCount)
@@ -202,21 +163,11 @@ class LogBuffer(private val capacity: Int) {
     }
 }
 
-/**
- * Bounded, thread-safe window of captured log items with a change signal.
- *
- * Extracted from [LogStore] so the log viewer's paging logic can be exercised
- * against a fresh capture in tests without any test-only hooks on the
- * process-wide singleton.
- */
 internal class LogCapture(capacity: Int = LogStore.MAX_BUFFER_SIZE) {
     private val buffer = LogBuffer(capacity)
 
-    // Emits the current buffer size after each append (replay 1: a late
-    // collector always learns the latest state). Emissions use emit() rather
-    // than tryEmit(): with the small replay buffer an active collector can
-    // make tryEmit drop values, and a dropped final notification would leave
-    // the viewer lagging by one line instead of self-healing on the next one.
+    // 每次追加后发出当前缓冲大小；replay 1 让后加入者也能拿到最新状态。
+    // 必须用 emit() 而非 tryEmit()：后者可能对活跃收集者丢值，丢了最后一次通知日志页会一直少一行。
     private val _updates = MutableSharedFlow<Int>(replay = 1)
     val updates: SharedFlow<Int> = _updates.asSharedFlow()
 
@@ -227,16 +178,10 @@ internal class LogCapture(capacity: Int = LogStore.MAX_BUFFER_SIZE) {
     val size: Int get() = buffer.size
     val frontIndex: Int get() = buffer.frontIndex
 
-    /**
-     * Logical capture-stream index one past the newest retained item. Unlike
-     * [size] (the number of retained items), this stays consistent with
-     * [sliceRange] bounds even after ring eviction advances [frontIndex].
-     * (Computed from two synchronized reads; a concurrent append may lag it by
-     * one item, which the next update notification self-heals.)
-     */
+    // 采集流中已保留项之后的下一个下标；与 size 不同，淘汰后仍与 sliceRange 边界一致。
+    // 由两次同步读拼成，并发 append 时可能滞后一项，由下一次 update 通知自愈。
     val endIndex: Int get() = buffer.frontIndex + buffer.size
 
-    /** Copy of the retained items with capture-stream indices in [fromIndex, toIndex). */
     fun sliceRange(fromIndex: Int, toIndex: Int): List<LogItem> =
         buffer.sliceRange(fromIndex, toIndex)
 
@@ -245,31 +190,22 @@ internal class LogCapture(capacity: Int = LogStore.MAX_BUFFER_SIZE) {
     }
 }
 
-/**
- * Process-wide log capture: reads logcat for the app's tags for the whole
- * lifetime of the process, keeps the latest [MAX_BUFFER_SIZE] parsed items in
- * memory, and notifies observers so the log viewer can page through history.
- */
 object LogStore {
 
-    /** Maximum number of log items kept in memory (oldest are dropped). */
     const val MAX_BUFFER_SIZE = 2_000
 
-    /** Number of items loaded per page in the log viewer. */
     const val PAGE_SIZE = 50
 
     private const val TAG = LogTags.LOG_STORE
     private const val RETRY_DELAY_MS = 3_000L
     private const val DEFAULT_MIN_SEVERITY = 4
 
-    /** The process-lifetime capture the log viewer reads from. */
     internal val capture = LogCapture(MAX_BUFFER_SIZE)
 
     private val started = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // The application context lives for the whole process, so holding it in a
-    // process-lifetime singleton is not a leak (lint cannot see that).
+    // 应用级 context 与进程同生命周期，放在进程级单例里不会泄漏（lint 看不出来）。
     @SuppressLint("StaticFieldLeak")
     @Volatile
     private var profiles: ProfileStore? = null
@@ -278,7 +214,6 @@ object LogStore {
     @Volatile
     private var minSeverityCheckedAt = 0L
 
-    /** Start capturing logcat output for the lifetime of the process. Idempotent. */
     fun start(context: Context) {
         if (!started.compareAndSet(false, true)) return
         profiles = ProfileStore.get(context.applicationContext)
@@ -295,12 +230,7 @@ object LogStore {
         }
     }
 
-    /**
-     * Tails `logcat -s <tags>` without clearing the device buffer. A marker
-     * line is written first; everything before it in the buffer belongs to an
-     * earlier process run and is dropped, so the store only holds logs
-     * produced by this process.
-     */
+    /** 增量跟踪 `logcat -s <tags>`，不清空设备缓冲区；先写标记行，标记之前的日志全部丢弃。 */
     private suspend fun readLogcatLoop() {
         Log.i(TAG, LogParser.MARKER)
         val tags = LogTags.ALL.joinToString(" ")
@@ -334,11 +264,7 @@ object LogStore {
         capture.append(item)
     }
 
-    /**
-     * Minimum severity for capture-time filtering, read from the active
-     * profile. Re-evaluated at most once per second: the profile lookup
-     * deserializes the whole profile list and is too expensive per line.
-     */
+    /** 采集期过滤阈值，取自当前配置档；每秒最多重读一次：逐行反序列化整份档案列表太贵。 */
     private fun currentMinSeverity(): Int {
         val now = SystemClock.elapsedRealtime()
         if (now - minSeverityCheckedAt >= 1_000L) {

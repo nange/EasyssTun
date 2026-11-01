@@ -18,9 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Tests for the home-screen server spinner. The controller is the only guard
- * that restoring the active entry is not mistaken for the user switching
- * servers, and that a spinner refresh does not rebuild an unchanged list.
+ * 覆盖首页服务器下拉框：控制器是唯一能保证「回填 active 项不被误当成用户切换」以及「刷新不重建未变化的列表」的地方。
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -59,8 +57,7 @@ class ServerSpinnerControllerTest {
         ServerSpinnerController(context, spinner, store) { selected = it }
 
     /**
-     * Invokes the listener the way the spinner does on its next layout: after
-     * [ServerSpinnerController.refresh] has already returned.
+     * 按 spinner 在下次布局时的行为触发监听：此时 [ServerSpinnerController.refresh] 已返回。
      */
     private fun select(position: Int) {
         requireNotNull(spinner.onItemSelectedListener)
@@ -88,7 +85,7 @@ class ServerSpinnerControllerTest {
         store.select("b")
         controller().refresh()
 
-        // The spinner delivers this on the next layout, i.e. after refresh().
+        // spinner 在下次布局时才派发该回调，即 refresh() 之后。
         select(1)
 
         assertNull(selected)

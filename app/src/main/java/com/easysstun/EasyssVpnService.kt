@@ -35,21 +35,14 @@ import java.util.Locale
 
 
 /**
- * Foreground service that owns the TUN interface and the native tunnel.
- *
- * It is also the only component that reports tunnel facts: every state change
- * is published through [VpnController], which the home screen renders. The
- * service never writes [Pref.userWantsVpn] — the user's intent is owned by the
- * controller, so a failed start stays a [VpnState.Failed] the UI can explain
- * instead of silently turning the intent off and reconnecting on the next
- * render.
+ * 拥有 TUN 网卡与 native 隧道的前台服务，也是唯一的事实上报方：状态一律经 [VpnController] 发布；绝不写 [Pref.userWantsVpn]（意图归 controller），否则启动失败会静默关掉意图、下次渲染又自动重连。
  */
 class EasyssVpnService : VpnService() {
     private var tunFd: ParcelFileDescriptor? = null
 
     private lateinit var pref: Pref
 
-    /** Profile repository; readable at any point, unlike [pref]. */
+    /** 配置档仓库：随时可读，不像 [pref] 要等 startService 初始化。 */
     private val profiles: ProfileStore
         get() = ProfileStore.get(this)
 
@@ -57,19 +50,16 @@ class EasyssVpnService : VpnService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private val statsClient = StatsClient()
     private var notificationUpdaterJob: Job? = null
-    // Guards the async startup sequence: onStartCommand / startService must
-    // not launch a second Mobile.start while one is in flight (the AAR
-    // rejects "already started"), and a hot restart must wait for the
-    // previous startup to fully unwind.
+    // 启动互斥：同一时刻只允许一个 Mobile.start（AAR 会拒绝「already started」），
+    // 热重启必须等上一次启动完全退出；onStartCommand 重入也由它挡住。
     @Volatile
     private var isStarting: Boolean = false
-    // True from the moment a teardown is requested until it completes. A second
-    // disconnect while the first teardown is still running must not start a
-    // competing shutdown (which would finalize the service twice).
+    // 拆除中标志：从请求拆除到完成期间为 true，期间第二次 disconnect 不得再起一套
+    // 拆除，否则 finalizeStop 会执行两次、服务被重复收尾。
     @Volatile
     private var isStopping: Boolean = false
-    // Set when the controller issued a follow-up start while finalizing (server
-    // switch), so onDestroy() knows the next instance is already on its way.
+    // controller 在收尾期间已排好后续启动（切服务器）时置位，onDestroy 据此不把
+    // 即将接替的新实例当成已消失而回收。
     @Volatile
     private var replacedByController: Boolean = false
 
@@ -84,8 +74,7 @@ class EasyssVpnService : VpnService() {
         }
 
         if (intent == null) {
-            // System restart: no Intent is replayed, so the service recovers
-            // the active profile, proxy mode and app list from the stores.
+            // 系统重启（START_STICKY）不重放 Intent：配置一律从仓库重新读取。
             Log.i(TAG, "onStartCommand: no Intent (system restart), loading configuration from the stores.")
         } else if (intent.action != ACTION_CONNECT) {
             Log.w(TAG, "onStartCommand: unexpected action '${intent.action}', treating it as a connect request.")
@@ -94,8 +83,7 @@ class EasyssVpnService : VpnService() {
         return try {
             if (startService()) START_STICKY else START_NOT_STICKY
         } catch (e: Exception) {
-            // A start that never reached the startup coroutine must not leave the
-            // home screen waiting in "connecting" forever.
+            // 未进到启动协程就失败也必须上报，否则首页会永远停在「连接中」。
             Log.e(TAG, "onStartCommand: unexpected start failure", e)
             controller.onServiceFailed(
                 e.message ?: getString(R.string.error_start_service_failed),
@@ -128,27 +116,22 @@ class EasyssVpnService : VpnService() {
         super.onDestroy()
         unregisterReceiver(configChangeReceiver)
         serviceScope.cancel()
-        // Defensive net: a system-initiated destroy skips the stop path, so the
-        // controller must not keep advertising a tunnel that no longer exists.
-        // A planned replacement (server switch) already started the next
-        // instance, so it must not be reconciled away.
+        // 系统销毁会跳过 stop 路径，必须通知 controller，否则它仍宣称隧道存在；
+        // 但切换服务器时新实例已启动，不能被当作消失回收。
         if (!replacedByController) controller.onServiceDestroyed()
         Log.i(TAG, "onDestroy: service destroyed, cancelling the service scope.")
     }
 
     override fun onRevoke() {
         super.onRevoke()
-        // The system revoked the VPN permission (another VPN took over, or the
-        // user revoked it in Settings). That is an explicit user/system action,
-        // so the persisted intent is cleared here, in the controller.
+        // 系统撤销 VPN 授权（被其他 VPN 顶替或在设置里撤销）是明确动作，
+        // 持久化意图由 controller 在此清除。
         controller.onPermissionRevoked()
         stopService()
     }
 
     /**
-     * Builds and starts the tunnel. Returns true when a startup sequence is in
-     * flight (or the tunnel is already up), false when the service could not
-     * start and has already reported the failure and stopped itself.
+     * 启动隧道：返回 true 表示启动流程已在进行或隧道已在运行；false 表示无法启动，此时已上报失败并自行停止。
      */
     fun startService(): Boolean {
         if (tunFd != null || isStarting) {
@@ -156,26 +139,20 @@ class EasyssVpnService : VpnService() {
             return true
         }
         if (isStopping) {
-            // The teardown owns the native stack; starting underneath it is the
-            // exact start/stop race this service is careful to avoid. The
-            // controller blocks connect() while Stopping, so this is defensive:
-            // the teardown's own finalize reports the state right after.
+            // 拆除期间 native 栈归拆除方所有，此时启动会撞上 start/stop 竞态；controller
+            // 在 Stopping 已挡住 connect，这里只是兜底，拆除结束自会上报状态。
             Log.w(TAG, "startService: teardown in progress, dropping the start request.")
             return false
         }
 
         pref = Pref(this)
 
-        // The service and the UI run in the same process, so the active
-        // profile, proxy mode and app list are read from the stores instead
-        // of being serialized through the start Intent.
+        // 服务与 UI 同进程：活动配置档、代理模式和分应用列表直接读仓库，不经 Intent 序列化。
         val profile = profiles.active()
         if (profile == null) {
             Log.w(TAG, "startService: no active server profile, not starting.")
-            // Do not leave a started service without a tunnel or notification.
-            // Callers using startForegroundService() must validate the profile
-            // first: the platform requires startForeground() before stopping an
-            // FGS-started instance (ServiceReceiver enforces that check).
+            // 不留无隧道无通知的已启动服务；用 startForegroundService() 的调用方须先校验配置档，
+            // 平台要求 FGS 实例先 startForeground() 再停止（ServiceReceiver 已做该检查）。
             controller.onServiceFailed(getString(R.string.error_no_active_profile), null)
             stopSelf()
             return false
@@ -183,17 +160,12 @@ class EasyssVpnService : VpnService() {
         controller.onServiceStarting(profile.id)
         Log.i(TAG, "startService: loaded active profile '${profile.name}' (${profile.id})")
 
-        /* VPN builder: built now, but establish() is deferred until the
-         * easyss SOCKS5 proxy is confirmed ready (see startup sequence
-         * below). Establishing the TUN first would make Android route app
-         * traffic (including the first DNS queries and the connectivity
-         * check) into a tunnel nobody is serving yet — the dropped packets
-         * surface as 10s+ first page loads right after enabling. */
+        // VPN builder 现在只构建，establish() 要等 SOCKS5 代理确认就绪：先建 TUN 会把 DNS
+        // 查询和连通性检查丢进无人服务的隧道，表现为开启后首页卡 10s+。
         val builder = buildVpnBuilder()
 
-        // Write every config file the native stack needs before establishing
-        // the VPN. A write failure is reported instead of silently starting
-        // with a stale (or missing) CA / routing-rules file.
+        // 必须在建立 VPN 前写完 native 需要的配置文件；写失败要上报，不能带着过期或缺失的
+        // CA/路由规则静默启动。
         val configWriter = ProfileConfigWriter(cacheDir)
         val configPaths = configWriter.writeProfileFiles(profile).getOrElse { error ->
             Log.e(TAG, "startService: could not write the profile config files", error)
@@ -220,29 +192,21 @@ class EasyssVpnService : VpnService() {
         val startupElapsed: () -> Long = { SystemClock.elapsedRealtime() - startElapsed }
         mobileJob = serviceScope.launch {
             try {
-                // libeasyss prints a version banner in its CLI only, never
-                // through the gomobile binding used here, so log it for the
-                // in-app log viewer before the startup sequence begins.
+                // libeasyss 只在 CLI 打印版本横幅，gomobile 绑定不会输出，故在此补一条供 App 内日志查看。
                 logVersionBanner("profile='${profile.name}' logLevel=${profile.logLevel}")
 
-                // Foreground immediately with a "connecting" state: the
-                // startup sequence waits for the proxy to become ready and
-                // can take a few seconds, and Android requires the
-                // foreground service to be announced promptly.
+                // 立刻进前台并显示「连接中」：启动要等代理就绪、可能耗时数秒，而 Android 要求尽快公告前台服务。
                 showForeground(
                     buildNotification(channelName, profile.name, getString(R.string.notification_connecting))
                 )
 
-                // Mobile.start() mirrors the Go export `func Start(cfg) error`:
-                // the gomobile binding throws Exception carrying the specific Go
-                // error text when startup fails. Surface it to the user via a
-                // dialog instead of silently tearing down.
+                // Mobile.start() 对应 Go 的 `func Start(cfg) error`：失败时 gomobile 绑定抛 Exception
+                // 并带 Go 错误文本，须透传给用户，不能静默拆除。
                 try {
                     Mobile.start(config)
                     Log.i(TAG, "startup: Mobile.start() done, t+${startupElapsed()}ms")
                 } catch (e: CancellationException) {
-                    // User stopped the service while startup was in flight; let
-                    // the outer catch rethrow and the teardown own the cleanup.
+                    // 启动途中用户已停止：交给外层 catch 重抛，清理归拆除路径。
                     throw e
                 } catch (e: Exception) {
                     val message = e.message ?: e.toString()
@@ -261,9 +225,7 @@ class EasyssVpnService : VpnService() {
                 }
                 coroutineContext.ensureActive()
 
-                // Only the SOCKS5 readiness above gates the VPN, so no app
-                // traffic (or Android's connectivity check) is dropped into a
-                // dead TUN: the native core is already up at this point.
+                // 只有上面的 SOCKS5 就绪检查放行 VPN：此时 native 核心已起，不会有流量掉进死 TUN。
                 val newTunFd = builder.establish()
                 if (newTunFd == null) {
                     Log.w(TAG, "startService: Failed to establish new tunFd, it's null.")
@@ -273,13 +235,9 @@ class EasyssVpnService : VpnService() {
                 tunFd = newTunFd
                 Log.i(TAG, "startService: Successfully established new tunFd: ${newTunFd.fd}, t+${startupElapsed()}ms")
 
-                // The teardown waits for this coroutine before stopping the
-                // native stack, but the last steps below are not suspendable, so
-                // re-check cancellation right before touching TProxy.
+                // 拆除方会等本协程结束后才停 native 栈，而下面几步不可挂起，动 TProxy 前必须再查一次取消。
                 coroutineContext.ensureActive()
 
-                // Natives of the hev-socks5-tunnel AAR; the binding class coming
-                // from hev.htproxy is imported at the top of this file.
                 val started = TProxyService.TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
                 if (!started) {
                     Log.w(TAG, "startService: TProxyStartService reported failure")
@@ -290,12 +248,10 @@ class EasyssVpnService : VpnService() {
                 createNotification(channelName, profile.name)
                 startNotificationUpdater(channelName, profile.name, profile.statsUrl())
                 Log.i(TAG, "startup: service fully started, t+${startupElapsed()}ms")
-                // waitForSocksReady() proved the SOCKS5 listener is serving and
-                // TProxy is running, so the local proxy is usable from here.
+                // 此时 SOCKS5 已在服务、TProxy 已启动，本地代理可用，才能上报运行中。
                 controller.onServiceRunning(profile.id)
             } catch (e: CancellationException) {
-                // User stopped the service while startup was in flight; the
-                // teardown path owns the cleanup.
+                // 启动途中用户已停止：清理归拆除路径。
                 Log.d(TAG, "startup: cancelled, t+${startupElapsed()}ms")
                 throw e
             } catch (e: Exception) {
@@ -311,10 +267,6 @@ class EasyssVpnService : VpnService() {
         return true
     }
 
-    /**
-     * Builds the VpnService builder: addresses, routes, MTU and the per-app
-     * routing rules of the current proxy mode.
-     */
     private fun buildVpnBuilder(): Builder {
         var session = String()
         val builder = Builder()
@@ -339,18 +291,8 @@ class EasyssVpnService : VpnService() {
         val apps = AppSelectionStore(pref).selected(proxyMode)
         Log.i(TAG, "Per-app routing: mode=$proxyMode, ${apps.size} selected apps")
 
-        // VpnService forbids mixing addAllowedApplication and
-        // addDisallowedApplication on one builder, so the easyss process's
-        // self-bypass must be expressed differently per mode:
-        //  - bypass mode: every app except the disallowed ones is routed, so
-        //    the easyss process itself must be disallowed explicitly — its
-        //    outbound dials to the proxy server would otherwise be routed
-        //    back into the TUN (self-loop) and never connect.
-        //  - proxy-only mode: only the allowed apps are routed; every other
-        //    app (including the easyss process) already bypasses the VPN, so
-        //    no self entry is needed. Guard against the user selecting the
-        //    app itself in the allowed list, which would re-introduce the
-        //    self-loop.
+        // VpnService 禁止在同一 builder 混用 allow/disallow：bypass 模式必须显式 disallow 自身，
+        // 否则出站拨号会被路由回 TUN 形成自环；proxy-only 模式只需把自身从允许列表剔除。
         val selfName = applicationContext.packageName
         if (proxyMode == Pref.PROXY_MODE_PROXY_ONLY) {
             val allowedApps = apps.filterNot { it == selfName }
@@ -385,9 +327,7 @@ class EasyssVpnService : VpnService() {
     }
 
     /**
-     * Best-effort cleanup for a startup that could not complete: stop whatever
-     * part of the native stack came up, close the TUN fd, report the failure to
-     * the controller and stop the service.
+     * 启动失败兜底清理：停掉已起来的 native 部分、关 TUN fd、上报失败后停止服务；每步都容错，否则清理异常会吞掉失败上报。
      */
     private fun finishStartupFailure(message: String, profileId: String) {
         Log.w(TAG, "finishStartupFailure: $message")
@@ -404,21 +344,13 @@ class EasyssVpnService : VpnService() {
         notificationUpdaterJob?.cancel()
         notificationUpdaterJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
-        // Report before stopping so the failure is not lost if the process is
-        // torn down right after stopSelf().
+        // 先上报再停止：进程若在 stopSelf() 后立刻被杀，失败信息就丢了。
         controller.onServiceFailed(message, profileId)
         stopSelf()
     }
 
     /**
-     * Polls the local SOCKS5 listener until it accepts a real SOCKS5
-     * handshake (greeting -> method selection reply), which proves the
-     * easyss proxy is serving, or [timeoutMs] elapses. Mirrors the Go side's
-     * Socks5Server.waitForAccept probe. A plain TCP connect is not enough:
-     * the listener may be bound at the kernel level before the accept loop
-     * is registered.
-     *
-     * [nowMillis] and [probe] are injectable for tests.
+     * 轮询本地 SOCKS5 直到完成一次真实握手（greeting→方法选择回复）或 [timeoutMs] 超时；只做 TCP 连接不够，监听端口可能已绑定但 accept 循环尚未注册。
      */
     internal fun waitForSocksReady(
         port: Int,
@@ -456,9 +388,7 @@ class EasyssVpnService : VpnService() {
         }
         val startupActive = mobileJob?.isActive == true
         if (tunFd == null && !startupActive && !isStarting) {
-            // Nothing to tear down. Finalizing anyway is what removes a residual
-            // service instance: an idle ACTION_DISCONNECT used to return here
-            // without stopSelf(), leaving a started (but useless) service behind.
+            // 无事可拆也要收尾：否则残留的服务实例不会 stopSelf()，变成空转服务。
             Log.d(TAG, "stopService: nothing to tear down, finalizing the idle instance.")
             isStopping = true
             finalizeStop()
@@ -470,11 +400,7 @@ class EasyssVpnService : VpnService() {
     }
 
     /**
-     * Tears down the current tunnel and re-establishes it with the latest
-     * persisted configuration. Used when [ConfigChangeNotifier] signals a change
-     * while the VPN is running (active profile edited, proxy mode toggled, app
-     * list changed), so the service keeps running with the new config instead of
-     * stopping for good.
+     * 按最新持久化配置重建隧道：VPN 运行中收到 [ConfigChangeNotifier] 变更时调用，服务继续运行而不是永久停止。
      */
     private fun restartService() {
         if (isStopping) {
@@ -483,14 +409,12 @@ class EasyssVpnService : VpnService() {
         }
         Log.i(TAG, "restartService() called. Tearing down tunnel to reload latest prefs.")
         isStopping = true
-        // Report the restart window as Connecting: the local proxy is about to
-        // be unusable, so TunnelState.ready must drop now instead of staying
-        // true for the whole teardown (and the home screen must stop polling a
-        // stats endpoint that is being torn down).
+        // 先把重启窗口上报为 Connecting：本地代理即将不可用，TunnelState.ready 必须立刻落下，
+        // 首页也要停止轮询正在拆除的 stats 端点。
         profiles.active()?.let { controller.onServiceStarting(it.id) }
         shutdownTunnel {
             if (!pref.userWantsVpn) {
-                // User pressed stop while the tunnel was being torn down.
+                // 拆除期间用户按了停止。
                 Log.w(TAG, "performRestart: user no longer wants the VPN. Finalizing stop instead.")
                 finalizeStop()
                 return@shutdownTunnel
@@ -503,14 +427,7 @@ class EasyssVpnService : VpnService() {
     }
 
     /**
-     * Common teardown sequence: waits for an in-flight startup to unwind, stops
-     * the native stack, closes the TUN fd, then runs [onShutdownComplete] on the
-     * main thread.
-     *
-     * The startup job is cancelled and joined *before* `Mobile.stop()` /
-     * `TProxyStopService()`: `Mobile.start()` is a blocking native call, so
-     * cancelling only cooperatively and stopping underneath it raced the native
-     * start/stop inside libeasyss.
+     * 拆除顺序：先取消并 join 启动协程，再停 native 栈，最后在主线程关 TUN fd 并回调 [onShutdownComplete]；`Mobile.start()` 是阻塞 native 调用，只做协作式取消就 `Mobile.stop()` 会与 libeasyss 内部的 start/stop 竞态。
      */
     private fun shutdownTunnel(onShutdownComplete: () -> Unit) {
         notificationUpdaterJob?.cancel()
@@ -519,7 +436,7 @@ class EasyssVpnService : VpnService() {
 
         serviceScope.launch {
             try {
-                // 1. Cancel the in-flight startup and wait for it to finish.
+                // 1. 先取消并 join 启动协程，再动 native 栈。
                 val job = mobileJob
                 if (job != null && job.isActive) {
                     Log.d(TAG, "shutdownTunnel: cancelling and joining mobileJob.")
@@ -533,7 +450,7 @@ class EasyssVpnService : VpnService() {
                     }
                 }
 
-                // 2. Stop TProxy (hev-socks5-tunnel), then Mobile.
+                // 2. 先停 TProxy，再停 Mobile。
                 runCatching { TProxyService.TProxyStopService() }
                     .onFailure { Log.e(TAG, "shutdownTunnel: TProxyStopService failed: ${it.message}", it) }
                 runCatching { Mobile.stop() }
@@ -557,9 +474,7 @@ class EasyssVpnService : VpnService() {
     }
 
     /**
-     * Final Java-level stop: removes the notification, closes the TUN fd, stops
-     * this service instance and lets the controller decide what comes next
-     * (Idle, or the second half of a server switch).
+     * 最终收尾：移除通知、关闭 TUN fd、停掉本服务实例；后续是 Idle 还是切换服务器的后半程由 controller 决定。
      */
     private fun finalizeStop() {
         notificationUpdaterJob?.cancel()
@@ -574,8 +489,7 @@ class EasyssVpnService : VpnService() {
         isStopping = false
         Log.d(TAG, "finalizeStop: calling stopSelf().")
         stopSelf()
-        // After stopSelf() so a switch's follow-up start cannot be swallowed by
-        // the stop this service instance is performing right now.
+        // 放在 stopSelf() 之后：否则切换服务器时的后续启动会被本次停止吞掉。
         replacedByController = controller.onServiceStopped()
     }
 
@@ -612,7 +526,7 @@ class EasyssVpnService : VpnService() {
 
     private fun startNotificationUpdater(channelName: String, profileName: String, statsUrl: String) {
         notificationUpdaterJob = serviceScope.launch {
-            delay(2_000) // brief wait for stats endpoint to be ready
+            delay(2_000) // 等 stats 端点就绪
             while (isActive) {
                 val contentText = fetchStatsContentText(statsUrl)
                     ?: getString(R.string.notification_stats_unavailable)
@@ -645,12 +559,10 @@ class EasyssVpnService : VpnService() {
     }
 
     companion object {
-        // How long startup waits for the easyss SOCKS5 proxy to accept a
-        // real handshake before giving up (see waitForSocksReady).
+        // 启动等待 SOCKS5 完成真实握手的上限，超时即放弃（见 waitForSocksReady）。
         const val STARTUP_READY_TIMEOUT_MS = 30_000L
 
-        // How long a teardown waits for the in-flight startup coroutine before
-        // stopping the native stack anyway (see shutdownTunnel).
+        // 拆除等待启动协程结束的上限，超时后照样停 native 栈（见 shutdownTunnel）。
         const val STARTUP_JOIN_TIMEOUT_MS = 10_000L
 
         const val ACTION_CONNECT = "CONNECT"
@@ -659,11 +571,7 @@ class EasyssVpnService : VpnService() {
         private const val TAG = LogTags.SERVICE
 
         /**
-         * Builds the action-only start Intent. Configuration is never passed
-         * through the Intent: the service reads the active profile, proxy mode
-         * and app list from Pref. Callers differ only in how they start the
-         * service ([Context.startService] from the UI,
-         * [Context.startForegroundService] from [ServiceReceiver]).
+         * 只带 action 的启动 Intent：配置绝不走 Intent，服务自己从仓库读；调用方只差在 [Context.startService]（UI）与 [Context.startForegroundService]（[ServiceReceiver]）。
          */
         fun connectIntent(context: Context): Intent =
             Intent(context, EasyssVpnService::class.java).setAction(ACTION_CONNECT)

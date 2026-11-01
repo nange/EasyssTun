@@ -4,10 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.util.Locale
 
-/**
- * Tests for the formatBytes() and formatDuration() helper functions
- * extracted from MainFragment.
- */
+/** 覆盖从 MainFragment 抽出的 formatBytes() 与 formatDuration()。 */
 class MainFragmentHelpersTest {
 
     // ── formatBytes ──────────────────────────────────────────────
@@ -60,22 +57,11 @@ class MainFragmentHelpersTest {
 
     @Test
     fun formatBytes_boundaryValues() {
-        // 999 bytes -> B
         assertTrue("999 should be B", formatBytes(999).contains("B") && !formatBytes(999).contains("K"))
-
-        // 1_000 bytes -> K
         assertTrue("1000 should be K", formatBytes(1_000).contains("K"))
-
-        // 999_999 bytes -> K
         assertTrue("999_999 should be K", formatBytes(999_999).contains("K"))
-
-        // 1_000_000 bytes -> M
         assertTrue("1_000_000 should be M", formatBytes(1_000_000).contains("M"))
-
-        // 999_999_999 bytes -> M
         assertTrue("999_999_999 should be M", formatBytes(999_999_999).contains("M"))
-
-        // 1_000_000_000 bytes -> G
         assertTrue("1_000_000_000 should be G", formatBytes(1_000_000_000).contains("G"))
     }
 
@@ -102,21 +88,20 @@ class MainFragmentHelpersTest {
 
     @Test
     fun formatDuration_hours() {
-        // Zero-valued components are omitted, including seconds.
+        // 为零的分量（含秒）不输出。
         assertEquals("1h", formatDuration(3600.0))
         assertEquals("2h 30m 15s", formatDuration(9015.0))
     }
 
     @Test
     fun formatDuration_days() {
-        // Zero-valued components are omitted, including seconds.
         assertEquals("1d", formatDuration(86400.0))
         assertEquals("2d 6h 30m 45s", formatDuration(196245.0))
     }
 
     @Test
     fun formatDuration_fractionalSeconds_truncates() {
-        // Fractional seconds are truncated (toLong)
+        // 小数秒直接截断（toLong），不四舍五入。
         val result = formatDuration(65.9)
         assertTrue("65.9s should show 1m 5s", result.contains("1m"))
         assertTrue("65.9s should show 1m 5s", result.contains("5s"))
@@ -124,13 +109,11 @@ class MainFragmentHelpersTest {
 
     @Test
     fun formatDuration_onlyDays() {
-        // Zero hours/minutes/seconds are omitted.
         assertEquals("3d", formatDuration(259200.0))
     }
 
     @Test
     fun formatDuration_largeValue() {
-        // 10 days, 5 hours, 30 minutes, 15 seconds
         val seconds = 10 * 86400.0 + 5 * 3600.0 + 30 * 60.0 + 15.0
         val result = formatDuration(seconds)
         assertTrue("Should contain days", result.contains("10d"))

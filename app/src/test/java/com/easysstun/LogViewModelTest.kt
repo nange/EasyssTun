@@ -9,11 +9,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-/**
- * Tests for LogViewModel's paged window into [LogCapture]: opening shows the
- * latest page, scrolling up loads older pages, and new logs append at the
- * tail without disturbing the loaded window.
- */
+/** 覆盖日志分页窗口：打开显示最新一页、上滑加载更早、新日志追加到尾部且不打断已加载窗口。 */
 class LogViewModelTest {
 
     @get:Rule
@@ -26,14 +22,13 @@ class LogViewModelTest {
 
     @Before
     fun setUp() {
-        // Each test gets its own capture, so no process-wide reset hook is
-        // needed on LogStore.
+        // 每个用例各自持有 capture，无需在 LogStore 上做进程级重置。
         capture = LogCapture()
     }
 
     private fun item(i: Int) = LogItem("msg$i", "12:00", "src", "INFO")
 
-    /** Appends synchronously: the test dispatcher runs the collector inline. */
+    /** 测试调度器内联执行收集器，因此这里用 runBlocking 同步追加。 */
     private fun append(item: LogItem) {
         runBlocking { capture.append(item) }
     }
@@ -81,20 +76,17 @@ class LogViewModelTest {
         val viewModel = LogViewModel(capture)
         viewModel.open()
 
-        // First page: [70, 120)
         assertEquals(50, viewModel.loadMore())
         var items = viewModel.logItems.value!!
         assertEquals(100, items.size)
         assertEquals("msg20", items.first().message)
 
-        // Second page: only [0, 20) remains
         assertEquals(20, viewModel.loadMore())
         items = viewModel.logItems.value!!
         assertEquals(120, items.size)
         assertEquals("msg0", items.first().message)
         assertFalse(viewModel.canLoadMore())
 
-        // Nothing older left: no-op
         assertEquals(0, viewModel.loadMore())
         assertEquals(120, viewModel.logItems.value!!.size)
     }
@@ -105,9 +97,7 @@ class LogViewModelTest {
         val viewModel = LogViewModel(capture)
         viewModel.open()
 
-        // Open: [20, 70)
         assertEquals(50, viewModel.logItems.value!!.size)
-        // Load more: only 20 older items exist
         assertEquals(20, viewModel.loadMore())
         val items = viewModel.logItems.value!!
         assertEquals(70, items.size)
@@ -154,7 +144,7 @@ class LogViewModelTest {
         viewModel.loadMore()
         val before = viewModel.logItems.value!!
 
-        // A second open() (e.g. view recreated) must not reset the window.
+        // 视图重建会再次调用 open()，此时不得重置已加载窗口。
         viewModel.open()
 
         assertEquals(before, viewModel.logItems.value)
@@ -166,7 +156,7 @@ class LogViewModelTest {
         LogViewModel(capture).open()
         repeat(30) { append(item(120 + it)) }
 
-        // Re-entering the log screen creates a new ViewModel.
+        // 重新进入日志页会新建 ViewModel，应重新显示最新一页。
         val viewModel = LogViewModel(capture)
         viewModel.open()
 
@@ -181,18 +171,16 @@ class LogViewModelTest {
         repeat(LogStore.MAX_BUFFER_SIZE) { append(item(it)) }
         val viewModel = LogViewModel(capture)
         viewModel.open()
-        // Load the oldest retained page.
-        while (viewModel.loadMore() > 0) { /* keep going until exhausted */ }
+        while (viewModel.loadMore() > 0) { }
         val sizeBeforeEviction = viewModel.logItems.value!!.size
 
-        // Overfill the buffer: the oldest items (which the window shows) get evicted.
+        // 写满后再溢出：窗口正在展示的最旧条目被淘汰，迫使窗口重建。
         repeat(LogStore.MAX_BUFFER_SIZE + 10) { append(item(10_000 + it)) }
 
         val items = viewModel.logItems.value!!
-        // Window must be rebuilt from the retained range, not crash.
         assertTrue(items.size <= sizeBeforeEviction + 10)
         assertTrue(items.size > 0)
-        // The retained range is [2010, 4010): the newest items (10010..12009).
+        // 保留区间为全局下标 [2010, 4010)，对应最新 10010..12009。
         assertEquals("msg10010", items.first().message)
         assertEquals("msg12009", items.last().message)
     }

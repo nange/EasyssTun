@@ -9,9 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Tests for the Profile data class: serialization, defaults, equality and the
- * migration of profile JSON written by builds that stored every numeric field
- * as a string.
+ * 覆盖 Profile：序列化、默认值、相等性，以及「数字字段存成字符串」的旧 JSON 迁移。
  */
 class ProfileTest {
 
@@ -43,7 +41,7 @@ class ProfileTest {
         password = "pw",
     )
 
-    // ── Round-trip and defaults ─────────────────────────────────
+    // ── 序列化往返与默认值 ─────────────────────────────────
 
     @Test
     fun serializeThenDeserialize_producesEqualProfile() {
@@ -145,16 +143,16 @@ class ProfileTest {
         assertFalse("JSON must no longer contain the removed disableWarmUp key", encoded.contains("disableWarmUp"))
         assertTrue("JSON should contain directFile", encoded.contains("\"directFile\":\"direct_domains_list\""))
         assertTrue("JSON should contain proxyFile", encoded.contains("\"proxyFile\":\"proxy_domains_list\""))
-        // The typed model writes numbers and booleans, not strings.
+        // 类型化模型写出数字与布尔值，不写字符串。
         assertTrue("ports must be serialized as numbers", encoded.contains("\"serverPort\":443"))
         assertTrue("the quic flag must be serialized as a boolean", encoded.contains("\"enableQuic\":true"))
     }
 
-    // ── Legacy JSON migration ───────────────────────────────────
+    // ── 旧 JSON 迁移 ───────────────────────────────────
 
     @Test
     fun legacyJsonWithStringFields_isMigratedToTypedValues() {
-        // Exact shape written by builds before the typed model existed.
+        // 旧版本落盘的字符串字段形态，必须继续能解码。
         val legacyJson = """
             {
                 "id": "legacy-ports",
@@ -187,7 +185,7 @@ class ProfileTest {
 
     @Test
     fun legacyJsonWithBlankNumericFields_decodesAsUnconfigured() {
-        // The form used to allow a blank local port and timeout.
+        // 旧表单允许本地端口与超时留空，空串表示未配置。
         val legacyJson = """
             {
                 "id": "legacy-blank",
@@ -230,8 +228,7 @@ class ProfileTest {
 
     @Test
     fun jsonWithLegacyDisableWarmUpKey_isIgnored() {
-        // Profiles stored while the (since removed) disableWarmUp option existed
-        // still carry the key. Dropping the option must not break decoding.
+        // 旧配置档仍带已删除的 disableWarmUp 键，删字段不能让解码失败。
         val legacyJson = """
             {
                 "id": "legacy",
@@ -274,7 +271,7 @@ class ProfileTest {
         assertEquals(original, decoded)
     }
 
-    // ── Stats endpoint (SOCKS port + 1000) ──────────────────────
+    // ── 统计端点：SOCKS 端口 + 1000 ──────────────────────
 
     @Test
     fun statsPort_withDefaultSocksPort_returns5080() {
@@ -310,7 +307,7 @@ class ProfileTest {
         assertEquals("http://127.0.0.1:5080/stats", Profile.defaultStatsUrl())
     }
 
-    // ── Timeout (native `-t/--timeout` knob) ────────────────────
+    // ── 超时：对应 native `-t/--timeout` ────────────────
 
     @Test
     fun defaultTimeout_isNativeDefault() {
@@ -354,7 +351,7 @@ class ProfileTest {
         )
     }
 
-    // ── Port parsing (profile form) ─────────────────────────────
+    // ── 配置档表单的端口解析 ─────────────────────────────
 
     @Test
     fun parsePortOrNull_acceptsRealPorts() {

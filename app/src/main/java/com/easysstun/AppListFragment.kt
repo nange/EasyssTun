@@ -41,7 +41,7 @@ class AppListFragment : Fragment() {
         adapter = AppListAdapter(requireContext(), viewLifecycleOwner.lifecycleScope)
         adapter.setProxyMode(pref.proxyMode)
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        // Avoid overly large recycled view pool for a simple item layout
+        // 条目布局简单，显式把池子上限设为 50，避免池子无谓增长。
         binding.recyclerView.recycledViewPool.setMaxRecycledViews(0, 50)
         binding.recyclerView.adapter = adapter
 
@@ -49,7 +49,7 @@ class AppListFragment : Fragment() {
             adapter.filter(text?.toString().orEmpty())
         }
 
-        // Initialize toggle state WITHOUT triggering the listener
+        // 先摘监听器再回填选中状态：否则初始化就会写偏好并触发重载。
         val currentMode = pref.proxyMode
         binding.proxyModeToggleGroup.clearOnButtonCheckedListeners()
         if (currentMode == Pref.PROXY_MODE_PROXY_ONLY) {
@@ -71,9 +71,8 @@ class AppListFragment : Fragment() {
                         binding.modeDescription.text = getString(R.string.mode_proxy_only_desc)
                     }
                 }
-                // The routing configuration changed: let a running tunnel reload it.
+                // 分流配置已变：通知运行中的隧道重载。
                 ConfigChangeNotifier.notifyChanged(requireContext())
-                // Reload the app list with the new mode's selections
                 adapter.setProxyMode(pref.proxyMode)
                 reloadList()
             }
@@ -99,8 +98,7 @@ class AppListFragment : Fragment() {
     }
 
     private fun reloadList(showProgress: Boolean = false) {
-        // Resolve everything that needs a Context on the main thread; the loader
-        // itself only receives plain values and can run on an IO thread.
+        // 需要 Context 的东西都在主线程取好；加载器只收纯值，才能放到 IO 线程。
         val packageManager = requireContext().packageManager
         val selfPackage = requireContext().packageName
         val showSystemApps = pref.showSystemApps

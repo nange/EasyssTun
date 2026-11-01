@@ -15,10 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/**
- * Tests for the per-mode app selection store, including the migration of the
- * legacy bypass-only key.
- */
+/** 覆盖按代理模式分开存储的分应用选择，含旧 bypass-only key 的迁移。 */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class AppSelectionStoreTest {
@@ -95,7 +92,7 @@ class AppSelectionStoreTest {
             sharedPreferences.getStringSet(AppSelectionStore.SELECTED_APPS, null),
         )
 
-        // Reading again must not re-run the migration or lose the data.
+        // 再次读取不得重跑迁移，也不能丢数据。
         assertEquals(legacy, store.selected(Pref.PROXY_MODE_BYPASS))
     }
 

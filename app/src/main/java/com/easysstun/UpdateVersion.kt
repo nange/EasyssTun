@@ -1,15 +1,8 @@
 package com.easysstun
 
-/**
- * Version comparison used by the in-app updater.
- *
- * This is a Kotlin port of easyss `selfupdate.HasNewVersion` (see
- * `selfupdate/github.go`), including its deliberate divergence from the semver
- * spec: prerelease identifiers with the same leading word are compared by their
- * numeric tail, so `rc9 < rc19` and `rc19.4 < rc19.10`. The spec's lexical rule
- * would order `rc9` above `rc19`, which is wrong for this project's tags
- * (`v3.0.0-rc19.4`).
- */
+/** 对齐 easyss `selfupdate.HasNewVersion`（`selfupdate/github.go`），故意偏离 semver：
+ * 同前缀的预发布标识按数字尾比较，`rc9 < rc19`、`rc19.4 < rc19.10`；
+ * semver 的字典序会把 `rc9` 排在 `rc19` 之前，与本项目 tag 不符。 */
 internal fun isNewerVersion(current: String, latest: String): Boolean {
     if (current.isBlank()) return true
     val currentVersion = normalize(current, stripGitDescribe = true)
@@ -17,13 +10,13 @@ internal fun isNewerVersion(current: String, latest: String): Boolean {
     val parsedCurrent = parseVersion(currentVersion)
     val parsedLatest = parseVersion(latestVersion)
     if (parsedCurrent == null || parsedLatest == null) {
-        // Unparseable tags (local builds, forks): fall back to "differs".
+        // 本地构建/分叉的 tag 解析不了：退化为「字符串不同即视为新版」。
         return currentVersion != latestVersion
     }
     return compareVersions(parsedLatest, parsedCurrent) > 0
 }
 
-/** Matches the `-<n>-g<sha>` suffix `git describe` appends past the last tag. */
+/** 匹配 `git describe` 在 tag 之后追加的 `-<n>-g<sha>` 后缀。 */
 private val GIT_DESCRIBE_SUFFIX = Regex("-\\d+-g[0-9a-f]+$")
 
 private val VERSION_PATTERN =
@@ -60,14 +53,14 @@ private fun compareVersions(a: AppVersion, b: AppVersion): Int {
     val bPre = b.prerelease
     return when {
         aPre == null && bPre == null -> 0
-        // A release outranks any prerelease of the same major.minor.patch.
+        // 正式版高于同 major.minor.patch 的任何预发布版。
         aPre == null -> 1
         bPre == null -> -1
         else -> comparePrerelease(aPre, bPre)
     }
 }
 
-/** `rc19.4` -> {prefix = "rc", major = 19, minor = 4}, or null without a numeric tail. */
+/** `rc19.4` 解析为 {prefix="rc", major=19, minor=4}；无数字尾时返回 null。 */
 private data class NumericPrerelease(val prefix: String, val major: Int, val minor: Int) : Comparable<NumericPrerelease> {
     override fun compareTo(other: NumericPrerelease): Int {
         if (major != other.major) return major.compareTo(other.major)
@@ -78,7 +71,7 @@ private data class NumericPrerelease(val prefix: String, val major: Int, val min
 private fun parseNumericPrerelease(prerelease: String): NumericPrerelease? {
     var index = 0
     while (index < prerelease.length && prerelease[index] !in '0'..'9') index++
-    // No alphabetic prefix or no numeric tail: let the semver rules decide.
+    // 无字母前缀或无数字尾：交回 semver 规则判断。
     if (index == 0 || index == prerelease.length) return null
 
     val prefix = prerelease.substring(0, index)
@@ -97,7 +90,7 @@ private fun comparePrerelease(a: String, b: String): Int {
     return compareSemverPrerelease(a, b)
 }
 
-/** Standard semver prerelease precedence: numeric identifiers < alphanumeric. */
+/** semver 预发布优先级：纯数字标识低于字母数字标识。 */
 private fun compareSemverPrerelease(a: String, b: String): Int {
     val aParts = a.split('.')
     val bParts = b.split('.')

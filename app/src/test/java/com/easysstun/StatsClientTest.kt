@@ -19,13 +19,12 @@ import org.robolectric.annotation.Config
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class StatsClientTest {
 
-    // Bind explicitly to IPv4: getLoopbackAddress() may return ::1, while the
-    // client URL below is an IPv4 literal.
+    // 显式绑 IPv4：getLoopbackAddress() 可能返回 ::1，而客户端 URL 是 IPv4 字面量。
     private val loopback: InetAddress = InetAddress.getByName("127.0.0.1")
 
     private lateinit var server: HttpServer
 
-    // Written by the test thread, read by the HTTP server's handler thread.
+    // 测试线程写，HTTP handler 线程读。
     @Volatile
     private var status = 200
 
@@ -79,8 +78,7 @@ class StatsClientTest {
 
     @Test
     fun fetch_returnsNullWhenNothingIsListening() = runBlocking {
-        // A dedicated server keeps the shared one running for tearDown (and
-        // avoids relying on HttpServer.stop() being idempotent).
+        // 另起一个服务器：共享的留给 tearDown，也不依赖 HttpServer.stop() 幂等。
         val closed = HttpServer.create(InetSocketAddress(loopback, 0), 0)
         val port = closed.address.port
         closed.start()

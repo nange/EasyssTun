@@ -9,11 +9,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/**
- * Tests for the config-file writer: content comparison (unchanged files are not
- * rewritten), the profile-file paths handed to the native config, and the
- * failure result the service surfaces to the user.
- */
+/** 覆盖配置落盘：内容未变不重写、交给 native 配置的路径，以及服务向用户上报的失败 Result。 */
 class ProfileConfigWriterTest {
 
     @get:Rule
@@ -76,18 +72,17 @@ class ProfileConfigWriterTest {
         val stamp = 1_600_000_000_000L
         assertTrue(file.setLastModified(stamp))
 
-        // Same content: the file must be left untouched (its mtime proves it).
+        // 内容相同：文件不得被重写，用 mtime 证明。
         assertTrue(writer.writeProfileFiles(profile).isSuccess)
         assertEquals("an unchanged file must not be rewritten", stamp, file.lastModified())
 
-        // Different content: the file is rewritten.
         assertTrue(writer.writeProfileFiles(profile.copy(customCa = "new cert")).isSuccess)
         assertEquals("new cert", file.readText())
     }
 
     @Test
     fun writeProfileFiles_ioFailureIsReturnedAsAFailedResult() {
-        // A regular file used as the cache dir makes every write fail.
+        // 用普通文件当缓存目录，使所有写入失败。
         val blocker = File(tmp.root, "blocker").apply { writeText("not a directory") }
         val writer = ProfileConfigWriter(File(blocker, "cache"))
 

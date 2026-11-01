@@ -7,10 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 
 class EasyssTunApplication : Application() {
 
-    /**
-     * Process-scoped updater: the download survives Activity recreation and
-     * the UI observes its state through [UpdateManager.state].
-     */
+    /** 进程级单例：下载跨 Activity 重建存活，UI 只通过 [UpdateManager.state] 观察。 */
     internal val updateManager: UpdateManager by lazy { UpdateManager.create(this) }
 
     override fun onCreate() {
@@ -19,8 +16,7 @@ class EasyssTunApplication : Application() {
             override fun onStart(owner: LifecycleOwner) = AppState.update(true)
             override fun onStop(owner: LifecycleOwner) = AppState.update(false)
         })
-        // Capture logcat for the whole process lifetime so the log viewer can
-        // page through all logs since the process started.
+        // 进程启动即开始采集 logcat，日志页才能回溯本次进程的全部日志。
         LogStore.start(this)
     }
 }

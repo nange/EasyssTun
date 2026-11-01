@@ -11,11 +11,7 @@ import org.json.JSONObject
 private const val TAG = LogTags.STATS
 
 /**
- * One sample of the local easyss stats endpoint (`GET /stats`).
- *
- * The endpoint is served by libeasyss on `127.0.0.1:<socksPort + 1000>`; the
- * JSON keys are the wire contract and are parsed once here instead of being
- * read ad hoc by every consumer (home screen and notification).
+ * 本地 stats 端点快照：端点为 libeasyss 的 `GET /stats`（`127.0.0.1:<socksPort + 1000>`），JSON 键是对外契约，首页与通知栏共用。
  */
 internal data class StatsSnapshot(
     val avgRttMs: Double = 0.0,
@@ -37,11 +33,10 @@ internal data class StatsSnapshot(
     val peakUploadSpeed: String = "",
 ) {
     companion object {
-        /** Parses a response body; null when it is not a JSON object. */
         fun parse(body: String): StatsSnapshot? =
             runCatching { parse(JSONObject(body)) }.getOrNull()
 
-        /** Parses an already-decoded JSON object; missing keys fall back to zero/empty. */
+        /** 缺失的键回退为零或空串，不抛异常。 */
         fun parse(json: JSONObject): StatsSnapshot = StatsSnapshot(
             avgRttMs = json.optDouble("avg_rtt_ms", 0.0),
             conns = json.optInt("conns", 0),
@@ -65,11 +60,7 @@ internal data class StatsSnapshot(
 }
 
 /**
- * Fetches [StatsSnapshot]s from the local easyss HTTP endpoint.
- *
- * A failed request is a normal condition while the tunnel is starting or
- * stopping, so every transport/parse error is mapped to `null` and logged;
- * only coroutine cancellation is rethrown.
+ * 从本地 stats 端点取数；隧道启停期间请求失败属正常：传输/解析错误一律转 null 并记日志，仅协程取消重新抛出。
  */
 internal class StatsClient(
     private val connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,

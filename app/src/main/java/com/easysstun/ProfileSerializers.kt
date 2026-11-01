@@ -15,21 +15,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 
-/**
- * Codec for a numeric profile field that older builds stored as a JSON string.
- *
- * Builds before the typed model wrote `"serverPort": "443"`, `"socksPort": "4080"`
- * and `"timeout": ""`; the typed model writes numbers. Decoding accepts both, so
- * an existing profile store keeps working after the upgrade, and normalizes the
- * value on the next write:
- *
- *  - a JSON number is taken as is;
- *  - a string is trimmed and parsed (`""` or `"abc"` becomes `null`);
- *  - JSON `null` or an unexpected element becomes `null`.
- *
- * `null` means "not configured" and makes the native config fall back to its own
- * default, which is exactly what a blank legacy value used to do.
- */
+/** 旧版本把数值字段存成 JSON 字符串（`"443"`、`"4080"`、`""`），这里两种表示都接受，写入时归一化为数字。
+ * 字符串 trim 后解析，空串/非法值、JSON `null`、意外元素一律读作 `null`；
+ * `null` 表示未配置，由 native 侧自身默认值兜底——正是旧版空值原本的效果。 */
 internal object LenientIntSerializer : KSerializer<Int?> {
 
     override val descriptor: SerialDescriptor =
@@ -54,13 +42,8 @@ internal object LenientIntSerializer : KSerializer<Int?> {
     }
 }
 
-/**
- * Codec for a boolean profile flag that older builds stored as a string.
- *
- * The legacy representation was the exact text "true"/"false" (anything else
- * meant false, matching the old `parseBooleanFlag`). Decoding accepts a JSON
- * boolean or that string form; writing always produces a real JSON boolean.
- */
+/** 旧版本把布尔存成字符串 `"true"`/`"false"`（其余一律 false，与原 `parseBooleanFlag` 一致）；
+ * 解码同时接受 JSON 布尔与该字符串，写入恒为真正的 JSON 布尔。 */
 internal object LenientBooleanSerializer : KSerializer<Boolean> {
 
     override val descriptor: SerialDescriptor =

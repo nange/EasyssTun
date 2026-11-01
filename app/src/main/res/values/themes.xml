@@ -2,7 +2,6 @@
 
     <style name="Theme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.MaterialComponents.LargeComponent</item>
-<!--        <item name="colorPrimary">@color/app_color</item>-->
         <item name="appColorPrimary">@color/app_color</item>
 
         <item name="android:windowTranslucentStatus">false</item>

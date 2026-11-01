@@ -47,8 +47,7 @@ class MainActivity : AppCompatActivity() {
         }
         requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
 
-        // In-app update: render the process-scoped updater state (progress survives
-        // rotation) and run the throttled launch-time check.
+        // 更新器状态是进程级（旋转不丢进度）；autoCheck 内部自带节流。
         val updateManager = (application as EasyssTunApplication).updateManager
         updateDialogs = UpdateDialogs(this, updateManager)
         lifecycleScope.launch {
@@ -61,8 +60,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Continues a pending install after the user returns from the
-        // "install unknown apps" system settings screen.
+        // 用户从「安装未知应用」系统设置返回后，继续挂起的安装流程。
         updateDialogs.onResume()
     }
 
