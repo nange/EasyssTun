@@ -61,25 +61,29 @@ app/src/main/java/com/easysstun/
   EasyssVpnService.kt         # ★ 核心：VpnService 前台服务，建 TUN 网卡、启动 native 隧道、通知栏管理
   VpnState.kt / VpnController.kt  # ★ VPN 状态的唯一真相来源：进程级 StateFlow + connect/disconnect/switchTo 命令
   MainFragment.kt             # ★ 主界面：渲染 VpnState、连接/取消、服务器切换、统计与更新卡片
-  ServerProfileActivity.kt    # 服务器配置档编辑页
+  ServerSpinnerController.kt  # 首页服务器下拉框（列表重建、active 选中回填、用户选择回调）
+  ServerProfileActivity.kt / SpinnerOption.kt  # 服务器配置档编辑页（ViewBinding）与「显示文案/存储值」双数组下拉框
   Profile.kt / ProfileSerializers.kt  # 服务器配置数据模型（端口/超时/QUIC 为类型化字段，含旧 JSON 迁移）
   Pref.kt                     # 仅键值访问（偏好读写；不含档案、分应用、配置文件注册表）
   ProfileStore.kt             # ★ 服务器档案仓库：CRUD + active id 不变量 + changes 变更事件
   AppSelectionStore.kt        # 分应用选择（按代理模式分开存储 + 旧 key 迁移）
   ProfileConfigWriter.kt      # 原生配置落盘（CA/规则/tproxy；返回 Result，内容未变不重写）
   ConfigChangeNotifier.kt     # 配置变更的唯一广播出口（运行中的隧道据此重载）
-  AppListFragment.kt / AppListAdapter.kt  # 分应用代理选择列表
-  LogFragment.kt              # 运行日志查看
-  SettingsFragment.kt         # 偏好设置页（服务器配置）
+  AppListFragment.kt / AppListAdapter.kt  # 分应用代理选择列表（ViewBinding；标签/图标加载随 ViewHolder 回收取消）
+  LogFragment.kt              # 运行日志查看（ViewBinding + ListAdapter，按页加载历史）
+  SettingsFragment.kt / ServerProfileAdapter.kt  # 偏好设置页（RecyclerView + ListAdapter 的服务器列表）
   UpdateManager.kt / UpdateSource.kt      # ★ 应用内更新：节流检查、下载状态机、GitHub API 与本地代理回退
   UpdateRelease.kt / UpdateVersion.kt     # Release 解析/选包、版本比较（rc 数字按数值比较）
   UpdateInstaller.kt / UpdateDialogs.kt   # 签名校验、FileProvider 安装 intent、更新弹窗
   UpdateCardView.kt           # 首页统计卡片下方的「软件更新」卡片（版本号、自动检查开关、检查/下载）
   ServiceReceiver.kt          # 开机自启广播接收
   Stats.kt / StatsBinder.kt   # ★ 本地 stats 端点客户端/快照（首页与通知栏共用）及统计卡片渲染
+  LogTags.kt                  # 全部 logcat tag 的唯一来源；LogParser 的捕获列表由 LogTags.ALL 生成
   AppJson.kt                 # 共享 kotlinx.serialization Json 配置（档案、Intent payload、Release）
   AppState.kt / TunnelState.kt / FormatUtils.kt / EasyssTunApplication.kt  # 辅助类（AppState=前后台，TunnelState=隧道就绪）
 app/src/main/res/xml/file_paths.xml     # FileProvider 路径（cacheDir/updates）
+app/src/main/res/xml/network_security_config.xml  # 仅 127.0.0.1/localhost 允许明文 HTTP
+app/src/main/res/xml/backup_rules.xml / data_extraction_rules.xml  # 备份/换机排除 sharedpref（含明文密码）
 app/libs/                     # ★ 本地 AAR 依赖（均不入库，首次构建自动下载）
   libeasyss.aar               #   easyss 代理原生库
   hev-socks5-tunnel.aar       #   tun2socks 实现（上游 heiher/hev-socks5-tunnel 预编译，含 4 ABI .so + 自带绑定类的 classes.jar）
@@ -96,6 +100,7 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - **签名**：优先读本地 `keystore.properties`；CI 走 `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` 环境变量。两者都没有时 release 构建产出未签名 APK。
 - **debug 变体**：包名后缀 `.debug`，应用名带 "(Debug)"，可与正式版共存。
 - **APK 命名**：`EasyssTun_v{versionName}_{versionCode}_{abi}_{variant}_{yyyyMMdd}.apk`。
+- **网络安全与备份**：全局 `usesCleartextTraffic` 已移除，`res/xml/network_security_config.xml` 仅对 `127.0.0.1` / `localhost` 放行明文（本地 stats/更新代理），新增其他明文端点必须显式加入该配置。服务器档案的密码以明文存于默认 SharedPreferences，`backup_rules.xml` 与 `data_extraction_rules.xml` 均排除 `sharedpref` 域，勿把该域加回备份。
 - **应用内更新（勿破坏的对外契约）**：App 通过 `https://api.github.com/repos/nange/EasyssTun/releases/latest` 检查更新（`UpdateRelease.kt`），依赖以下约定：
   1. APK 命名必须保持上面的格式，解析正则见 `UpdateRelease.kt`；只接受 `release` 变体与设备支持的 ABI，`{versionName}` 必须等于 release tag 去掉前缀 `v`。
   2. `versionCode` 必须单调递增，且与 `versionName` 同时更新：更新器要求两者都比当前安装版本新，否则按「发布信息不一致」拒绝安装。
@@ -117,6 +122,8 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - minSdk 为 33，可以使用较新的 Android API，无需做低版本兼容分支。
 - 配置层职责：`Pref` 只做键值访问（原始 SharedPreferences 私有）；服务器档案一律走 `ProfileStore`（CRUD + active id 不变量 + `changes` 变更事件），分应用选择走 `AppSelectionStore`，原生配置文件走 `ProfileConfigWriter`（返回 `Result`，内容未变不重写）。写入配置的 setter 不会自动重启隧道；需要运行中的隧道重载时，由调用方显式调用 `ConfigChangeNotifier.notifyChanged()`。
 - `Profile` 的端口/超时/QUIC 字段是类型化的（`Int?` / `Boolean`），旧版本写入的字符串 JSON 由 `LenientIntSerializer` / `LenientBooleanSerializer` 兼容，不要退回字符串字段。
+- UI 层一律使用 ViewBinding（含自定义 View 内部），不要新增 `findViewById`；列表用 `RecyclerView` + `ListAdapter`/`AsyncListDiffer`，异步加载的图标/文案必须绑定到 ViewHolder 并在回收时取消。用户可见文案必须同时写入 `values/strings.xml` 与 `values-zh/strings.xml`。
+- 日志：tag 统一定义在 `LogTags`，新增 logger 必须把 tag 加进 `LogTags.ALL`（否则 `logcat -s` 过滤会丢弃该 tag）；高频状态变化用 `Log.d`，不要用 INFO 刷屏。
 
 ## 测试
 
@@ -125,7 +132,8 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（偏好键值）。
 - 配置层与档案模型的覆盖：`ProfileStoreTest`（CRUD、active id 回退、变更事件、损坏 JSON）、`AppSelectionStoreTest`（按模式隔离、旧 key 迁移）、`ProfileConfigWriterTest`（写入、内容未变不重写、失败 Result）、`ProfileTest`（类型化字段、旧 JSON 迁移、端口/超时解析）。
 - VPN 状态机与首页状态的覆盖：`VpnControllerTest`（命令幂等、切服、失败只报一次、撤权、进程重建/resume、TunnelState 派生）、`MainFragmentStateTest`（连接/停止/切服中旋转/失败弹窗的 UI 状态）、`EasyssVpnServiceConfigTest`（无有效配置上报 Failed、空闲 DISCONNECT 会 stopSelf）。
-- 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比）。
+- 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比/时长/字节单位）。
+- UI 表单与列表的覆盖：`ServerProfileActivityTest`（字段 trim、端口/超时校验、重名拒绝、下拉框值往返）、`MainFragmentStateTest`（首页 spinner 与 VpnState 渲染）、`UpdateCardViewTest`（卡片版本号/debug 提示/重新挂载后重新订阅）、`LogViewModelTest`（日志分页窗口）。
 
 ## Git 提交与 PR 规范
 
