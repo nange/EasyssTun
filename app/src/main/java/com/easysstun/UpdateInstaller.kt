@@ -11,7 +11,7 @@ import androidx.core.net.toUri
 import java.io.File
 import java.security.MessageDigest
 
-private const val TAG = "Updater"
+private const val TAG = LogTags.UPDATER
 private const val UPDATE_DIR = "updates"
 private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
 

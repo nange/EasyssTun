@@ -30,6 +30,6 @@ class VersionInfoTest {
     fun versionLogTag_isCapturedByLogStore() {
         // The banner is only visible in the viewer while its tag is part of the
         // logcat filter LogStore starts with.
-        assertTrue(LogParser.APP_LOG_TAGS.contains(VERSION_LOG_TAG))
+        assertTrue(LogTags.ALL.contains(VERSION_LOG_TAG))
     }
 }

@@ -360,7 +360,7 @@ internal class VpnController private constructor(
     }
 
     companion object {
-        private const val TAG = "VpnController"
+        private const val TAG = LogTags.VPN_CONTROLLER
 
         @Volatile
         private var instance: VpnController? = null

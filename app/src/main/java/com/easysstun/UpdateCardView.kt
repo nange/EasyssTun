@@ -89,6 +89,12 @@ class UpdateCardView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         stateJob?.cancel()
         stateJob = null
+        // bind() early-returns when the same manager/owner is passed again, so
+        // the binding must be forgotten here: a view that is detached and
+        // re-attached (e.g. moved to another parent) would otherwise never
+        // re-subscribe to the state flow.
+        boundManager = null
+        boundOwner = null
         super.onDetachedFromWindow()
     }
 }

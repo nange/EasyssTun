@@ -204,69 +204,68 @@ dependencies {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-download libeasyss.aar from nange/easyss latest GitHub release
-// if it doesn't exist locally (e.g., in CI / fresh checkout).
+// Auto-download of a prebuilt AAR from a GitHub release, shared by the two
+// native dependencies below. A pinned version uses the direct asset URL and
+// skips the API call; without a pin the latest release is resolved through the
+// GitHub API (GITHUB_TOKEN is used when present to avoid rate limiting).
 // ---------------------------------------------------------------------------
+def downloadAar = { String repo, String version, String assetName, File targetFile ->
+    def downloadUrl
+    def releaseTag
+
+    if (version) {
+        releaseTag = version
+        downloadUrl = "https://github.com/${repo}/releases/download/${releaseTag}/${assetName}"
+        logger.lifecycle("${assetName} not found locally, downloading version ${releaseTag}...")
+    } else {
+        logger.lifecycle("${assetName} not found locally, downloading from latest release...")
+
+        def connection = new URL("https://api.github.com/repos/${repo}/releases/latest").openConnection()
+        connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+
+        def githubToken = System.getenv("GITHUB_TOKEN")
+        if (githubToken) {
+            connection.setRequestProperty("Authorization", "Bearer ${githubToken}")
+        }
+
+        def json = new groovy.json.JsonSlurper().parseText(connection.content.text)
+        def asset = json.assets.find { it.name == assetName }
+        if (!asset) {
+            throw new GradleException(
+                "Asset '${assetName}' not found in latest release (${json.tag_name}). " +
+                "Available assets: ${json.assets.collect { it.name }}"
+            )
+        }
+
+        releaseTag = json.tag_name
+        downloadUrl = asset.browser_download_url
+        logger.lifecycle("Found asset in release ${releaseTag}, downloading from ${downloadUrl}")
+    }
+
+    try {
+        new URL(downloadUrl).openStream().withStream { input ->
+            targetFile.withOutputStream { output ->
+                output << input
+            }
+        }
+        logger.lifecycle("Successfully downloaded ${assetName} (release: ${releaseTag})")
+    } catch (Exception e) {
+        throw new GradleException("Failed to download ${assetName}: ${e.message}", e)
+    }
+}
+
+// libeasyss comes from nange/easyss; the pinned version in version.properties
+// avoids the API call on a fresh checkout.
 task downloadLibeasyssAar {
-    def targetDir = file("libs")
-    def targetFile = file("${targetDir}/libeasyss.aar")
+    def targetFile = file("libs/libeasyss.aar")
 
     onlyIf {
         !targetFile.exists()
     }
 
     doLast {
-        targetDir.mkdirs()
-
-        def downloadUrl
-        def releaseTag
-
-        if (libeasyssVersion) {
-            // Version pinned: use direct URL, skip GitHub API call
-            releaseTag = libeasyssVersion
-            downloadUrl = "https://github.com/nange/easyss/releases/download/${releaseTag}/libeasyss.aar"
-            logger.lifecycle("libeasyss.aar not found locally, downloading version ${releaseTag}...")
-        } else {
-            // No version pinned: fetch latest release via GitHub API
-            logger.lifecycle("libeasyss.aar not found locally, downloading from latest release...")
-
-            def apiUrl = "https://api.github.com/repos/nange/easyss/releases/latest"
-            def connection = new URL(apiUrl).openConnection()
-            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-
-            // Use GITHUB_TOKEN for authenticated requests (avoids rate limiting)
-            def githubToken = System.getenv("GITHUB_TOKEN")
-            if (githubToken) {
-                connection.setRequestProperty("Authorization", "Bearer ${githubToken}")
-            }
-
-            def responseText = connection.content.text
-            def json = new groovy.json.JsonSlurper().parseText(responseText)
-
-            def asset = json.assets.find { it.name == "libeasyss.aar" }
-            if (!asset) {
-                throw new GradleException(
-                    "Asset 'libeasyss.aar' not found in latest release (${json.tag_name}). " +
-                    "Available assets: ${json.assets.collect { it.name }}"
-                )
-            }
-
-            releaseTag = json.tag_name
-            downloadUrl = asset.browser_download_url
-            logger.lifecycle("Found asset in release ${releaseTag}, downloading from ${downloadUrl}")
-        }
-
-        // Download the AAR directly
-        try {
-            new URL(downloadUrl).openStream().withStream { input ->
-                targetFile.withOutputStream { output ->
-                    output << input
-                }
-            }
-            logger.lifecycle("Successfully downloaded libeasyss.aar (release: ${releaseTag})")
-        } catch (Exception e) {
-            throw new GradleException("Failed to download libeasyss.aar: ${e.message}", e)
-        }
+        targetFile.parentFile.mkdirs()
+        downloadAar('nange/easyss', libeasyssVersion, 'libeasyss.aar', targetFile)
     }
 }
 
@@ -276,70 +275,24 @@ afterEvaluate {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-download hev-socks5-tunnel.aar from the upstream
-// heiher/hev-socks5-tunnel GitHub release if it doesn't exist locally
-// (e.g., in CI / fresh checkout).
+// hev-socks5-tunnel comes from the upstream heiher/hev-socks5-tunnel release
+// (2.18.0 and later ship an official AAR, so the old fork is not needed).
 // ---------------------------------------------------------------------------
 task downloadHevSocks5TunnelAar {
-    def targetDir = file("libs")
-    def targetFile = file("${targetDir}/hev-socks5-tunnel.aar")
+    def targetFile = file("libs/hev-socks5-tunnel.aar")
 
     onlyIf {
         !targetFile.exists()
     }
 
     doLast {
-        targetDir.mkdirs()
-
-        def downloadUrl
-        def releaseTag
-
-        if (hevSocks5TunnelVersion) {
-            // Version pinned: use direct URL, skip GitHub API call
-            releaseTag = hevSocks5TunnelVersion
-            downloadUrl = "https://github.com/heiher/hev-socks5-tunnel/releases/download/${releaseTag}/hev-socks5-tunnel.aar"
-            logger.lifecycle("hev-socks5-tunnel.aar not found locally, downloading version ${releaseTag}...")
-        } else {
-            // No version pinned: fetch latest release via GitHub API
-            logger.lifecycle("hev-socks5-tunnel.aar not found locally, downloading from latest release...")
-
-            def apiUrl = "https://api.github.com/repos/heiher/hev-socks5-tunnel/releases/latest"
-            def connection = new URL(apiUrl).openConnection()
-            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-
-            // Use GITHUB_TOKEN for authenticated requests (avoids rate limiting)
-            def githubToken = System.getenv("GITHUB_TOKEN")
-            if (githubToken) {
-                connection.setRequestProperty("Authorization", "Bearer ${githubToken}")
-            }
-
-            def responseText = connection.content.text
-            def json = new groovy.json.JsonSlurper().parseText(responseText)
-
-            def asset = json.assets.find { it.name == "hev-socks5-tunnel.aar" }
-            if (!asset) {
-                throw new GradleException(
-                    "Asset 'hev-socks5-tunnel.aar' not found in latest release (${json.tag_name}). " +
-                    "Available assets: ${json.assets.collect { it.name }}"
-                )
-            }
-
-            releaseTag = json.tag_name
-            downloadUrl = asset.browser_download_url
-            logger.lifecycle("Found asset in release ${releaseTag}, downloading from ${downloadUrl}")
-        }
-
-        // Download the AAR directly
-        try {
-            new URL(downloadUrl).openStream().withStream { input ->
-                targetFile.withOutputStream { output ->
-                    output << input
-                }
-            }
-            logger.lifecycle("Successfully downloaded hev-socks5-tunnel.aar (release: ${releaseTag})")
-        } catch (Exception e) {
-            throw new GradleException("Failed to download hev-socks5-tunnel.aar: ${e.message}", e)
-        }
+        targetFile.parentFile.mkdirs()
+        downloadAar(
+            'heiher/hev-socks5-tunnel',
+            hevSocks5TunnelVersion,
+            'hev-socks5-tunnel.aar',
+            targetFile
+        )
     }
 }
 

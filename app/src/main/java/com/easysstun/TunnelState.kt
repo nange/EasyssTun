@@ -20,14 +20,15 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object TunnelState {
 
-    private const val TAG = "TunnelState"
+    private const val TAG = LogTags.TUNNEL
 
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
     fun update(ready: Boolean) {
         if (_ready.value == ready) return
-        Log.i(TAG, "tunnel ready -> $ready")
+        // Debug level: VpnState already reports start/stop at INFO.
+        Log.d(TAG, "tunnel ready -> $ready")
         _ready.value = ready
     }
 }

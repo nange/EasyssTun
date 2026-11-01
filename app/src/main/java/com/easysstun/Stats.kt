@@ -8,7 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-private const val TAG = "Stats"
+private const val TAG = LogTags.STATS
 
 /**
  * One sample of the local easyss stats endpoint (`GET /stats`).

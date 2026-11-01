@@ -5,10 +5,18 @@ import android.os.Build
 import android.view.ContextThemeWrapper
 import android.view.View
 import android.widget.TextView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,6 +32,35 @@ class UpdateCardViewTest {
     // application context does not carry it.
     private val context: Context =
         ContextThemeWrapper(applicationContext, R.style.Theme)
+
+    private class TestOwner : LifecycleOwner {
+        private val registry = LifecycleRegistry(this).apply {
+            currentState = Lifecycle.State.RESUMED
+        }
+        override val lifecycle: Lifecycle get() = registry
+    }
+
+    private fun manager(): UpdateManager = UpdateManager(
+        UpdateEnvironment(
+            context = applicationContext,
+            pref = Pref(applicationContext),
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            sourceFactory = { throw AssertionError("the test never checks for updates") },
+            verifier = { _, _ -> InstallCheck.Ok },
+            clock = { 0L },
+            isDebugBuild = true,
+            currentVersionCode = BuildConfig.VERSION_CODE,
+            currentVersionName = BuildConfig.VERSION_NAME,
+            supportedAbis = listOf("arm64-v8a"),
+            tunnelReady = MutableStateFlow(false),
+        )
+    )
+
+    private fun boundManagerOf(view: UpdateCardView): Any? {
+        val field = UpdateCardView::class.java.getDeclaredField("boundManager")
+        field.isAccessible = true
+        return field.get(view)
+    }
 
     @Test
     fun showsAppVersion() {
@@ -48,5 +85,24 @@ class UpdateCardViewTest {
             context.getString(R.string.update_debug_disabled),
             view.findViewById<TextView>(R.id.update_status).text.toString(),
         )
+    }
+
+    @Test
+    fun detachForgetsTheBindingSoReattachCanResubscribe() {
+        val view = UpdateCardView(context)
+        val manager = manager()
+        val owner = TestOwner()
+        view.bind(manager, Pref(applicationContext), owner)
+        assertSame(manager, boundManagerOf(view))
+
+        // Detach: the state job is cancelled and the binding forgotten, so a
+        // later bind() with the same manager/owner is not skipped.
+        val onDetached = View::class.java.getDeclaredMethod("onDetachedFromWindow")
+        onDetached.isAccessible = true
+        onDetached.invoke(view)
+        assertNull("detach must forget the bound manager", boundManagerOf(view))
+
+        view.bind(manager, Pref(applicationContext), owner)
+        assertSame(manager, boundManagerOf(view))
     }
 }

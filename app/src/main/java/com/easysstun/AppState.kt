@@ -8,14 +8,16 @@ import kotlinx.coroutines.flow.asStateFlow
 /** Tracks whether the app is in the foreground. Defaults to true (app starts visible). */
 object AppState {
 
-    private const val TAG = "AppState"
+    private const val TAG = LogTags.APP_STATE
 
     private val _isForeground = MutableStateFlow(true)
     val isForeground: StateFlow<Boolean> = _isForeground.asStateFlow()
 
     fun update(foreground: Boolean) {
         if (_isForeground.value != foreground) {
-            Log.i(TAG, "App state changed → ${if (foreground) "FOREGROUND (2s)" else "BACKGROUND (30s)"}")
+            // Debug level: this fires on every foreground/background switch and
+            // would otherwise dominate the in-app log viewer.
+            Log.d(TAG, "App state changed → ${if (foreground) "FOREGROUND (2s)" else "BACKGROUND (30s)"}")
         }
         _isForeground.value = foreground
     }

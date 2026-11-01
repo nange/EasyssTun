@@ -72,6 +72,7 @@
     <string name="error_tproxy_start">隧道引擎启动失败</string>
 
     <!-- 服务器配置表单 -->
+    <string name="title_server_profile">服务器配置</string>
     <string name="section_basic">基本</string>
     <string name="section_protocol_settings">协议设置</string>
     <string name="section_advanced">高级</string>
@@ -89,6 +90,12 @@
     <string name="helper_timeout">范围 15–60，默认 30</string>
     <string name="error_timeout_invalid">超时时间必须是整数秒（%1$d–%2$d）</string>
     <string name="error_port_invalid">端口必须是 1–65535 之间的数字</string>
+    <string name="error_required_fields">服务器、端口和密码不能为空</string>
+    <string name="error_name_duplicate">已存在名为“%1$s”的配置</string>
+    <string name="error_profile_missing">该配置已不存在</string>
+    <string name="profile_saved">配置已保存</string>
+    <string name="profile_updated">配置已更新</string>
+    <string name="server_address_active">%1$s（当前使用）</string>
     <string name="hint_direct_domains">直连域名/IP（每行一个）</string>
     <string name="hint_proxy_domains">代理域名/IP（每行一个）</string>
 

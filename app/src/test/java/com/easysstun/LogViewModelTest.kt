@@ -1,7 +1,7 @@
 package com.easysstun
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
-import org.junit.After
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,7 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Tests for LogViewModel's paged window into [LogStore]: opening shows the
+ * Tests for LogViewModel's paged window into [LogCapture]: opening shows the
  * latest page, scrolling up loads older pages, and new logs append at the
  * tail without disturbing the loaded window.
  */
@@ -22,21 +22,25 @@ class LogViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    private lateinit var capture: LogCapture
+
     @Before
     fun setUp() {
-        LogStore.resetForTest()
-    }
-
-    @After
-    fun tearDown() {
-        LogStore.resetForTest()
+        // Each test gets its own capture, so no process-wide reset hook is
+        // needed on LogStore.
+        capture = LogCapture()
     }
 
     private fun item(i: Int) = LogItem("msg$i", "12:00", "src", "INFO")
 
+    /** Appends synchronously: the test dispatcher runs the collector inline. */
+    private fun append(item: LogItem) {
+        runBlocking { capture.append(item) }
+    }
+
     @Test
     fun open_withEmptyStore_showsEmptyWindow() {
-        val viewModel = LogViewModel()
+        val viewModel = LogViewModel(capture)
         viewModel.open()
 
         assertTrue(viewModel.logItems.value.orEmpty().isEmpty())
@@ -45,9 +49,9 @@ class LogViewModelTest {
 
     @Test
     fun open_showsOnlyTheLatestPage() {
-        repeat(120) { LogStore.appendForTest(item(it)) }
+        repeat(120) { append(item(it)) }
 
-        val viewModel = LogViewModel()
+        val viewModel = LogViewModel(capture)
         viewModel.open()
 
         val items = viewModel.logItems.value!!
@@ -59,9 +63,9 @@ class LogViewModelTest {
 
     @Test
     fun open_fewerThanPageSize_showsAll() {
-        repeat(30) { LogStore.appendForTest(item(it)) }
+        repeat(30) { append(item(it)) }
 
-        val viewModel = LogViewModel()
+        val viewModel = LogViewModel(capture)
         viewModel.open()
 
         val items = viewModel.logItems.value!!
@@ -73,8 +77,8 @@ class LogViewModelTest {
 
     @Test
     fun loadMore_prependsOlderPagesUntilExhausted() {
-        repeat(120) { LogStore.appendForTest(item(it)) }
-        val viewModel = LogViewModel()
+        repeat(120) { append(item(it)) }
+        val viewModel = LogViewModel(capture)
         viewModel.open()
 
         // First page: [70, 120)
@@ -97,8 +101,8 @@ class LogViewModelTest {
 
     @Test
     fun loadMore_partialPageNearFront() {
-        repeat(70) { LogStore.appendForTest(item(it)) }
-        val viewModel = LogViewModel()
+        repeat(70) { append(item(it)) }
+        val viewModel = LogViewModel(capture)
         viewModel.open()
 
         // Open: [20, 70)
@@ -113,12 +117,12 @@ class LogViewModelTest {
 
     @Test
     fun newLogsAppendToWindowTail() {
-        repeat(60) { LogStore.appendForTest(item(it)) }
-        val viewModel = LogViewModel()
+        repeat(60) { append(item(it)) }
+        val viewModel = LogViewModel(capture)
         viewModel.open()
         assertEquals(50, viewModel.logItems.value!!.size)
 
-        repeat(10) { LogStore.appendForTest(item(60 + it)) }
+        repeat(10) { append(item(60 + it)) }
 
         val items = viewModel.logItems.value!!
         assertEquals(60, items.size)
@@ -128,13 +132,13 @@ class LogViewModelTest {
 
     @Test
     fun newLogsAppendEvenAfterLoadingEverything() {
-        repeat(70) { LogStore.appendForTest(item(it)) }
-        val viewModel = LogViewModel()
+        repeat(70) { append(item(it)) }
+        val viewModel = LogViewModel(capture)
         viewModel.open()
         viewModel.loadMore()
         assertEquals(70, viewModel.logItems.value!!.size)
 
-        repeat(5) { LogStore.appendForTest(item(70 + it)) }
+        repeat(5) { append(item(70 + it)) }
 
         val items = viewModel.logItems.value!!
         assertEquals(75, items.size)
@@ -144,8 +148,8 @@ class LogViewModelTest {
 
     @Test
     fun open_keepsWindowWhenCalledAgain() {
-        repeat(120) { LogStore.appendForTest(item(it)) }
-        val viewModel = LogViewModel()
+        repeat(120) { append(item(it)) }
+        val viewModel = LogViewModel(capture)
         viewModel.open()
         viewModel.loadMore()
         val before = viewModel.logItems.value!!
@@ -158,12 +162,12 @@ class LogViewModelTest {
 
     @Test
     fun freshViewModel_showsLatestPageAgain() {
-        repeat(120) { LogStore.appendForTest(item(it)) }
-        LogViewModel().open()
-        repeat(30) { LogStore.appendForTest(item(120 + it)) }
+        repeat(120) { append(item(it)) }
+        LogViewModel(capture).open()
+        repeat(30) { append(item(120 + it)) }
 
         // Re-entering the log screen creates a new ViewModel.
-        val viewModel = LogViewModel()
+        val viewModel = LogViewModel(capture)
         viewModel.open()
 
         val items = viewModel.logItems.value!!
@@ -174,15 +178,15 @@ class LogViewModelTest {
 
     @Test
     fun loadMore_afterEviction_rebuildsFromRetainedRange() {
-        repeat(LogStore.MAX_BUFFER_SIZE) { LogStore.appendForTest(item(it)) }
-        val viewModel = LogViewModel()
+        repeat(LogStore.MAX_BUFFER_SIZE) { append(item(it)) }
+        val viewModel = LogViewModel(capture)
         viewModel.open()
         // Load the oldest retained page.
         while (viewModel.loadMore() > 0) { /* keep going until exhausted */ }
         val sizeBeforeEviction = viewModel.logItems.value!!.size
 
         // Overfill the buffer: the oldest items (which the window shows) get evicted.
-        repeat(LogStore.MAX_BUFFER_SIZE + 10) { LogStore.appendForTest(item(10_000 + it)) }
+        repeat(LogStore.MAX_BUFFER_SIZE + 10) { append(item(10_000 + it)) }
 
         val items = viewModel.logItems.value!!
         // Window must be rebuilt from the retained range, not crash.

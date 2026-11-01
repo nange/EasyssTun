@@ -3,42 +3,32 @@ package com.easysstun
 import android.app.AlertDialog
 import android.os.Bundle
 import android.view.View
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.easysstun.databinding.ActivityServerProfileBinding
 import java.util.Locale
 import java.util.UUID
 
 class ServerProfileActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_PROFILE_ID = "profileId"
+    }
+
+    private lateinit var binding: ActivityServerProfileBinding
     private lateinit var profiles: ProfileStore
     private lateinit var controller: VpnController
-    private var currentProfile: Profile? = null
     private var profileId: String? = null
 
-    // Declare UI elements
-    private lateinit var profileName: EditText
-    private lateinit var profileServer: EditText
-    private lateinit var profileServerPort: EditText
-    private lateinit var profilePassword: EditText
-    private lateinit var profileSocksPort: EditText
-    private lateinit var profileEncryption: Spinner
-    private lateinit var profileProxyRule: Spinner
-    private lateinit var profileOutbound: Spinner
-    private lateinit var profileServerNameIndication: EditText
-    private lateinit var profileCustomCa: EditText
-    private lateinit var profileDirectFile: EditText
-    private lateinit var profileProxyFile: EditText
-    private lateinit var profileLogLevel: Spinner
-    private lateinit var profileEnableQuic: Spinner
-    private lateinit var profileIpv6Rule: Spinner
-    private lateinit var profileTimeout: EditText
-    private lateinit var saveProfileButton: Button
-    private lateinit var deleteProfileButton: Button // Added delete button
+    private lateinit var encryptionOptions: SpinnerOption
+    private lateinit var proxyRuleOptions: SpinnerOption
+    private lateinit var outboundOptions: SpinnerOption
+    private lateinit var logLevelOptions: SpinnerOption
+    private lateinit var enableQuicOptions: SpinnerOption
+    private lateinit var ipv6RuleOptions: SpinnerOption
 
     /**
      * Every free-form parameter field of the form. Used to strip the leading and
@@ -47,120 +37,110 @@ class ServerProfileActivity : AppCompatActivity() {
      */
     private val parameterFields: List<EditText>
         get() = listOf(
-            profileName,
-            profileServer,
-            profileServerPort,
-            profilePassword,
-            profileSocksPort,
-            profileServerNameIndication,
-            profileCustomCa,
-            profileDirectFile,
-            profileProxyFile,
-            profileTimeout
+            binding.profileName,
+            binding.profileServer,
+            binding.profileServerPort,
+            binding.profilePassword,
+            binding.profileSocksPort,
+            binding.profileServerNameIndication,
+            binding.profileCustomCa,
+            binding.profileDirectFile,
+            binding.profileProxyFile,
+            binding.profileTimeout,
         )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_server_profile)
+        binding = ActivityServerProfileBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         profiles = ProfileStore.get(this)
         controller = VpnController.get(this)
-        profileId = intent.getStringExtra("profileId")
-
-        // Initialize UI elements
-        profileName = findViewById(R.id.profile_name)
-        profileServer = findViewById(R.id.profile_server)
-        profileServerPort = findViewById(R.id.profile_server_port)
-        profilePassword = findViewById(R.id.profile_password)
-        profileSocksPort = findViewById(R.id.profile_socks_port)
-        profileEncryption = findViewById(R.id.profile_encryption)
-        profileProxyRule = findViewById(R.id.profile_proxy_rule)
-        profileOutbound = findViewById(R.id.profile_outbound)
-        profileServerNameIndication = findViewById(R.id.profile_server_name_indication)
-        profileCustomCa = findViewById(R.id.profile_custom_ca)
-        profileDirectFile = findViewById(R.id.profile_direct_file)
-        profileProxyFile = findViewById(R.id.profile_proxy_file)
-        profileLogLevel = findViewById(R.id.profile_log_level)
-        profileEnableQuic = findViewById(R.id.profile_enable_quic)
-        profileIpv6Rule = findViewById(R.id.profile_ipv6_rule)
-        profileTimeout = findViewById(R.id.profile_timeout)
-        saveProfileButton = findViewById(R.id.save_profile_button)
-        deleteProfileButton = findViewById(R.id.delete_profile_button) // Initialize delete button
-
-        // Populate Spinners
-        val encryptionAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_encryption_list, android.R.layout.simple_spinner_item
-        )
-        encryptionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileEncryption.adapter = encryptionAdapter
-
-        val proxyRuleAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_proxyrule_list, android.R.layout.simple_spinner_item
-        )
-        proxyRuleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileProxyRule.adapter = proxyRuleAdapter
-
-        val outboundAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_outbound_list, android.R.layout.simple_spinner_item
-        )
-        outboundAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileOutbound.adapter = outboundAdapter
-
-        val logLevelAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_loglevel_list, android.R.layout.simple_spinner_item
-        )
-        logLevelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileLogLevel.adapter = logLevelAdapter
-
-        val enableQuicAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_enable_quic_list, android.R.layout.simple_spinner_item
-        )
-        enableQuicAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileEnableQuic.adapter = enableQuicAdapter
-
-        val ipv6RuleAdapter = ArrayAdapter.createFromResource(
-            this, R.array.easyss_ipv6_rule_list, android.R.layout.simple_spinner_item
-        )
-        ipv6RuleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        profileIpv6Rule.adapter = ipv6RuleAdapter
-
-
-        if (profileId != null) {
-            currentProfile = profileId?.let { profiles.find(it) }
-            currentProfile?.let {
-                profileName.setText(it.name)
-                profileServer.setText(it.server)
-                profileServerPort.setText(it.serverPort.toFieldText())
-                profilePassword.setText(it.password)
-                profileSocksPort.setText(it.socksPort.toFieldText())
-                // Set spinner selections
-                setSpinnerSelection(profileEncryption, it.encryption, R.array.easyss_encryption_list)
-                setSpinnerSelection(profileProxyRule, it.proxyRule, R.array.easyss_proxyrule_list_value, R.array.easyss_proxyrule_list_value)
-                setSpinnerSelection(profileOutbound, it.outbound, R.array.easyss_outbound_list_value, R.array.easyss_outbound_list_value)
-                setSpinnerSelection(profileLogLevel, it.logLevel, R.array.easyss_loglevel_list_value, R.array.easyss_loglevel_list_value)
-                setSpinnerSelection(profileEnableQuic, it.enableQuic.toString(), R.array.easyss_enable_quic_list_value, R.array.easyss_enable_quic_list_value)
-                setSpinnerSelection(profileIpv6Rule, it.ipv6Rule, R.array.easyss_ipv6_rule_value, R.array.easyss_ipv6_rule_value)
-
-                profileServerNameIndication.setText(it.serverNameIndication)
-                profileCustomCa.setText(it.customCa)
-                profileDirectFile.setText(it.directFile)
-                profileProxyFile.setText(it.proxyFile)
-                profileTimeout.setText(it.timeout.toFieldText())
-
-                // Show delete button if editing an existing profile
-                deleteProfileButton.visibility = View.VISIBLE
-            }
+        profileId = intent.getStringExtra(EXTRA_PROFILE_ID)
+        // The profile can disappear between the list screen and this form (it
+        // was deleted elsewhere); editing a blank form whose save would be a
+        // silent no-op is worse than telling the user and closing the screen.
+        val editingProfile = profileId?.let { profiles.find(it) }
+        if (profileId != null && editingProfile == null) {
+            Toast.makeText(this, getString(R.string.error_profile_missing), Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
+
+        encryptionOptions = bindOptions(
+            binding.profileEncryption,
+            R.array.easyss_encryption_list,
+            R.array.easyss_encryption_list,
+        )
+        proxyRuleOptions = bindOptions(
+            binding.profileProxyRule,
+            R.array.easyss_proxyrule_list,
+            R.array.easyss_proxyrule_list_value,
+        )
+        outboundOptions = bindOptions(
+            binding.profileOutbound,
+            R.array.easyss_outbound_list,
+            R.array.easyss_outbound_list_value,
+        )
+        logLevelOptions = bindOptions(
+            binding.profileLogLevel,
+            R.array.easyss_loglevel_list,
+            R.array.easyss_loglevel_list_value,
+        )
+        enableQuicOptions = bindOptions(
+            binding.profileEnableQuic,
+            R.array.easyss_enable_quic_list,
+            R.array.easyss_enable_quic_list_value,
+        )
+        ipv6RuleOptions = bindOptions(
+            binding.profileIpv6Rule,
+            R.array.easyss_ipv6_rule_list,
+            R.array.easyss_ipv6_rule_value,
+        )
+
+        editingProfile?.let { bindProfile(it) }
 
         setupAutoTrim()
 
-        saveProfileButton.setOnClickListener {
-            saveProfile()
-        }
+        binding.saveProfileButton.setOnClickListener { saveProfile() }
+        binding.deleteProfileButton.setOnClickListener { showDeleteConfirmationDialog() }
+    }
 
-        deleteProfileButton.setOnClickListener {
-            showDeleteConfirmationDialog()
-        }
+    private fun bindProfile(profile: Profile) {
+        binding.profileName.setText(profile.name)
+        binding.profileServer.setText(profile.server)
+        binding.profileServerPort.setText(profile.serverPort.toFieldText())
+        binding.profilePassword.setText(profile.password)
+        binding.profileSocksPort.setText(profile.socksPort.toFieldText())
+        encryptionOptions.select(profile.encryption)
+        proxyRuleOptions.select(profile.proxyRule)
+        outboundOptions.select(profile.outbound)
+        logLevelOptions.select(profile.logLevel)
+        enableQuicOptions.select(profile.enableQuic.toString())
+        ipv6RuleOptions.select(profile.ipv6Rule)
+        binding.profileServerNameIndication.setText(profile.serverNameIndication)
+        binding.profileCustomCa.setText(profile.customCa)
+        binding.profileDirectFile.setText(profile.directFile)
+        binding.profileProxyFile.setText(profile.proxyFile)
+        binding.profileTimeout.setText(profile.timeout.toFieldText())
+
+        // Show delete button if editing an existing profile
+        binding.deleteProfileButton.visibility = View.VISIBLE
+    }
+
+    /**
+     * Installs [entriesRes] as the spinner's labels and pairs it with the values
+     * in [valuesRes] (the same resource when labels and values are identical).
+     */
+    private fun bindOptions(spinner: Spinner, entriesRes: Int, valuesRes: Int): SpinnerOption {
+        val adapter = ArrayAdapter.createFromResource(
+            this,
+            entriesRes,
+            android.R.layout.simple_spinner_item,
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinner.adapter = adapter
+        return SpinnerOption(spinner, resources.getStringArray(valuesRes))
     }
 
     private fun showDeleteConfirmationDialog() {
@@ -196,28 +176,6 @@ class ServerProfileActivity : AppCompatActivity() {
             finish()
         }
     }
-
-    private fun setSpinnerSelection(spinner: Spinner, value: String?, valuesArrayResId: Int, entriesArrayResId: Int? = null) {
-        value?.let {
-            if (spinner.adapter == null) {
-                val entries = resources.getStringArray(entriesArrayResId ?: valuesArrayResId)
-                val aa = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_spinner_item,
-                    entries
-                )
-                aa.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                spinner.adapter = aa
-            }
-
-            val values = resources.getStringArray(valuesArrayResId)
-            val position = values.indexOf(it)
-            if (position >= 0) {
-                spinner.setSelection(position)
-            }
-        }
-    }
-
 
     /**
      * Strips leading/trailing whitespace from every parameter field as soon as it
@@ -262,26 +220,25 @@ class ServerProfileActivity : AppCompatActivity() {
         this?.let { String.format(Locale.ROOT, "%d", it) } ?: ""
 
     private fun saveProfile() {
-        val name = trimmedText(profileName)
-        val server = trimmedText(profileServer)
-        val serverPortText = trimmedText(profileServerPort)
-        val password = trimmedText(profilePassword)
-        val socksPortText = trimmedText(profileSocksPort)
-        val encryption = profileEncryption.selectedItem.toString() // May need to get from values array if entries are different
-        val proxyRule = getSpinnerValue(profileProxyRule, R.array.easyss_proxyrule_list_value)
-        val outbound = getSpinnerValue(profileOutbound, R.array.easyss_outbound_list_value)
-        val serverNameIndication = trimmedText(profileServerNameIndication)
-        val customCa = trimmedText(profileCustomCa)
-        val directFile = trimmedText(profileDirectFile)
-        val proxyFile = trimmedText(profileProxyFile)
-        val logLevel = getSpinnerValue(profileLogLevel, R.array.easyss_loglevel_list_value)
-        val enableQuic = getSpinnerValue(profileEnableQuic, R.array.easyss_enable_quic_list_value).toBoolean()
-        val ipv6Rule = getSpinnerValue(profileIpv6Rule, R.array.easyss_ipv6_rule_value)
-        val timeoutText = trimmedText(profileTimeout)
-
+        val name = trimmedText(binding.profileName)
+        val server = trimmedText(binding.profileServer)
+        val serverPortText = trimmedText(binding.profileServerPort)
+        val password = trimmedText(binding.profilePassword)
+        val socksPortText = trimmedText(binding.profileSocksPort)
+        val encryption = encryptionOptions.selected()
+        val proxyRule = proxyRuleOptions.selected()
+        val outbound = outboundOptions.selected()
+        val serverNameIndication = trimmedText(binding.profileServerNameIndication)
+        val customCa = trimmedText(binding.profileCustomCa)
+        val directFile = trimmedText(binding.profileDirectFile)
+        val proxyFile = trimmedText(binding.profileProxyFile)
+        val logLevel = logLevelOptions.selected()
+        val enableQuic = enableQuicOptions.selected().toBoolean()
+        val ipv6Rule = ipv6RuleOptions.selected()
+        val timeoutText = trimmedText(binding.profileTimeout)
 
         if (server.isBlank() || serverPortText.isBlank() || password.isBlank()) {
-            Toast.makeText(this, "Server, Port, and Password cannot be empty", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_required_fields), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -314,9 +271,35 @@ class ServerProfileActivity : AppCompatActivity() {
             return
         }
 
+        // A blank name falls back to "server:port", which is what the list shows.
+        val savedName = name.ifBlank { "$server:$serverPort" }
+        // Names identify configurations in the list and the home spinner, so two
+        // entries that read the same would be indistinguishable to the user.
+        val duplicate = profiles.all().any { other ->
+            other.id != profileId && other.name.equals(savedName, ignoreCase = true)
+        }
+        if (duplicate) {
+            Toast.makeText(
+                this,
+                getString(R.string.error_name_duplicate, savedName),
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        // The profile can be deleted while the form is open. ProfileStore.update()
+        // ignores an unknown id, so without this check the screen would claim the
+        // profile was updated and close as if it had been saved.
+        val editingId = profileId
+        if (editingId != null && profiles.find(editingId) == null) {
+            Toast.makeText(this, getString(R.string.error_profile_missing), Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
         val profileToSave = Profile(
             id = profileId ?: UUID.randomUUID().toString(),
-            name = name.ifBlank { "$server:$serverPort" }, // Default name to server:port if blank
+            name = savedName,
             server = server,
             serverPort = serverPort,
             password = password,
@@ -339,10 +322,10 @@ class ServerProfileActivity : AppCompatActivity() {
 
         if (profileId == null) { // A new profile is being added
             profiles.add(profileToSave)
-            Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.profile_saved), Toast.LENGTH_SHORT).show()
         } else { // An existing profile is being updated
             profiles.update(profileToSave)
-            Toast.makeText(this, "Profile updated", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.profile_updated), Toast.LENGTH_SHORT).show()
 
             // Check if the updated profile is the active one: a running tunnel
             // must reload it. This is the explicit notification the store
@@ -352,11 +335,5 @@ class ServerProfileActivity : AppCompatActivity() {
             }
         }
         finish()
-    }
-
-    // Helper to get value from spinner if entryValues are used
-    private fun getSpinnerValue(spinner: Spinner, valuesArrayResId: Int): String {
-        val values = resources.getStringArray(valuesArrayResId)
-        return values[spinner.selectedItemPosition]
     }
 }

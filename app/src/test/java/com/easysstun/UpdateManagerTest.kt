@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -117,17 +118,19 @@ class UpdateManagerTest {
         tunnelReady: StateFlow<Boolean> = MutableStateFlow(true),
         verifier: (File, Int) -> InstallCheck = { _, _ -> InstallCheck.Ok },
     ): UpdateManager = UpdateManager(
-        context = context,
-        pref = pref,
-        scope = scope,
-        sourceFactory = { source },
-        verifier = verifier,
-        clock = { NOW },
-        isDebugBuild = isDebug,
-        currentVersionCode = 169,
-        currentVersionName = "3.0.0-rc19.4",
-        supportedAbis = listOf("arm64-v8a"),
-        tunnelReady = tunnelReady,
+        UpdateEnvironment(
+            context = context,
+            pref = pref,
+            scope = scope,
+            sourceFactory = { source },
+            verifier = verifier,
+            clock = { NOW },
+            isDebugBuild = isDebug,
+            currentVersionCode = 169,
+            currentVersionName = "3.0.0-rc19.4",
+            supportedAbis = listOf("arm64-v8a"),
+            tunnelReady = tunnelReady,
+        )
     )
 
     @Test
@@ -380,7 +383,7 @@ class UpdateManagerTest {
         assertEquals(170, state.release.versionCode)
         assertEquals("3.0.0-rc20", state.release.versionName)
         assertEquals("v3.0.0-rc20", state.release.tag)
-        assertEquals(170, manager.activeRelease?.versionCode)
+        assertEquals(170, (manager.state.value as UpdateState.Available).release.versionCode)
     }
 
     @Test
@@ -516,6 +519,66 @@ class UpdateManagerTest {
         val failed = manager.state.value as UpdateState.Failed
         assertEquals(UpdateError.ChecksumMismatch, failed.error)
         assertTrue(UpdateInstaller.updateDir(context).listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun downloadingStateCarriesTheRelease() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeSource(release = release(), gate = gate)
+        val manager = manager(source, this)
+        manager.checkNow()
+        advanceUntilIdle()
+
+        manager.downloadAndInstall()
+        runCurrent()
+
+        val downloading = manager.state.value as UpdateState.Downloading
+        assertEquals(170, downloading.release.versionCode)
+        assertEquals("3.0.0-rc20", downloading.release.versionName)
+
+        manager.cancelDownload()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(UpdateState.Idle, manager.state.value)
+    }
+
+    @Test
+    fun downloadFailureKeepsTheReleaseForRetry() = runTest {
+        val source = FakeSource(
+            release = release(),
+            downloadError = UpdateException(UpdateError.Network),
+        )
+        val manager = manager(source, this)
+        manager.checkNow()
+        advanceUntilIdle()
+
+        manager.downloadAndInstall()
+        advanceUntilIdle()
+        val failed = manager.state.value as UpdateState.Failed
+        assertEquals(UpdateAction.DOWNLOAD, failed.action)
+        assertEquals(170, failed.release?.versionCode)
+
+        // Retry resumes the download of the same release instead of running a
+        // new check (which is what an `activeRelease` field used to decide).
+        source.downloadError = null
+        manager.retryLastAction()
+        advanceUntilIdle()
+
+        assertEquals(2, source.downloadCount)
+        assertEquals(1, source.fetchCount)
+        assertTrue(manager.state.value is UpdateState.ReadyToInstall)
+    }
+
+    @Test
+    fun checkFailureHasNoReleaseToRetry() = runTest {
+        val source = FakeSource(fetchError = UpdateException(UpdateError.Network))
+        val manager = manager(source, this)
+        manager.checkNow()
+        advanceUntilIdle()
+
+        val failed = manager.state.value as UpdateState.Failed
+        assertEquals(UpdateAction.CHECK, failed.action)
+        assertNull(failed.release)
     }
 
     @Test

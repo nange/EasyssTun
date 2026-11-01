@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   Chinese labels for the profile-form spinners. Only the display arrays are
+   translated; the matching `*_value` arrays hold the stable values persisted in
+   the profile and stay identical in every locale.
+-->
+<resources>
+    <string-array name="easyss_proxyrule_list">
+        <item>自动屏蔽（跳过局域网与国内，屏蔽广告）</item>
+        <item>自动（跳过局域网与国内）</item>
+        <item>反向自动</item>
+        <item>全部代理</item>
+        <item>直连</item>
+    </string-array>
+
+    <string-array name="easyss_loglevel_list">
+        <item>信息</item>
+        <item>调试</item>
+        <item>警告</item>
+        <item>错误</item>
+    </string-array>
+
+    <string-array name="easyss_enable_quic_list">
+        <item>否</item>
+        <item>是</item>
+    </string-array>
+
+    <string-array name="easyss_ipv6_rule_list">
+        <item>自动</item>
+        <item>启用</item>
+        <item>禁用</item>
+    </string-array>
+</resources>

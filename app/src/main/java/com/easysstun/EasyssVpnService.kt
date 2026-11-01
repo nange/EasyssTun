@@ -127,14 +127,13 @@ class EasyssVpnService : VpnService() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(configChangeReceiver)
-        Log.d(TAG, "onDestroy: Cancelling serviceScope.")
         serviceScope.cancel()
         // Defensive net: a system-initiated destroy skips the stop path, so the
         // controller must not keep advertising a tunnel that no longer exists.
         // A planned replacement (server switch) already started the next
         // instance, so it must not be reconciled away.
         if (!replacedByController) controller.onServiceDestroyed()
-        Log.i(TAG, "onDestroy: Service being destroyed.")
+        Log.i(TAG, "onDestroy: service destroyed, cancelling the service scope.")
     }
 
     override fun onRevoke() {
@@ -238,10 +237,9 @@ class EasyssVpnService : VpnService() {
                 // the gomobile binding throws Exception carrying the specific Go
                 // error text when startup fails. Surface it to the user via a
                 // dialog instead of silently tearing down.
-                Log.i(TAG, "startup: Mobile.start() begin, t+${startupElapsed()}ms")
                 try {
                     Mobile.start(config)
-                    Log.i(TAG, "startup: Mobile.start() returned, t+${startupElapsed()}ms")
+                    Log.i(TAG, "startup: Mobile.start() done, t+${startupElapsed()}ms")
                 } catch (e: CancellationException) {
                     // User stopped the service while startup was in flight; let
                     // the outer catch rethrow and the teardown own the cleanup.
@@ -280,11 +278,9 @@ class EasyssVpnService : VpnService() {
                 // re-check cancellation right before touching TProxy.
                 coroutineContext.ensureActive()
 
-                Log.d(TAG, "startService: Attempting to call TProxyStartService with tunFd: ${newTunFd.fd}.")
                 // Natives of the hev-socks5-tunnel AAR; the binding class coming
                 // from hev.htproxy is imported at the top of this file.
                 val started = TProxyService.TProxyStartService(proxyFile.absolutePath, newTunFd.fd)
-                Log.d(TAG, "startService: TProxyStartService returned: $started, t+${startupElapsed()}ms")
                 if (!started) {
                     Log.w(TAG, "startService: TProxyStartService reported failure")
                     finishStartupFailure(getString(R.string.error_tproxy_start), profile.id)
@@ -341,7 +337,7 @@ class EasyssVpnService : VpnService() {
 
         val proxyMode = pref.proxyMode
         val apps = AppSelectionStore(pref).selected(proxyMode)
-        Log.i(TAG, "Per-app routing: mode=$proxyMode, selectedApps=$apps")
+        Log.i(TAG, "Per-app routing: mode=$proxyMode, ${apps.size} selected apps")
 
         // VpnService forbids mixing addAllowedApplication and
         // addDisallowedApplication on one builder, so the easyss process's
@@ -364,7 +360,6 @@ class EasyssVpnService : VpnService() {
             for (appName in allowedApps) {
                 try {
                     builder.addAllowedApplication(appName)
-                    Log.i(TAG, "addAllowedApplication: $appName")
                 } catch (e: PackageManager.NameNotFoundException) {
                     Log.w(TAG, "App not found for VPN allow: $appName", e)
                 }
@@ -374,14 +369,12 @@ class EasyssVpnService : VpnService() {
             for (appName in apps) {
                 try {
                     builder.addDisallowedApplication(appName)
-                    Log.i(TAG, "addDisallowedApplication: $appName")
                 } catch (e: PackageManager.NameNotFoundException) {
                     Log.w(TAG, "App not found for VPN bypass: $appName", e)
                 }
             }
             try {
                 builder.addDisallowedApplication(selfName)
-                Log.i(TAG, "addDisallowedApplication: $selfName (self)")
             } catch (e: PackageManager.NameNotFoundException) {
                 Log.w(TAG, "Self app not found for VPN bypass: $selfName", e)
             }
@@ -569,7 +562,6 @@ class EasyssVpnService : VpnService() {
      * (Idle, or the second half of a server switch).
      */
     private fun finalizeStop() {
-        Log.d(TAG, "finalizeStop: finalizing service stop.")
         notificationUpdaterJob?.cancel()
         notificationUpdaterJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -664,7 +656,7 @@ class EasyssVpnService : VpnService() {
         const val ACTION_CONNECT = "CONNECT"
         const val ACTION_DISCONNECT = "DISCONNECT"
         const val NOTIFICATION_ID = 1
-        private const val TAG = "EasyssVpnServiceDiag"
+        private const val TAG = LogTags.SERVICE
 
         /**
          * Builds the action-only start Intent. Configuration is never passed

@@ -22,7 +22,6 @@ import androidx.preference.PreferenceManager
 class Pref(context: Context) {
     companion object {
         const val SERVICE_ENABLED = "enable"
-        const val VERSION = "version"
         const val SHOW_SYSTEM_APPS = "show_system_apps"
         const val UPDATE_AUTO_CHECK = "update_auto_check"
         const val UPDATE_LAST_CHECK_AT = "update_last_check_at"
@@ -34,15 +33,6 @@ class Pref(context: Context) {
 
     private val prefs: SharedPreferences =
         PreferenceManager.getDefaultSharedPreferences(context)
-
-    var version: String
-        get() {
-            val currentTimestamp: String = System.currentTimeMillis().toString()
-            return prefs.getString(VERSION, currentTimestamp) ?: currentTimestamp
-        }
-        set(value) {
-            prefs.edit { putString(VERSION, value) }
-        }
 
     /**
      * The user's persisted *intent*: true while they want the VPN to be up.

@@ -11,8 +11,6 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat.getDrawable
@@ -34,7 +32,7 @@ import kotlinx.coroutines.withContext
 
 class MainFragment : Fragment() {
     companion object {
-        private const val TAG = "MainFragment"
+        private const val TAG = LogTags.MAIN
 
         // Process-level guard: the version banner is a startup line, not a
         // per-view one (the home fragment view is re-created on navigation).
@@ -52,6 +50,7 @@ class MainFragment : Fragment() {
 
     private val statsClient = StatsClient()
     private var statsBinder: StatsBinder? = null
+    private var serverSpinner: ServerSpinnerController? = null
 
     private var statsPollingJob: Job? = null
 
@@ -80,6 +79,11 @@ class MainFragment : Fragment() {
         statsBinder = StatsBinder(binding, initiallyExpanded = isStatsExpanded) {
             isStatsExpanded = it
         }
+        serverSpinner = ServerSpinnerController(
+            mContext,
+            binding.serverSpinner,
+            profiles,
+        ) { onServerSelected(it) }
         setup()
         requireActivity().addMenuProvider(object : MenuProvider {
             override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
@@ -114,6 +118,7 @@ class MainFragment : Fragment() {
     override fun onDestroyView() {
         stopStatsPolling()
         statsBinder = null
+        serverSpinner = null
         _binding = null
         super.onDestroyView()
     }
@@ -132,7 +137,7 @@ class MainFragment : Fragment() {
         // is in the background (profile edit/delete, app list, proxy mode), so
         // refresh the configuration-dependent parts and re-render the current
         // state.
-        updateServerSpinner()
+        serverSpinner?.refresh()
         updateAppListCard()
         renderState(controller.state.value)
         // Recovers a dropped permission result, and turns the persisted
@@ -146,45 +151,9 @@ class MainFragment : Fragment() {
 
     // ── Server spinner ──────────────────────────────────────────
 
-    private fun updateServerSpinner() {
-        val binding = _binding ?: return
-        val serverProfiles = profiles.all()
-        val adapter = ArrayAdapter(
-            mContext,
-            android.R.layout.simple_spinner_item,
-            serverProfiles.map { it.name }
-        )
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.serverSpinner.adapter = adapter
-        binding.serverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>?,
-                viewOfItem: View?,
-                position: Int,
-                id: Long
-            ) {
-                serverProfiles.getOrNull(position)?.let { onServerSelected(it) }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-
-        // Restore the active server without triggering the listener: selecting a
-        // spinner entry programmatically must not be mistaken for a user switch.
-        val activeId = profiles.activeId() ?: return
-        val activePosition = serverProfiles.indexOfFirst { it.id == activeId }
-        if (activePosition != -1) {
-            val listener = binding.serverSpinner.onItemSelectedListener
-            binding.serverSpinner.onItemSelectedListener = null
-            binding.serverSpinner.setSelection(activePosition, false)
-            binding.serverSpinner.onItemSelectedListener = listener
-        }
-    }
-
     private fun onServerSelected(profile: Profile) {
         val state = controller.state.value
         if (profile.id == profiles.activeId() && state !is VpnState.Switching) {
-            Log.d(TAG, "Spinner selected the active server. No change.")
             return
         }
         // The controller is the only writer of the active profile: it either
@@ -200,7 +169,7 @@ class MainFragment : Fragment() {
     // ── Connect / disconnect ────────────────────────────────────
 
     private fun setup() {
-        updateServerSpinner()
+        serverSpinner?.refresh()
         binding.serviceButton.setOnClickListener { onServiceButtonClicked() }
         binding.serviceSetting.setOnClickListener {
             findNavController().navigate(R.id.action_main_to_setting)
@@ -400,7 +369,7 @@ class MainFragment : Fragment() {
                     fetchAndUpdateStats()
                     AppState.isForeground.collectLatest { isForeground ->
                         val interval = if (isForeground) 2_000L else 30_000L
-                        Log.i(TAG, "Stats polling: using ${interval / 1000}s interval (foreground=$isForeground)")
+                        Log.d(TAG, "Stats polling: using ${interval / 1000}s interval (foreground=$isForeground)")
                         while (isActive) {
                             delay(interval)
                             fetchAndUpdateStats()
