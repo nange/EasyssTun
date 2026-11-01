@@ -1,6 +1,6 @@
 # EasyssTun
 
-> **Note:** 此仓库原始版本 fork 自 [bingooo/EasyssTun](https://github.com/bingooo/EasyssTun)。现已完成大量重构。
+> **Note:** 此仓库原始代码 fork 自 [bingooo/EasyssTun](https://github.com/bingooo/EasyssTun)。现已完成整体重构。
 
 基于 [easyss](https://github.com/nange/easyss) 代理的轻量级 Android VPN，底层使用高性能、低开销的 [tun2socks](https://github.com/heiher/hev-socks5-tunnel) 实现。
 
