@@ -18,6 +18,9 @@ kotlin-profile
 .kotlin
 .zcode
 
+# agent worktrees（见 AGENTS.md「Git 工作流」）
+.agents/worktrees/
+
 # signing
 keystore.properties
 *.jks
