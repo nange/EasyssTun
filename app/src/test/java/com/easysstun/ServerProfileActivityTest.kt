@@ -7,6 +7,7 @@ import android.widget.EditText
 import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -32,6 +33,15 @@ class ServerProfileActivityTest {
         ).edit().clear().commit()
         ProfileStore.resetForTests()
         VpnController.resetForTests()
+    }
+
+    @After
+    fun tearDown() {
+        ProfileStore.resetForTests()
+        VpnController.resetForTests()
+        PreferenceManager.getDefaultSharedPreferences(
+            ApplicationProvider.getApplicationContext()
+        ).edit().clear().commit()
     }
 
     private fun launch(profileId: String? = null): ServerProfileActivity {

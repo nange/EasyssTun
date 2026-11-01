@@ -9,7 +9,7 @@ import java.io.File
  * field was blank), which is exactly the condition under which the native
  * config must not be pointed at a path.
  */
-data class ProfileConfigPaths(
+internal data class ProfileConfigPaths(
     val customCa: String? = null,
     val directFile: String? = null,
     val proxyFile: String? = null,

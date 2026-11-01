@@ -330,8 +330,11 @@ class ServerProfileActivity : AppCompatActivity() {
             customCa = customCa,
             directFile = directFile,
             proxyFile = proxyFile,
+            // A blank local port means "use the default", so store the resolved
+            // value: the profile always carries a concrete port.
             socksPort = socksPort ?: Profile.DEFAULT_SOCKS_PORT,
-            timeout = timeoutSeconds.takeIf { it > 0 }
+            // A blank timeout means "let libeasyss apply its own default".
+            timeout = if (timeoutText.isEmpty()) null else timeoutSeconds
         )
 
         if (profileId == null) { // A new profile is being added

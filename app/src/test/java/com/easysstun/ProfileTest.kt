@@ -1,6 +1,5 @@
 package com.easysstun
 
-import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -15,8 +14,6 @@ import org.junit.Test
  * as a string.
  */
 class ProfileTest {
-
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private fun createFullProfile() = Profile(
         id = "test-id-001",
@@ -51,8 +48,8 @@ class ProfileTest {
     @Test
     fun serializeThenDeserialize_producesEqualProfile() {
         val original = createFullProfile()
-        val encoded = json.encodeToString(Profile.serializer(), original)
-        val decoded = json.decodeFromString(Profile.serializer(), encoded)
+        val encoded = appJson.encodeToString(Profile.serializer(), original)
+        val decoded = appJson.decodeFromString(Profile.serializer(), encoded)
 
         assertEquals("Deserialized profile should equal original", original, decoded)
         assertEquals("ID should survive round-trip", original.id, decoded.id)
@@ -66,8 +63,8 @@ class ProfileTest {
 
     @Test
     fun serializeThenDeserialize_minimalProfile_preservesDefaults() {
-        val encoded = json.encodeToString(Profile.serializer(), minimalProfile())
-        val decoded = json.decodeFromString(Profile.serializer(), encoded)
+        val encoded = appJson.encodeToString(Profile.serializer(), minimalProfile())
+        val decoded = appJson.decodeFromString(Profile.serializer(), encoded)
 
         assertEquals("min-timeout", decoded.id)
         assertEquals("Default encryption should be chacha20-poly1305", "chacha20-poly1305", decoded.encryption)
@@ -132,7 +129,7 @@ class ProfileTest {
             }
         """.trimIndent()
 
-        val profile = json.decodeFromString(Profile.serializer(), jsonWithExtra)
+        val profile = appJson.decodeFromString(Profile.serializer(), jsonWithExtra)
         assertEquals("extra-keys-test", profile.id)
         assertEquals("Test", profile.name)
         assertEquals("s.example.com", profile.server)
@@ -140,7 +137,7 @@ class ProfileTest {
 
     @Test
     fun allFieldsSerialized_producesValidJson() {
-        val encoded = json.encodeToString(Profile.serializer(), createFullProfile())
+        val encoded = appJson.encodeToString(Profile.serializer(), createFullProfile())
 
         assertTrue("JSON should contain id", encoded.contains("\"id\":\"test-id-001\""))
         assertTrue("JSON should contain encryption", encoded.contains("\"encryption\":\"aes-256-gcm\""))
@@ -171,7 +168,7 @@ class ProfileTest {
             }
         """.trimIndent()
 
-        val profile = json.decodeFromString(Profile.serializer(), legacyJson)
+        val profile = appJson.decodeFromString(Profile.serializer(), legacyJson)
 
         assertEquals(8443, profile.serverPort)
         assertEquals(2081, profile.socksPort)
@@ -185,7 +182,7 @@ class ProfileTest {
             {"id":"q","name":"Q","server":"s","serverPort":"443","password":"pw","enableQuic":"false"}
         """.trimIndent()
 
-        assertEquals(false, json.decodeFromString(Profile.serializer(), legacyJson).enableQuic)
+        assertEquals(false, appJson.decodeFromString(Profile.serializer(), legacyJson).enableQuic)
     }
 
     @Test
@@ -203,7 +200,7 @@ class ProfileTest {
             }
         """.trimIndent()
 
-        val profile = json.decodeFromString(Profile.serializer(), legacyJson)
+        val profile = appJson.decodeFromString(Profile.serializer(), legacyJson)
 
         assertNull("a blank local port means the default", profile.socksPort)
         assertEquals("the stats port falls back to the default", 5080, profile.statsPort())
@@ -224,7 +221,7 @@ class ProfileTest {
             }
         """.trimIndent()
 
-        val profile = json.decodeFromString(Profile.serializer(), legacyJson)
+        val profile = appJson.decodeFromString(Profile.serializer(), legacyJson)
 
         assertNull("an unparseable server port falls back to the native default", profile.serverPort)
         assertNull("an unparseable local port falls back to the default", profile.socksPort)
@@ -247,7 +244,7 @@ class ProfileTest {
             }
         """.trimIndent()
 
-        val profile = json.decodeFromString(Profile.serializer(), legacyJson)
+        val profile = appJson.decodeFromString(Profile.serializer(), legacyJson)
         assertEquals("legacy", profile.id)
         assertEquals("legacy.example.com", profile.server)
         assertEquals(true, profile.enableQuic)
@@ -265,13 +262,13 @@ class ProfileTest {
             }
         """.trimIndent()
 
-        assertEquals(Profile.DEFAULT_TIMEOUT, json.decodeFromString(Profile.serializer(), legacyJson).timeout)
+        assertEquals(Profile.DEFAULT_TIMEOUT, appJson.decodeFromString(Profile.serializer(), legacyJson).timeout)
     }
 
     @Test
     fun timeout_survivesSerializationRoundTrip() {
         val original = createFullProfile().copy(timeout = 45)
-        val decoded = json.decodeFromString(Profile.serializer(), json.encodeToString(Profile.serializer(), original))
+        val decoded = appJson.decodeFromString(Profile.serializer(), appJson.encodeToString(Profile.serializer(), original))
 
         assertEquals(45, decoded.timeout)
         assertEquals(original, decoded)

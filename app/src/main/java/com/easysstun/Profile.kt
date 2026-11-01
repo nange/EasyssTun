@@ -128,9 +128,10 @@ fun parsePortOrNull(raw: String): Int? {
  *
  * Pure: the auxiliary files (custom CA, direct/proxy rules) are written by
  * [ProfileConfigWriter] beforehand, and [paths] tells this function where they
- * are. A missing path means the profile does not use that file.
+ * are. [paths] is required on purpose: a caller that forgot to write the files
+ * must not silently start with a config that drops them.
  */
-fun Profile.buildSimpleConfig(paths: ProfileConfigPaths = ProfileConfigPaths()): SimpleConfig {
+internal fun Profile.buildSimpleConfig(paths: ProfileConfigPaths): SimpleConfig {
     val config = SimpleConfig()
 
     config.setServer(server)

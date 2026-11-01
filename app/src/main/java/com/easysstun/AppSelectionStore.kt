@@ -31,7 +31,7 @@ internal class AppSelectionStore(private val pref: Pref) {
                 Log.i(TAG, "migrating the legacy app selection into $key (${legacy.size} apps)")
                 pref.putStringSet(key, legacy)
                 pref.remove(SELECTED_APPS)
-                return legacy
+                return legacy.toSet()
             }
         }
         return emptySet()

@@ -49,6 +49,7 @@ class ServiceReceiverTest {
     @After
     fun tearDown() {
         ShadowVpnService.reset()
+        ProfileStore.resetForTests()
         sharedPreferences.edit().clear().commit()
     }
 

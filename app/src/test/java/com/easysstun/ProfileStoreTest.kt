@@ -5,6 +5,10 @@ import android.os.Build
 import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -14,6 +18,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 import java.util.UUID
 
 /**
@@ -214,9 +219,7 @@ class ProfileStoreTest {
     fun all_readsProfilesWrittenByLegacyBuilds() {
         // Exact shape written by builds before the typed model: every numeric
         // field is a string and the QUIC flag is "true"/"false".
-        pref.putString(
-            ProfileStore.SERVER_PROFILES,
-            """
+        val legacyJson = """
             [{
                 "id": "legacy",
                 "name": "Legacy",
@@ -227,8 +230,8 @@ class ProfileStoreTest {
                 "socksPort": "4080",
                 "timeout": "45"
             }]
-            """.trimIndent(),
-        )
+        """.trimIndent()
+        pref.putString(ProfileStore.LEGACY_SERVER_PROFILES, legacyJson)
 
         val profile = store.all().single()
 
@@ -236,6 +239,95 @@ class ProfileStoreTest {
         assertEquals(4080, profile.socksPort)
         assertEquals(45, profile.timeout)
         assertTrue(profile.enableQuic)
+    }
+
+    @Test
+    fun all_migratesTheLegacyStoreOnceAndKeepsItForDowngrades() {
+        val legacyJson = """[{"id":"legacy","name":"Legacy","server":"s","serverPort":"443","password":"pw"}]"""
+        pref.putString(ProfileStore.LEGACY_SERVER_PROFILES, legacyJson)
+
+        store.all()
+
+        assertEquals(
+            "the migrated payload is copied to the current key",
+            legacyJson,
+            pref.getString(ProfileStore.SERVER_PROFILES),
+        )
+        assertEquals(
+            "the legacy key is kept so a downgraded build still reads its profiles",
+            legacyJson,
+            pref.getString(ProfileStore.LEGACY_SERVER_PROFILES),
+        )
+    }
+
+    @Test
+    fun all_prefersTheCurrentKeyOverTheLegacyOne() {
+        pref.putString(
+            ProfileStore.LEGACY_SERVER_PROFILES,
+            """[{"id":"old","name":"Old","server":"s","serverPort":"443","password":"pw"}]""",
+        )
+        pref.putString(
+            ProfileStore.SERVER_PROFILES,
+            """[{"id":"new","name":"New","server":"s","serverPort":443,"password":"pw"}]""",
+        )
+
+        assertEquals("new", store.all().single().id)
+    }
+
+    @Test
+    fun save_writesOnlyTheCurrentKey() {
+        pref.putString(ProfileStore.LEGACY_SERVER_PROFILES, "legacy payload")
+        store.add(profile("id1"))
+
+        assertEquals(
+            "a write must not touch the downgrade-compatible legacy key",
+            "legacy payload",
+            pref.getString(ProfileStore.LEGACY_SERVER_PROFILES),
+        )
+        assertTrue(pref.getString(ProfileStore.SERVER_PROFILES)?.contains("\"id\":\"id1\"") == true)
+    }
+
+    @Test
+    fun all_withCorruptedPayload_logsOncePerPayload() {
+        pref.putString(ProfileStore.SERVER_PROFILES, "NOT VALID JSON {{{")
+        ShadowLog.clear()
+
+        assertTrue(store.all().isEmpty())
+        assertTrue(store.all().isEmpty())
+        assertTrue(store.all().isEmpty())
+
+        assertEquals(
+            "a corrupt store must not log on every read",
+            1,
+            ShadowLog.getLogsForTag("ProfileStore").size,
+        )
+    }
+
+    @Test
+    fun delete_notifiesOnlyAfterTheActivePointerMoved() {
+        store.add(profile("id1"))
+        store.add(profile("id2"))
+        store.select("id2")
+
+        // An undispatched collector resumes inline inside the change event, which
+        // is exactly the case where a pointer written after the event is missed.
+        val seen = mutableListOf<String?>()
+        val job = CoroutineScope(Dispatchers.Unconfined).launch {
+            store.changes.drop(1).collect { seen += store.activeId() }
+        }
+        store.delete("id2")
+        job.cancel()
+
+        assertEquals(listOf("id1"), seen)
+    }
+
+    @Test
+    fun delete_unknownId_doesNotNotify() {
+        val before = store.changes.value
+
+        store.delete("does-not-exist")
+
+        assertEquals(before, store.changes.value)
     }
 
     @Test

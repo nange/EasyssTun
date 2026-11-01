@@ -387,7 +387,7 @@ class VpnControllerTest {
         controller.onServiceRunning(profile.id)
         assertTrue(TunnelState.ready.value)
 
-        // PREFS_UPDATED restart: the service rebuilds the tunnel from Pref.
+        // ConfigChangeNotifier restart: the service rebuilds the tunnel from the stores.
         controller.onServiceStarting(profile.id)
 
         assertEquals(VpnState.Connecting(profile.id), controller.state.value)

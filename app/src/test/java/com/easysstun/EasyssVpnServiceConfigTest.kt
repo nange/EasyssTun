@@ -35,6 +35,7 @@ class EasyssVpnServiceConfigTest {
             ApplicationProvider.getApplicationContext()
         ).edit().clear().commit()
         VpnController.resetForTests()
+        ProfileStore.resetForTests()
         TunnelState.update(false)
         service = Robolectric.buildService(EasyssVpnService::class.java).get()
     }
@@ -42,6 +43,7 @@ class EasyssVpnServiceConfigTest {
     @After
     fun tearDown() {
         VpnController.resetForTests()
+        ProfileStore.resetForTests()
         TunnelState.update(false)
         PreferenceManager.getDefaultSharedPreferences(service).edit().clear().commit()
     }
