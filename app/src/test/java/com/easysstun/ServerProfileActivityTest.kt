@@ -319,4 +319,40 @@ class ServerProfileActivityTest {
         assertEquals("Office", saved.name)
         assertEquals("new-secret", saved.password)
     }
+
+    @Test
+    fun launchWithAMissingProfileFinishesWithAnError() {
+        val activity = launch(profileId = "deleted-before-open")
+
+        assertTrue("the form must not stay open for a deleted profile", activity.isFinishing)
+        assertEquals(
+            activity.getString(R.string.error_profile_missing),
+            ShadowToast.getTextOfLatestToast()
+        )
+    }
+
+    @Test
+    fun saveAfterTheProfileWasDeletedReportsAnErrorInsteadOfSuccess() {
+        val profile = Profile(
+            id = "deleted-while-open",
+            name = "Server",
+            server = "example.com",
+            serverPort = 443,
+            password = "secret",
+        )
+        val store = ProfileStore.get(ApplicationProvider.getApplicationContext())
+        store.add(profile)
+        val activity = launch(profileId = profile.id)
+        store.delete(profile.id)
+
+        activity.save()
+
+        assertTrue("the form must not stay open after the profile disappeared", activity.isFinishing)
+        assertEquals(
+            "the user must not be told the profile was updated",
+            activity.getString(R.string.error_profile_missing),
+            ShadowToast.getTextOfLatestToast()
+        )
+        assertTrue("the deleted profile must not come back", ProfileStore.get(activity).all().isEmpty())
+    }
 }

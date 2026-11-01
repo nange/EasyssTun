@@ -97,6 +97,7 @@
     <string name="error_port_invalid">Port must be a number between 1 and 65535</string>
     <string name="error_required_fields">Server, Port, and Password cannot be empty</string>
     <string name="error_name_duplicate">A configuration named “%1$s” already exists</string>
+    <string name="error_profile_missing">This configuration no longer exists</string>
     <string name="profile_saved">Profile saved</string>
     <string name="profile_updated">Profile updated</string>
     <string name="server_address_active">%1$s  (Active)</string>

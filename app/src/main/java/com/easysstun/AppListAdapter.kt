@@ -114,7 +114,7 @@ class AppListAdapter(
     }
 
     private fun labelOf(appInfo: PackageInfo): String =
-        labelCache.getOrPut(appInfo.packageName) {
+        labelCache.computeIfAbsent(appInfo.packageName) {
             appInfo.applicationInfo?.loadLabel(packageManager)?.toString() ?: appInfo.packageName
         }
 

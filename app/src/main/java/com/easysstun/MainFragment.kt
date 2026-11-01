@@ -133,7 +133,6 @@ class MainFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (_binding == null) return
         // The server list and the per-app routing can change while this screen
         // is in the background (profile edit/delete, app list, proxy mode), so
         // refresh the configuration-dependent parts and re-render the current

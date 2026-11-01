@@ -24,7 +24,7 @@ internal object LogTags {
     const val VPN_CONTROLLER = "VpnController"
 
     /** Tags captured by the in-app log viewer. */
-    val ALL = arrayOf(
+    val ALL: List<String> = listOf(
         APP_STATE,
         APP_SELECTION,
         GO,

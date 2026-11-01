@@ -57,6 +57,15 @@ class ServerProfileActivity : AppCompatActivity() {
         profiles = ProfileStore.get(this)
         controller = VpnController.get(this)
         profileId = intent.getStringExtra(EXTRA_PROFILE_ID)
+        // The profile can disappear between the list screen and this form (it
+        // was deleted elsewhere); editing a blank form whose save would be a
+        // silent no-op is worse than telling the user and closing the screen.
+        val editingProfile = profileId?.let { profiles.find(it) }
+        if (profileId != null && editingProfile == null) {
+            Toast.makeText(this, getString(R.string.error_profile_missing), Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
 
         encryptionOptions = bindOptions(
             binding.profileEncryption,
@@ -89,9 +98,7 @@ class ServerProfileActivity : AppCompatActivity() {
             R.array.easyss_ipv6_rule_value,
         )
 
-        profileId?.let { id ->
-            profiles.find(id)?.let { bindProfile(it) }
-        }
+        editingProfile?.let { bindProfile(it) }
 
         setupAutoTrim()
 
@@ -277,6 +284,16 @@ class ServerProfileActivity : AppCompatActivity() {
                 getString(R.string.error_name_duplicate, savedName),
                 Toast.LENGTH_SHORT
             ).show()
+            return
+        }
+
+        // The profile can be deleted while the form is open. ProfileStore.update()
+        // ignores an unknown id, so without this check the screen would claim the
+        // profile was updated and close as if it had been saved.
+        val editingId = profileId
+        if (editingId != null && profiles.find(editingId) == null) {
+            Toast.makeText(this, getString(R.string.error_profile_missing), Toast.LENGTH_SHORT).show()
+            finish()
             return
         }
 

@@ -11,9 +11,12 @@ import android.widget.Spinner
  * selection that mirrors [ProfileStore.activeId], and the mapping from a spinner
  * entry back to its [Profile].
  *
- * Restoring the active entry after a refresh is not a user action, so the
- * selection is applied while the listener is suppressed; [onSelected] only fires
- * for entries the user actually picks.
+ * Restoring the active entry after a refresh is not a user action. The spinner
+ * dispatches its selection callback on the next layout, i.e. after [refresh] has
+ * returned, so a flag toggled around `setSelection()` cannot cover it; the
+ * listener instead drops any selection that resolves to the current active
+ * profile. [onSelected] therefore only fires for an entry the user actually
+ * picked, independent of when the callback is delivered.
  */
 internal class ServerSpinnerController(
     private val context: Context,
@@ -24,9 +27,6 @@ internal class ServerSpinnerController(
     /** Profiles currently backing the adapter, indexed by spinner position. */
     private var boundProfiles: List<Profile> = emptyList()
 
-    /** True while [refresh] changes the selection on the user's behalf. */
-    private var restoring = false
-
     init {
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
@@ -35,8 +35,12 @@ internal class ServerSpinnerController(
                 position: Int,
                 id: Long,
             ) {
-                if (restoring) return
-                boundProfiles.getOrNull(position)?.let(onSelected)
+                val profile = boundProfiles.getOrNull(position) ?: return
+                // Programmatic restore selects the active profile; a user tap
+                // always resolves to a different one (the active entry is the
+                // current selection, so tapping it changes nothing).
+                if (profile.id == profiles.activeId()) return
+                onSelected(profile)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -50,7 +54,8 @@ internal class ServerSpinnerController(
      */
     fun refresh() {
         val current = profiles.all()
-        if (current != boundProfiles) {
+        val adapterRebuilt = current != boundProfiles
+        if (adapterRebuilt) {
             boundProfiles = current
             val adapter = ArrayAdapter(
                 context,
@@ -62,9 +67,10 @@ internal class ServerSpinnerController(
         }
 
         val activePosition = current.indexOfFirst { it.id == profiles.activeId() }
-        if (activePosition < 0 || activePosition == spinner.selectedItemPosition) return
-        restoring = true
+        if (activePosition < 0) return
+        // A rebuilt adapter may still report the previous selection until the
+        // next layout, so always point it at the active entry in that case.
+        if (!adapterRebuilt && activePosition == spinner.selectedItemPosition) return
         spinner.setSelection(activePosition, false)
-        restoring = false
     }
 }

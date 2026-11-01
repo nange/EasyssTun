@@ -92,6 +92,7 @@
     <string name="error_port_invalid">端口必须是 1–65535 之间的数字</string>
     <string name="error_required_fields">服务器、端口和密码不能为空</string>
     <string name="error_name_duplicate">已存在名为“%1$s”的配置</string>
+    <string name="error_profile_missing">该配置已不存在</string>
     <string name="profile_saved">配置已保存</string>
     <string name="profile_updated">配置已更新</string>
     <string name="server_address_active">%1$s（当前使用）</string>

@@ -133,7 +133,7 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - 配置层与档案模型的覆盖：`ProfileStoreTest`（CRUD、active id 回退、变更事件、损坏 JSON）、`AppSelectionStoreTest`（按模式隔离、旧 key 迁移）、`ProfileConfigWriterTest`（写入、内容未变不重写、失败 Result）、`ProfileTest`（类型化字段、旧 JSON 迁移、端口/超时解析）。
 - VPN 状态机与首页状态的覆盖：`VpnControllerTest`（命令幂等、切服、失败只报一次、撤权、进程重建/resume、TunnelState 派生）、`MainFragmentStateTest`（连接/停止/切服中旋转/失败弹窗的 UI 状态）、`EasyssVpnServiceConfigTest`（无有效配置上报 Failed、空闲 DISCONNECT 会 stopSelf）。
 - 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比/时长/字节单位）。
-- UI 表单与列表的覆盖：`ServerProfileActivityTest`（字段 trim、端口/超时校验、重名拒绝、下拉框值往返）、`MainFragmentStateTest`（首页 spinner 与 VpnState 渲染）、`UpdateCardViewTest`（卡片版本号/debug 提示/重新挂载后重新订阅）、`LogViewModelTest`（日志分页窗口）。
+- UI 表单与列表的覆盖：`ServerProfileActivityTest`（字段 trim、端口/超时校验、重名拒绝、下拉框值往返、档案被删除时的保存错误）、`ServerSpinnerControllerTest`（程序化回填不触发切服、列表未变不重建 adapter）、`MainFragmentStateTest`（首页 spinner 与 VpnState 渲染）、`UpdateCardViewTest`（卡片版本号/debug 提示/重新挂载后重新订阅）、`LogViewModelTest`（日志分页窗口）。
 
 ## Git 提交与 PR 规范
 
