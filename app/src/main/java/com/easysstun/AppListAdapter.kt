@@ -64,6 +64,10 @@ class AppListAdapter(
 
     fun setAppList(list: List<PackageInfo>) {
         allApps = list
+        // The list is reloaded after mode/system-app changes, and an installed
+        // app may have been updated in the meantime; re-read labels instead of
+        // showing a stale one from the previous load.
+        labelCache.clear()
         differ.submitList(list)
     }
 
