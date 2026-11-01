@@ -36,6 +36,7 @@ make release    # ./gradlew assembleRelease —— 发布构建（需签名配�
 make lint       # ./gradlew lintDebug
 make test       # ./gradlew test —— 单元测试（Robolectric，本地 JVM 运行）
 make check      # lint + test（CI 执行的就是这个）
+make worktree-clean  # 删除 .agents/worktrees/ 下的工作树及其分支（见「Git 工作流」）
 make clean
 # Windows 上这些命令由 Makefile 自动经 `cmd /c gradlew.bat` 执行
 ```
@@ -111,7 +112,29 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
   修改资产命名或发布方式时，必须同步更新 `UpdateRelease.kt` 的正则、`UpdateReleaseTest.kt` 与本段文档。
 - **Gradle wrapper 升级**：`gradlew`、`gradlew.bat`、`gradle/wrapper/gradle-wrapper.jar`、`gradle/wrapper/gradle-wrapper.properties` 四个文件必须同版本、**一起提交**（wrapper jar 入库是 Gradle 官方要求；勿在 `.gitignore` 里加裸 `wrapper` 规则，它会匹配 `gradle/wrapper/` 并让 `git add` 直接报错退出）。升级必须跑**两次** wrapper 任务：先 `./gradlew wrapper --gradle-version <新版本>`（由当前版本执行，只改 properties），再执行一次 `./gradlew wrapper`（此时由新版本执行，刷新 jar；脚本是否变化取决于上游模板）。脚本/jar 到底变没变一律以 `git diff` 为准，有变化就与 properties 一起提交——模板未变时脚本可以一字不动（如 9.6.1→9.7.1），模板变了则必须重新生成（如 9.5.1→9.6.1 改动了 `gradlew`/`gradlew.bat`）。收尾校验：`./gradlew --version`，并将 `shasum -a 256 gradle/wrapper/gradle-wrapper.jar` 与 `https://services.gradle.org/distributions/gradle-<版本>-wrapper.jar.sha256` 比对。**切勿合并外部 PR 提交的 wrapper jar**，务必用可信发行版按上述步骤本地重新生成。
 
-## 编码规范
+## 测试
+
+- 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
+- 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
+- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（偏好键值）。
+- 配置层与档案模型的覆盖：`ProfileStoreTest`（CRUD、active id 回退、变更事件、损坏 JSON）、`AppSelectionStoreTest`（按模式隔离、旧 key 迁移）、`ProfileConfigWriterTest`（写入、内容未变不重写、失败 Result）、`ProfileTest`（类型化字段、旧 JSON 迁移、端口/超时解析）。
+- VPN 状态机与首页状态的覆盖：`VpnControllerTest`（命令幂等、切服、失败只报一次、撤权、进程重建/resume、TunnelState 派生）、`MainFragmentStateTest`（连接/停止/切服中旋转/失败弹窗的 UI 状态）、`EasyssVpnServiceConfigTest`（无有效配置上报 Failed、空闲 DISCONNECT 会 stopSelf）。
+- 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比/时长/字节单位）。
+- UI 表单与列表的覆盖：`ServerProfileActivityTest`（字段 trim、端口/超时校验、重名拒绝、下拉框值往返、档案被删除时的保存错误）、`ServerSpinnerControllerTest`（程序化回填不触发切服、列表未变不重建 adapter）、`MainFragmentStateTest`（首页 spinner 与 VpnState 渲染）、`UpdateCardViewTest`（卡片版本号/debug 提示/重新挂载后重新订阅）、`LogViewModelTest`（日志分页窗口）。
+
+## 工作规范
+
+上文是**项目事实**（结构、构建、契约）；本节是 **Agent 行为约定**。两者冲突时以用户当次指令为准。
+
+### 交互约定
+
+- **始终使用简体中文回复用户**；代码、标识符、commit message、PR 标题保持英文。
+- **不主动提交**：用户没有明确要求提交代码前，不要 `git commit`、`git push` 或创建 PR。改动完成后说明改了什么、怎么验证，把提交时机留给用户。
+- 同理不做破坏性 git 操作（`reset --hard`、强制 checkout 覆盖工作区、删除他人分支等），除非用户明确要求。
+
+### 代码与注释
+
+代码规范：
 
 - Kotlin 代码风格：`official`（见 `gradle.properties`）。
 - 数据序列化统一用 `kotlinx.serialization`，不要引入 Gson/Moshi。
@@ -125,19 +148,31 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 - UI 层一律使用 ViewBinding（含自定义 View 内部），不要新增 `findViewById`；列表用 `RecyclerView` + `ListAdapter`/`AsyncListDiffer`，异步加载的图标/文案必须绑定到 ViewHolder 并在回收时取消。用户可见文案必须同时写入 `values/strings.xml` 与 `values-zh/strings.xml`。
 - 日志：tag 统一定义在 `LogTags`，新增 logger 必须把 tag 加进 `LogTags.ALL`（否则 `logcat -s` 过滤会丢弃该 tag）；高频状态变化用 `Log.d`，不要用 INFO 刷屏。
 
-## 测试
+注释约定：只写「读代码看不出来、写错会静默出错」的两类事实。
 
-- 单元测试位于 `app/src/test/java/com/easysstun/`，基于 JUnit4 + Robolectric，`make test` 本地即可跑，不需要设备/模拟器。
-- 新增纯逻辑（工具类、序列化、状态管理）时应附带单元测试。
-- 应用内更新的覆盖：`UpdateVersionTest`（rc 数字版本比较）、`UpdateReleaseTest`（Release JSON/资产名解析与选包）、`UpdateManagerTest`（节流、状态机、下载校验/取消、提示去重）、`UpdateInstallerTest`（权限/签名校验/FileProvider intent）、`UpdateCardViewTest`（首页卡片版本号/debug 提示）、`PrefTest`（偏好键值）。
-- 配置层与档案模型的覆盖：`ProfileStoreTest`（CRUD、active id 回退、变更事件、损坏 JSON）、`AppSelectionStoreTest`（按模式隔离、旧 key 迁移）、`ProfileConfigWriterTest`（写入、内容未变不重写、失败 Result）、`ProfileTest`（类型化字段、旧 JSON 迁移、端口/超时解析）。
-- VPN 状态机与首页状态的覆盖：`VpnControllerTest`（命令幂等、切服、失败只报一次、撤权、进程重建/resume、TunnelState 派生）、`MainFragmentStateTest`（连接/停止/切服中旋转/失败弹窗的 UI 状态）、`EasyssVpnServiceConfigTest`（无有效配置上报 Failed、空闲 DISCONNECT 会 stopSelf）。
-- 首页统计的覆盖：`StatsSnapshotTest`/`StatsClientTest`（stats JSON 解析与 HTTP 失败降级）、`StatsBinderTest`（统计卡片渲染/展开/不可用态）、`FormatUtilsTest`（hex/百分比/时长/字节单位）。
-- UI 表单与列表的覆盖：`ServerProfileActivityTest`（字段 trim、端口/超时校验、重名拒绝、下拉框值往返、档案被删除时的保存错误）、`ServerSpinnerControllerTest`（程序化回填不触发切服、列表未变不重建 adapter）、`MainFragmentStateTest`（首页 spinner 与 VpnState 渲染）、`UpdateCardViewTest`（卡片版本号/debug 提示/重新挂载后重新订阅）、`LogViewModelTest`（日志分页窗口）。
+1. **顺序 / 锁 / 生命周期约束**——例如必须先 `stop()` 再 `release()`、回调在哪个线程触发、字段在哪一阶段才有效。
+2. **外部系统行为或跨包契约**——例如服务端字段语义、AAR/JNI 的类名与方法签名、系统 API 的隐式副作用。
 
-## Git 提交与 PR 规范
+不要写：
 
-### Commit 信息格式
+- 代码演进史（"过去用 X，现在改成 Y"、"取代了某某"）——历史看 `git log` 与 commit message。
+- 枚举式清单（"只有这五个方法会写这个字段"）——新增一个方法就变成错误文档。
+- 设计取舍的长篇解释——写进 commit message 或本文件。
+
+其他：单个注释块不超过 3 行；函数名、类名已经说清楚的不要再加 godoc 式复述；不写"这里做了什么"的翻译式注释。
+
+### Git 工作流
+
+**worktree**：仅当当前处于主分支（本仓库为 `easyss`）时，代码改动才先建 worktree 再改；已经在功能分支、用户指定的分支或工作树上时直接改。
+
+- 目录固定为 `.agents/worktrees/<name>`，`<name>` 可用 `type/name` 分层（如 `feat/app-list-filter`，对应分支名相同）。
+- 从当前 HEAD 或用户指定的 base 新建分支。
+- 该目录不入库（`.gitignore` 已忽略），不要提交其中的内容。
+- 清理统一走 `make worktree-clean`：删除 `.agents/worktrees/` 下的工作树及其检出的分支（分支强制删除）。不要手动 `rm -rf`，否则 `git worktree list` 里会残留失效条目。
+
+**提交前检查**：执行 `make lint`，有告警或错误先修复再提交；改动代码后完整验证用 `make check`（lint + test）。
+
+### 提交信息格式
 
 遵循 Conventional Commits 风格，单行、全英文、小写开头、祈使语气、结尾不加句号：
 
@@ -165,12 +200,21 @@ app/src/test/                 # Robolectric 单元测试（含 Update* 版本/�
 
 一次提交只做一件事；改动较大时拆分为多个小提交。
 
-### PR 提交要求
+### 提交 PR
 
-- **分支**：如果用户要求提交PR。则不要直接向 `easyss` 主分支提交改动，应从最新的 `easyss` 分支切出**单独的功能分支**开发（命名用英文短横线格式，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
-- **PR 标题**：用英文，建议同样采用 `<type>: <description>` 格式。
-- **PR 描述**：用中文撰写，需包含：改动动机、具体内容、影响范围、验证方式（如 `make check` 通过、真机测试结果等）。
-- PR 合入 `easyss` 后 CI 会自动执行 `make check`；提交 PR 前请在本地先跑一遍确保通过。
+- 不要直接向 `easyss` 主分支提交 PR 改动：从最新 `easyss` 切出**单独的功能分支**（英文短横线命名，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
+- PR 标题用英文，采用 `<type>: <description>` 格式。
+- PR 描述用中文，包含：改动动机、具体内容、影响范围、验证方式（如 `make check` 通过、真机测试结果）。
+- 合入 `easyss` 后 CI 自动执行 `make check`；提 PR 前先在本地跑一遍。
+
+### Review PR
+
+目标简洁高效，不逐段复述 diff。
+
+1. **先确认代码是否已在本地**：查 `git worktree list`、`.agents/worktrees/`、`git branch -r`、`git log --all` 中是否有该 PR 的 head 提交。命中就直接在对应工作树/分支评审；需要最新提交时只 `git fetch`，不要重新 clone。
+2. 本地确实没有（如外部 fork 的 PR）才 clone 或下载补丁。
+3. 从 PR 描述与改动范围入手，只输出影响**正确性、跨包契约、明显维护成本**的问题；格式与命名偏好不提。
+4. 结论先行：每个问题给出文件/行号、问题本身、判断依据（为什么错、会怎么坏）。不为了凑数提建议。
 
 ## 版本发布流程
 
