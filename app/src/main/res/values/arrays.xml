@@ -189,8 +189,8 @@
         <item>Error</item>
     </string-array>
     <string-array name="easyss_enable_quic_list">
-        <item>否</item>
-        <item>是</item>
+        <item>No</item>
+        <item>Yes</item>
     </string-array>
     <string-array name="easyss_enable_quic_list_value">
         <item>false</item>
@@ -203,9 +203,9 @@
         <item>error</item>
     </string-array>
     <string-array name="easyss_ipv6_rule_list">
-        <item>自动</item>
-        <item>启用</item>
-        <item>禁用</item>
+        <item>Auto</item>
+        <item>Enabled</item>
+        <item>Disabled</item>
     </string-array>
     <string-array name="easyss_ipv6_rule_value">
         <item>auto</item>

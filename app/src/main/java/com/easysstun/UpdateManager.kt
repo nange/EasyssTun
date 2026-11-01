@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
-private const val TAG = "Updater"
+private const val TAG = LogTags.UPDATER
 
 /** Automatic checks run at most once per this interval. */
 internal const val AUTO_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
@@ -70,10 +70,39 @@ internal sealed interface UpdateState {
     data object Checking : UpdateState
     data class UpToDate(val versionName: String) : UpdateState
     data class Available(val release: AvailableRelease) : UpdateState
-    data class Downloading(val downloaded: Long, val total: Long) : UpdateState
+    data class Downloading(
+        val downloaded: Long,
+        val total: Long,
+        val release: AvailableRelease,
+    ) : UpdateState
     data class ReadyToInstall(val file: File, val release: AvailableRelease) : UpdateState
-    data class Failed(val action: UpdateAction, val error: UpdateError, val manual: Boolean) : UpdateState
+    data class Failed(
+        val action: UpdateAction,
+        val error: UpdateError,
+        val manual: Boolean,
+        /** The release whose download failed; null for a failed check. */
+        val release: AvailableRelease? = null,
+    ) : UpdateState
 }
+
+/**
+ * Everything [UpdateManager] needs from its host. Bundled so the manager has a
+ * single collaborator instead of an eleven-argument constructor, and so tests
+ * can build a fake environment with one named object.
+ */
+internal data class UpdateEnvironment(
+    val context: Context,
+    val pref: Pref,
+    val scope: CoroutineScope,
+    val sourceFactory: () -> UpdateSource,
+    val verifier: (File, Int) -> InstallCheck,
+    val clock: () -> Long,
+    val isDebugBuild: Boolean,
+    val currentVersionCode: Int,
+    val currentVersionName: String,
+    val supportedAbis: List<String>,
+    val tunnelReady: StateFlow<Boolean>,
+)
 
 /**
  * Application-scoped update orchestration: throttled check against the GitHub
@@ -96,18 +125,20 @@ internal sealed interface UpdateState {
  * instance through [create] from [EasyssTunApplication].
  */
 internal class UpdateManager internal constructor(
-    private val context: Context,
-    private val pref: Pref,
-    private val scope: CoroutineScope,
-    private val sourceFactory: () -> UpdateSource,
-    private val verifier: (File, Int) -> InstallCheck,
-    private val clock: () -> Long,
-    private val isDebugBuild: Boolean,
-    private val currentVersionCode: Int,
-    private val currentVersionName: String,
-    private val supportedAbis: List<String>,
-    private val tunnelReady: StateFlow<Boolean>,
+    private val env: UpdateEnvironment,
 ) {
+    private val context get() = env.context
+    private val pref get() = env.pref
+    private val scope get() = env.scope
+    private val sourceFactory get() = env.sourceFactory
+    private val verifier get() = env.verifier
+    private val clock get() = env.clock
+    private val isDebugBuild get() = env.isDebugBuild
+    private val currentVersionCode get() = env.currentVersionCode
+    private val currentVersionName get() = env.currentVersionName
+    private val supportedAbis get() = env.supportedAbis
+    private val tunnelReady get() = env.tunnelReady
+
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
@@ -117,30 +148,28 @@ internal class UpdateManager internal constructor(
     /** Set when the tunnel became ready while another check was still in flight. */
     private var pendingTunnelCheck = false
 
-    @Volatile
-    private var availableRelease: AvailableRelease? = null
     private var promptedVersionCode = 0
     private var lastAutoAttemptAt = 0L
-
-    /** Release selected by the last check; null when up to date or never checked. */
-    val activeRelease: AvailableRelease? get() = availableRelease
 
     companion object {
         fun create(context: Context): UpdateManager {
             val appContext = context.applicationContext
-            val pref = Pref(appContext)
             val manager = UpdateManager(
-                context = appContext,
-                pref = pref,
-                scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-                sourceFactory = { GitHubUpdateSource(ProfileStore.get(appContext)) },
-                verifier = { file, versionCode -> UpdateInstaller.verify(appContext, file, versionCode) },
-                clock = { System.currentTimeMillis() },
-                isDebugBuild = BuildConfig.DEBUG,
-                currentVersionCode = BuildConfig.VERSION_CODE,
-                currentVersionName = BuildConfig.VERSION_NAME,
-                supportedAbis = Build.SUPPORTED_ABIS.toList(),
-                tunnelReady = TunnelState.ready,
+                UpdateEnvironment(
+                    context = appContext,
+                    pref = Pref(appContext),
+                    scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                    sourceFactory = { GitHubUpdateSource(ProfileStore.get(appContext)) },
+                    verifier = { file, versionCode ->
+                        UpdateInstaller.verify(appContext, file, versionCode)
+                    },
+                    clock = { System.currentTimeMillis() },
+                    isDebugBuild = BuildConfig.DEBUG,
+                    currentVersionCode = BuildConfig.VERSION_CODE,
+                    currentVersionName = BuildConfig.VERSION_NAME,
+                    supportedAbis = Build.SUPPORTED_ABIS.toList(),
+                    tunnelReady = TunnelState.ready,
+                )
             )
             // The updater outlives any Activity, so it cannot rely on the
             // receivers MainFragment registers: watch the process-wide tunnel
@@ -265,9 +294,9 @@ internal class UpdateManager internal constructor(
     /** Downloads the release found by the last check, verifies it and hands it to the UI. */
     @Synchronized
     fun downloadAndInstall() {
-        val release = availableRelease ?: return
+        val release = releaseOf(_state.value) ?: return
         if (isBusy()) return
-        _state.value = UpdateState.Downloading(0L, release.asset.size)
+        _state.value = UpdateState.Downloading(0L, release.asset.size, release)
         job = scope.launch {
             val selfJob = coroutineContext[Job]
             val updateDir = UpdateInstaller.updateDir(context)
@@ -278,7 +307,7 @@ internal class UpdateManager internal constructor(
                 val source = sourceFactory()
                 withTimeout(DOWNLOAD_TIMEOUT_MS) {
                     source.download(release.asset, dest) { downloaded, total ->
-                        _state.value = UpdateState.Downloading(downloaded, total)
+                        _state.value = UpdateState.Downloading(downloaded, total, release)
                     }
                 }
                 Log.i(TAG, "downloaded update ${release.versionName} (${dest.length()} bytes), verifying")
@@ -294,14 +323,10 @@ internal class UpdateManager internal constructor(
                     InstallCheck.WrongPackage, InstallCheck.VersionMismatch ->
                         failDownload(UpdateError.MetadataMismatch, release)
                 }
-            } catch (e: TimeoutCancellationException) {
-                failDownload(UpdateError.Network, release)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: UpdateException) {
-                failDownload(e.error, release)
             } catch (e: Exception) {
-                failDownload(UpdateError.Io(e.message), release)
+                // A real cancellation must propagate; a timeout is a failure.
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                failDownload(errorOf(e), release)
             } finally {
                 if (!keepFile) dest.delete()
                 onJobFinished(selfJob)
@@ -314,6 +339,7 @@ internal class UpdateManager internal constructor(
      * opened: the file stays in the cache, but re-rendering the state (resume,
      * rotation) must not relaunch the installer the user just dismissed.
      */
+    @Synchronized
     fun markInstallLaunched() {
         if (_state.value is UpdateState.ReadyToInstall) {
             _state.value = UpdateState.Idle
@@ -329,6 +355,7 @@ internal class UpdateManager internal constructor(
     }
 
     /** Remembers the version the user asked not to be prompted about. */
+    @Synchronized
     fun dismissVersion(versionCode: Int) {
         pref.updateDismissedVersionCode = versionCode
     }
@@ -337,6 +364,7 @@ internal class UpdateManager internal constructor(
      * Returns true exactly once per version (per process) so rotation does not
      * re-open the "update available" dialog; skipped versions never prompt.
      */
+    @Synchronized
     fun consumePrompt(versionCode: Int): Boolean {
         if (pref.updateDismissedVersionCode == versionCode) return false
         if (promptedVersionCode == versionCode) return false
@@ -345,13 +373,29 @@ internal class UpdateManager internal constructor(
     }
 
     /** Re-runs whatever failed last: the check, or the download of the known release. */
+    @Synchronized
     fun retryLastAction() {
-        when ((_state.value as? UpdateState.Failed)?.action) {
-            UpdateAction.CHECK -> checkNow()
-            UpdateAction.DOWNLOAD ->
-                if (availableRelease != null) downloadAndInstall() else checkNow()
+        when (val failed = _state.value as? UpdateState.Failed) {
             null -> Unit
+            else -> when (failed.action) {
+                UpdateAction.CHECK -> checkNow()
+                UpdateAction.DOWNLOAD ->
+                    if (failed.release != null) downloadAndInstall() else checkNow()
+            }
         }
+    }
+
+    /**
+     * The release carried by the current state, if any. The state is the only
+     * place a release lives, so a retry after a failure does not need a second
+     * `activeRelease` field that could disagree with what the UI shows.
+     */
+    private fun releaseOf(state: UpdateState): AvailableRelease? = when (state) {
+        is UpdateState.Available -> state.release
+        is UpdateState.Downloading -> state.release
+        is UpdateState.ReadyToInstall -> state.release
+        is UpdateState.Failed -> state.release
+        UpdateState.Idle, UpdateState.Checking, is UpdateState.UpToDate -> null
     }
 
     /** Only called while holding this instance's monitor (see the class KDoc). */
@@ -376,6 +420,18 @@ internal class UpdateManager internal constructor(
         return clock() - lastAutoAttemptAt < AUTO_CHECK_RETRY_INTERVAL_MS
     }
 
+    /**
+     * Maps a check/download failure to the UI error model.
+     * [TimeoutCancellationException] is a [CancellationException] subclass, so
+     * timeouts are classified here before the coroutine decides whether a
+     * cancellation is a real one.
+     */
+    private fun errorOf(e: Throwable): UpdateError = when (e) {
+        is TimeoutCancellationException -> UpdateError.Network
+        is UpdateException -> e.error
+        else -> UpdateError.Io(e.message)
+    }
+
     @Synchronized
     private fun startCheck(manual: Boolean) {
         if (isBusy()) return
@@ -390,14 +446,10 @@ internal class UpdateManager internal constructor(
                 pref.updateLastCheckAt = clock()
                 _state.value = result
                 Log.i(TAG, "check finished: ${result::class.simpleName}")
-            } catch (e: TimeoutCancellationException) {
-                _state.value = UpdateState.Failed(UpdateAction.CHECK, UpdateError.Network, manual)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: UpdateException) {
-                _state.value = UpdateState.Failed(UpdateAction.CHECK, e.error, manual)
             } catch (e: Exception) {
-                _state.value = UpdateState.Failed(UpdateAction.CHECK, UpdateError.Io(e.message), manual)
+                // A real cancellation must propagate; a timeout is a failure.
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                _state.value = UpdateState.Failed(UpdateAction.CHECK, errorOf(e), manual)
             } finally {
                 onJobFinished(selfJob)
             }
@@ -425,14 +477,8 @@ internal class UpdateManager internal constructor(
             manual = manual,
         )
         return when {
-            codeNewer && nameNewer -> {
-                availableRelease = available
-                UpdateState.Available(available)
-            }
-            !codeNewer && !nameNewer -> {
-                availableRelease = null
-                UpdateState.UpToDate(currentVersionName)
-            }
+            codeNewer && nameNewer -> UpdateState.Available(available)
+            !codeNewer && !nameNewer -> UpdateState.UpToDate(currentVersionName)
             else -> {
                 // versionCode and versionName disagree: the release is inconsistent,
                 // so refuse to offer an install the package manager would reject.
@@ -440,7 +486,6 @@ internal class UpdateManager internal constructor(
                     TAG,
                     "inconsistent release ${release.tagName}: codeNewer=$codeNewer nameNewer=$nameNewer",
                 )
-                availableRelease = null
                 UpdateState.Failed(UpdateAction.CHECK, UpdateError.MetadataMismatch, manual)
             }
         }
@@ -448,6 +493,11 @@ internal class UpdateManager internal constructor(
 
     private fun failDownload(error: UpdateError, release: AvailableRelease) {
         Log.w(TAG, "update download failed: $error")
-        _state.value = UpdateState.Failed(UpdateAction.DOWNLOAD, error, release.manual)
+        _state.value = UpdateState.Failed(
+            UpdateAction.DOWNLOAD,
+            error,
+            release.manual,
+            release,
+        )
     }
 }

@@ -95,22 +95,22 @@ class MainFragmentHelpersTest {
 
     @Test
     fun formatDuration_minutes() {
-        assertEquals("1m 0s", formatDuration(60.0))
+        assertEquals("1m", formatDuration(60.0))
         assertEquals("2m 30s", formatDuration(150.0))
         assertEquals("59m 59s", formatDuration(3599.0))
     }
 
     @Test
     fun formatDuration_hours() {
-        // Zero minutes/seconds are skipped (only s=0 always appended)
-        assertEquals("1h 0s", formatDuration(3600.0))
+        // Zero-valued components are omitted, including seconds.
+        assertEquals("1h", formatDuration(3600.0))
         assertEquals("2h 30m 15s", formatDuration(9015.0))
     }
 
     @Test
     fun formatDuration_days() {
-        // Zero hours/minutes are skipped
-        assertEquals("1d 0s", formatDuration(86400.0))
+        // Zero-valued components are omitted, including seconds.
+        assertEquals("1d", formatDuration(86400.0))
         assertEquals("2d 6h 30m 45s", formatDuration(196245.0))
     }
 
@@ -124,8 +124,8 @@ class MainFragmentHelpersTest {
 
     @Test
     fun formatDuration_onlyDays() {
-        // Zero hours/minutes are skipped
-        assertEquals("3d 0s", formatDuration(259200.0))
+        // Zero hours/minutes/seconds are omitted.
+        assertEquals("3d", formatDuration(259200.0))
     }
 
     @Test

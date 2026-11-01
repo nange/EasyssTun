@@ -190,14 +190,5 @@ internal class StatsBinder(
 
     private companion object {
         const val ANIMATION_DURATION_MS = 350L
-
-        /** "1.5 MB/s" -> "1.5 M/s"; values without a byte unit are unchanged. */
-        val SPEED_UNIT = Regex("(?<=[KMGT])B/s")
-        val SIZE_UNIT = Regex("(?<=[KMGT])B$")
-
-        fun stripByteUnit(value: String): String {
-            if (value.isEmpty()) return value
-            return value.replace(SPEED_UNIT, "/s").replace(SIZE_UNIT, "")
-        }
     }
 }

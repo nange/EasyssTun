@@ -17,6 +17,10 @@ internal fun formatBytes(bytes: Long): String {
 
 /**
  * Formats a duration in seconds into a human-readable string.
+ *
+ * Zero-valued components are omitted, including seconds: `3600` renders as
+ * `"1h"` (not the inconsistent `"1h 0s"`), while a sub-minute duration still
+ * shows its seconds (`"0s"`, `"42s"`).
  * Package-internal for testability.
  */
 internal fun formatDuration(seconds: Double): String {
@@ -25,12 +29,28 @@ internal fun formatDuration(seconds: Double): String {
     val h = (totalSecs % 86400) / 3600
     val m = (totalSecs % 3600) / 60
     val s = totalSecs % 60
-    return buildString {
-        if (d > 0) append("${d}d ")
-        if (h > 0) append("${h}h ")
-        if (m > 0) append("${m}m ")
-        append("${s}s")
+    val parts = buildList {
+        if (d > 0) add("${d}d")
+        if (h > 0) add("${h}h")
+        if (m > 0) add("${m}m")
+        if (s > 0 || isEmpty()) add("${s}s")
     }
+    return parts.joinToString(" ")
+}
+
+/** "1.5 MB/s" -> "1.5 M/s"; values without a byte unit are unchanged. */
+private val SPEED_UNIT = Regex("(?<=[KMGT])B/s")
+private val SIZE_UNIT = Regex("(?<=[KMGT])B$")
+
+/**
+ * Drops the `B` from a byte unit reported by libeasyss, so the stats card can
+ * label the value with its own unit text. Used together with [formatBytes]:
+ * both keep the same K/M/G suffix family, the size formatter just also applies
+ * the SI (1000-based) scale to raw byte counts.
+ */
+internal fun stripByteUnit(value: String): String {
+    if (value.isEmpty()) return value
+    return value.replace(SPEED_UNIT, "/s").replace(SIZE_UNIT, "")
 }
 
 /**

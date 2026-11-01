@@ -23,4 +23,14 @@ class FormatUtilsTest {
         assertEquals(100, formatPercent(300, 200))
         assertEquals(33, formatPercent(1, 3))
     }
+
+    @Test
+    fun stripByteUnit_matchesTheStatsUnitStyle() {
+        assertEquals("", stripByteUnit(""))
+        assertEquals("1.5 M/s", stripByteUnit("1.5 MB/s"))
+        assertEquals("12 K/s", stripByteUnit("12 KB/s"))
+        assertEquals("1.5 M", stripByteUnit("1.5 MB"))
+        assertEquals("1.5 M/s", stripByteUnit("1.5 M/s"))
+        assertEquals("unknown", stripByteUnit("unknown"))
+    }
 }

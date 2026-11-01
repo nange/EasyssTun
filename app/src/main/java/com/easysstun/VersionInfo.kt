@@ -5,7 +5,7 @@ import io.github.nange.easyss.mobile.Mobile
 
 /**
  * Log tag of the startup version banner. It must stay listed in
- * [LogParser.APP_LOG_TAGS], otherwise the `logcat -s` filter used by
+ * [LogTags.ALL], otherwise the `logcat -s` filter used by
  * [LogStore] drops the banner before it can be parsed.
  */
 const val VERSION_LOG_TAG = "EasyssTun"

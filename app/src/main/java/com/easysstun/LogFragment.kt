@@ -49,7 +49,7 @@ class LogFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        LogStore.ensureStarted(requireContext())
+        LogStore.start(requireContext())
 
         logAdapter = LogAdapter()
         binding.logRecyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -193,11 +193,13 @@ internal class LogAdapter : ListAdapter<LogItem, LogAdapter.LogViewHolder>(DIFF_
 
 
 /**
- * Holds the visible window into [LogStore]: the window always spans
- * [windowStart, store.endIndex), starting with the latest page on open.
+ * Holds the visible window into a [LogCapture]: the window always spans
+ * `[windowStart, capture.endIndex)`, starting with the latest page on open.
  * Scrolling up prepends older pages; new logs always append at the tail.
  */
-class LogViewModel : ViewModel() {
+internal class LogViewModel(
+    private val capture: LogCapture = LogStore.capture,
+) : ViewModel() {
     private val window = mutableListOf<LogItem>()
     private val _logItems = MutableLiveData<List<LogItem>>(emptyList())
     val logItems: LiveData<List<LogItem>> get() = _logItems
@@ -213,7 +215,7 @@ class LogViewModel : ViewModel() {
         // emissions may be skipped, but each resync reads the current store
         // state so the window always converges.
         viewModelScope.launch {
-            LogStore.updates.collect { resync() }
+            capture.updates.collect { resync() }
         }
     }
 
@@ -221,11 +223,11 @@ class LogViewModel : ViewModel() {
     fun open() {
         if (opened) return
         opened = true
-        val end = LogStore.endIndex
-        windowStart = maxOf(LogStore.frontIndex, end - LogStore.PAGE_SIZE)
+        val end = capture.endIndex
+        windowStart = maxOf(capture.frontIndex, end - LogStore.PAGE_SIZE)
         windowEndIndex = end
         window.clear()
-        window.addAll(LogStore.sliceRange(windowStart, end))
+        window.addAll(capture.sliceRange(windowStart, end))
         _logItems.value = window.toList()
     }
 
@@ -235,7 +237,7 @@ class LogViewModel : ViewModel() {
      */
     fun loadMore(): Int {
         if (!opened) return 0
-        val front = LogStore.frontIndex
+        val front = capture.frontIndex
         if (windowStart < front) {
             // Eviction passed the front of our window: rebuild from the retained range
             rebuildWindow()
@@ -243,7 +245,7 @@ class LogViewModel : ViewModel() {
         }
         if (windowStart <= front) return 0
         val newStart = maxOf(front, windowStart - LogStore.PAGE_SIZE)
-        val older = LogStore.sliceRange(newStart, windowStart)
+        val older = capture.sliceRange(newStart, windowStart)
         if (older.isEmpty()) return 0
         window.addAll(0, older)
         windowStart = newStart
@@ -252,28 +254,28 @@ class LogViewModel : ViewModel() {
     }
 
     /** True when an older page is still available. */
-    fun canLoadMore(): Boolean = opened && windowStart > LogStore.frontIndex
+    fun canLoadMore(): Boolean = opened && windowStart > capture.frontIndex
 
     private fun resync() {
         if (!opened) return
-        val front = LogStore.frontIndex
-        val end = LogStore.endIndex
+        val front = capture.frontIndex
+        val end = capture.endIndex
         if (windowStart < front) {
             rebuildWindow()
         } else if (end > windowEndIndex) {
-            window.addAll(LogStore.sliceRange(windowEndIndex, end))
+            window.addAll(capture.sliceRange(windowEndIndex, end))
             windowEndIndex = end
             _logItems.value = window.toList()
         }
     }
 
     private fun rebuildWindow() {
-        val front = LogStore.frontIndex
-        val end = LogStore.endIndex
+        val front = capture.frontIndex
+        val end = capture.endIndex
         windowStart = maxOf(windowStart, front)
         windowEndIndex = end
         window.clear()
-        window.addAll(LogStore.sliceRange(windowStart, end))
+        window.addAll(capture.sliceRange(windowStart, end))
         _logItems.value = window.toList()
     }
 }

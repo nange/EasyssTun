@@ -12,7 +12,7 @@ import com.easysstun.databinding.DialogUpdateProgressBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.File
 
-private const val TAG = "Updater"
+private const val TAG = LogTags.UPDATER
 
 /**
  * Owns every updater dialog for one [FragmentActivity]: the "update available"
@@ -57,7 +57,7 @@ internal class UpdateDialogs(
                 if (state != lastFailedState) {
                     lastFailedState = state
                     if (state.manual) {
-                        showError(state.action, state.error)
+                        showError(state.action, state.error, state.release)
                     } else {
                         Log.w(TAG, "automatic update check failed: ${state.error}")
                     }
@@ -117,16 +117,12 @@ internal class UpdateDialogs(
         if (progressDialog == null) {
             val binding = DialogUpdateProgressBinding.inflate(activity.layoutInflater)
             progressBinding = binding
-            val release = manager.activeRelease
-            binding.updateProgressVersion.text = if (release != null) {
-                activity.getString(
-                    R.string.update_dialog_version,
-                    release.versionName,
-                    release.versionCode,
-                )
-            } else {
-                ""
-            }
+            val release = state.release
+            binding.updateProgressVersion.text = activity.getString(
+                R.string.update_dialog_version,
+                release.versionName,
+                release.versionCode,
+            )
             binding.updateProgressText.text = activity.getString(R.string.update_progress_starting)
             if (state.total <= 0L) {
                 binding.updateProgressBar.isIndeterminate = true
@@ -207,14 +203,18 @@ internal class UpdateDialogs(
             .show()
     }
 
-    private fun showError(action: UpdateAction, error: UpdateError) {
+    private fun showError(
+        action: UpdateAction,
+        error: UpdateError,
+        release: AvailableRelease?,
+    ) {
         if (!isAlive()) return
         val builder = MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.update_failed_title)
             .setMessage(updateErrorText(activity, error))
             .setNeutralButton(R.string.update_open_releases) { _, _ -> openUrl(RELEASES_PAGE) }
             .setNegativeButton(android.R.string.cancel, null)
-        if (action == UpdateAction.CHECK || manager.activeRelease != null) {
+        if (action == UpdateAction.CHECK || release != null) {
             builder.setPositiveButton(R.string.update_retry) { _, _ -> manager.retryLastAction() }
         }
         errorDialog?.dismiss()

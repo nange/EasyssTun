@@ -45,7 +45,7 @@ internal class AppSelectionStore(private val pref: Pref) {
         if (mode == Pref.PROXY_MODE_PROXY_ONLY) SELECTED_APPS_PROXY_ONLY else SELECTED_APPS_BYPASS
 
     companion object {
-        private const val TAG = "AppSelectionStore"
+        private const val TAG = LogTags.APP_SELECTION
 
         /** Legacy key written when bypass was the only mode. Read once, then removed. */
         const val SELECTED_APPS = "selected_apps"

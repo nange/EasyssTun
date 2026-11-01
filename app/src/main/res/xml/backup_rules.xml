@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older that API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Backup rules for devices before Android 12.
+
+   Server profiles store the proxy password in plain text in the default
+   SharedPreferences, so the whole sharedpref domain is excluded from backup
+   instead of letting a cloud backup or a device transfer carry credentials.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="." />
 </full-backup-content>

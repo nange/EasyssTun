@@ -38,6 +38,6 @@ class ServiceReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        private const val TAG = "ServiceReceiver"
+        private const val TAG = LogTags.SERVICE_RECEIVER
     }
 }

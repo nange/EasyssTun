@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 
 class MainFragment : Fragment() {
     companion object {
-        private const val TAG = "MainFragment"
+        private const val TAG = LogTags.MAIN
 
         // Process-level guard: the version banner is a startup line, not a
         // per-view one (the home fragment view is re-created on navigation).
@@ -155,7 +155,6 @@ class MainFragment : Fragment() {
     private fun onServerSelected(profile: Profile) {
         val state = controller.state.value
         if (profile.id == profiles.activeId() && state !is VpnState.Switching) {
-            Log.d(TAG, "Spinner selected the active server. No change.")
             return
         }
         // The controller is the only writer of the active profile: it either
@@ -371,7 +370,7 @@ class MainFragment : Fragment() {
                     fetchAndUpdateStats()
                     AppState.isForeground.collectLatest { isForeground ->
                         val interval = if (isForeground) 2_000L else 30_000L
-                        Log.i(TAG, "Stats polling: using ${interval / 1000}s interval (foreground=$isForeground)")
+                        Log.d(TAG, "Stats polling: using ${interval / 1000}s interval (foreground=$isForeground)")
                         while (isActive) {
                             delay(interval)
                             fetchAndUpdateStats()

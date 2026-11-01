@@ -18,7 +18,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-private const val TAG = "Updater"
+private const val TAG = LogTags.UPDATER
 private const val USER_AGENT = "EasyssTun-Android"
 private const val LOOPBACK = "127.0.0.1"
 

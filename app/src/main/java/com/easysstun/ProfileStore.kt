@@ -163,7 +163,7 @@ internal class ProfileStore private constructor(private val pref: Pref) {
     }
 
     companion object {
-        private const val TAG = "ProfileStore"
+        private const val TAG = LogTags.PROFILE_STORE
 
         /** Current profile-store key (typed JSON: numbers and booleans). */
         const val SERVER_PROFILES = "server_profiles_v2"

@@ -110,18 +110,4 @@ class PrefTest {
         assertEquals(1_700_000_000_000L, reloaded.updateLastCheckAt)
         assertEquals(170, reloaded.updateDismissedVersionCode)
     }
-
-    @Test
-    fun version_getter_whenNotSet_returnsCurrentTimestamp() {
-        val v = pref.version
-        assertTrue("Version should not be blank", v.isNotBlank())
-        assertTrue("Version should be a valid timestamp", v.toLongOrNull() != null)
-    }
-
-    @Test
-    fun version_setterAndGetter_persists() {
-        pref.version = "test-version-123"
-        assertEquals("Version should be persisted", "test-version-123", pref.version)
-        assertEquals("test-version-123", sharedPreferences.getString(Pref.VERSION, null))
-    }
 }

@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -29,13 +28,6 @@ data class LogItem(val message: String, var time: String, var source: String, va
  * implementation.
  */
 object LogParser {
-
-    // App log tags to display in the log viewer
-    val APP_LOG_TAGS = arrayOf(
-        "GoLog", "EasyssVpnServiceDiag", "MainFragment", "AppState",
-        "Pref", "Profile", "LogFragment", "AppListAdapter", "LogStore",
-        "Stats", "Updater", VERSION_LOG_TAG
-    )
 
     // Written to logcat right before the LogStore reader starts; everything
     // before it belongs to an earlier process run and is dropped.
@@ -211,25 +203,14 @@ class LogBuffer(private val capacity: Int) {
 }
 
 /**
- * Process-wide log capture: reads logcat for the app's tags for the whole
- * lifetime of the process, keeps the latest [MAX_BUFFER_SIZE] parsed items in
- * memory, and notifies observers so the log viewer can page through history.
+ * Bounded, thread-safe window of captured log items with a change signal.
+ *
+ * Extracted from [LogStore] so the log viewer's paging logic can be exercised
+ * against a fresh capture in tests without any test-only hooks on the
+ * process-wide singleton.
  */
-object LogStore {
-
-    /** Maximum number of log items kept in memory (oldest are dropped). */
-    const val MAX_BUFFER_SIZE = 2_000
-
-    /** Number of items loaded per page in the log viewer. */
-    const val PAGE_SIZE = 50
-
-    private const val TAG = "LogStore"
-    private const val RETRY_DELAY_MS = 3_000L
-    private const val DEFAULT_MIN_SEVERITY = 4
-
-    private val buffer = LogBuffer(MAX_BUFFER_SIZE)
-    private val started = AtomicBoolean(false)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+internal class LogCapture(capacity: Int = LogStore.MAX_BUFFER_SIZE) {
+    private val buffer = LogBuffer(capacity)
 
     // Emits the current buffer size after each append (replay 1: a late
     // collector always learns the latest state). Emissions use emit() rather
@@ -239,15 +220,9 @@ object LogStore {
     private val _updates = MutableSharedFlow<Int>(replay = 1)
     val updates: SharedFlow<Int> = _updates.asSharedFlow()
 
-    // The application context lives for the whole process, so holding it in a
-    // process-lifetime singleton is not a leak (lint cannot see that).
-    @SuppressLint("StaticFieldLeak")
-    @Volatile
-    private var profiles: ProfileStore? = null
-    @Volatile
-    private var minSeverity = DEFAULT_MIN_SEVERITY
-    @Volatile
-    private var minSeverityCheckedAt = 0L
+    init {
+        _updates.tryEmit(0)
+    }
 
     val size: Int get() = buffer.size
     val frontIndex: Int get() = buffer.frontIndex
@@ -261,14 +236,52 @@ object LogStore {
      */
     val endIndex: Int get() = buffer.frontIndex + buffer.size
 
-    /** Idempotent alias of [start], safe to call from UI code. */
-    fun ensureStarted(context: Context) = start(context)
+    /** Copy of the retained items with capture-stream indices in [fromIndex, toIndex). */
+    fun sliceRange(fromIndex: Int, toIndex: Int): List<LogItem> =
+        buffer.sliceRange(fromIndex, toIndex)
+
+    suspend fun append(item: LogItem) {
+        _updates.emit(buffer.append(item))
+    }
+}
+
+/**
+ * Process-wide log capture: reads logcat for the app's tags for the whole
+ * lifetime of the process, keeps the latest [MAX_BUFFER_SIZE] parsed items in
+ * memory, and notifies observers so the log viewer can page through history.
+ */
+object LogStore {
+
+    /** Maximum number of log items kept in memory (oldest are dropped). */
+    const val MAX_BUFFER_SIZE = 2_000
+
+    /** Number of items loaded per page in the log viewer. */
+    const val PAGE_SIZE = 50
+
+    private const val TAG = LogTags.LOG_STORE
+    private const val RETRY_DELAY_MS = 3_000L
+    private const val DEFAULT_MIN_SEVERITY = 4
+
+    /** The process-lifetime capture the log viewer reads from. */
+    internal val capture = LogCapture(MAX_BUFFER_SIZE)
+
+    private val started = AtomicBoolean(false)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // The application context lives for the whole process, so holding it in a
+    // process-lifetime singleton is not a leak (lint cannot see that).
+    @SuppressLint("StaticFieldLeak")
+    @Volatile
+    private var profiles: ProfileStore? = null
+    @Volatile
+    private var minSeverity = DEFAULT_MIN_SEVERITY
+    @Volatile
+    private var minSeverityCheckedAt = 0L
 
     /** Start capturing logcat output for the lifetime of the process. Idempotent. */
     fun start(context: Context) {
         if (!started.compareAndSet(false, true)) return
         profiles = ProfileStore.get(context.applicationContext)
-        _updates.tryEmit(0)
         scope.launch {
             while (isActive) {
                 try {
@@ -282,10 +295,6 @@ object LogStore {
         }
     }
 
-    /** Copy of the retained items with capture-stream indices in [fromIndex, toIndex). */
-    fun sliceRange(fromIndex: Int, toIndex: Int): List<LogItem> =
-        buffer.sliceRange(fromIndex, toIndex)
-
     /**
      * Tails `logcat -s <tags>` without clearing the device buffer. A marker
      * line is written first; everything before it in the buffer belongs to an
@@ -294,7 +303,7 @@ object LogStore {
      */
     private suspend fun readLogcatLoop() {
         Log.i(TAG, LogParser.MARKER)
-        val tags = LogParser.APP_LOG_TAGS.joinToString(" ")
+        val tags = LogTags.ALL.joinToString(" ")
         var inputStream: InputStream? = null
         var bufferedReader: BufferedReader? = null
         var process: Process? = null
@@ -322,8 +331,7 @@ object LogStore {
     }
 
     private suspend fun append(item: LogItem) {
-        val newSize = buffer.append(item)
-        _updates.emit(newSize)
+        capture.append(item)
     }
 
     /**
@@ -345,17 +353,5 @@ object LogStore {
             }
         }
         return minSeverity
-    }
-
-    internal fun appendForTest(item: LogItem) {
-        // runBlocking is fine here: the test rule's UnconfinedTestDispatcher
-        // runs the collector inline, so emit() delivers without blocking.
-        val newSize = buffer.append(item)
-        runBlocking { _updates.emit(newSize) }
-    }
-
-    internal fun resetForTest() {
-        buffer.clear()
-        _updates.tryEmit(0)
     }
 }
