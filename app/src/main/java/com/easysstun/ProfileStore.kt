@@ -18,10 +18,15 @@ import kotlinx.serialization.encodeToString
  * Adding a profile does not change the selection.
  *
  * The list is stored under [SERVER_PROFILES]. [LEGACY_SERVER_PROFILES] is the key
- * the pre-store builds wrote; it is migrated once on first read and then kept
- * untouched, so a build that is downgraded (and only understands the old,
- * string-typed JSON) still finds its profiles. A profile change made by such a
- * downgraded build is not carried back into [SERVER_PROFILES].
+ * the pre-store builds wrote; it is copied into [SERVER_PROFILES] when the store
+ * is created and then left untouched, so a build that is downgraded (and only
+ * understands the old, string-typed JSON) still finds its profiles.
+ *
+ * That snapshot is frozen: a profile deleted by this build can reappear after a
+ * downgrade, and a profile change made while downgraded is not carried back. The
+ * snapshot is dropped as soon as the last profile is deleted — downgrade
+ * compatibility is meaningless then, and the snapshot still holds the profiles'
+ * plaintext passwords.
  *
  * Mutations are persisted through the key/value layer of [Pref] and bump
  * [changes] only after every related key has been written, so a collector
@@ -55,7 +60,7 @@ internal class ProfileStore private constructor(private val pref: Pref) {
      * lists profiles; the user can still create a new profile from the form.
      */
     fun all(): List<Profile> {
-        val json = profilesJson() ?: return emptyList()
+        val json = pref.getString(SERVER_PROFILES) ?: return emptyList()
         return try {
             appJson.decodeFromString<List<Profile>>(json).also { corruptPayload = null }
         } catch (e: Exception) {
@@ -121,15 +126,19 @@ internal class ProfileStore private constructor(private val pref: Pref) {
     }
 
     /**
-     * The raw profile list, migrating the pre-store key once. The legacy key is
-     * deliberately left in place: it is what a downgraded build reads.
+     * One-time migration of the pre-store key, run while the process-wide
+     * instance is being created. Doing it there (instead of on the first read)
+     * keeps [all] a pure read and rules out a background reader overwriting a
+     * profile that another thread wrote between its read and its write.
+     *
+     * The legacy key is deliberately left in place: it is the frozen snapshot a
+     * downgraded build reads.
      */
-    private fun profilesJson(): String? {
-        pref.getString(SERVER_PROFILES)?.let { return it }
-        val legacy = pref.getString(LEGACY_SERVER_PROFILES) ?: return null
+    private fun migrateLegacyStore() {
+        if (pref.getString(SERVER_PROFILES) != null) return
+        val legacy = pref.getString(LEGACY_SERVER_PROFILES) ?: return
         Log.i(TAG, "migrating the legacy profile store into $SERVER_PROFILES")
         pref.putString(SERVER_PROFILES, legacy)
-        return legacy
     }
 
     private fun logCorruptOnce(json: String, error: Exception) {
@@ -140,6 +149,12 @@ internal class ProfileStore private constructor(private val pref: Pref) {
 
     private fun save(profiles: List<Profile>) {
         pref.putString(SERVER_PROFILES, appJson.encodeToString(profiles))
+        if (profiles.isEmpty()) {
+            // Downgrade compatibility is meaningless without profiles, and the
+            // frozen snapshot still holds the profiles' plaintext passwords:
+            // drop it once the user has deleted everything.
+            pref.remove(LEGACY_SERVER_PROFILES)
+        }
         notifyChanged()
     }
 
@@ -169,7 +184,14 @@ internal class ProfileStore private constructor(private val pref: Pref) {
         fun get(context: Context): ProfileStore {
             instance?.let { return it }
             return synchronized(this) {
-                instance ?: ProfileStore(Pref(context.applicationContext)).also { instance = it }
+                instance ?: run {
+                    val created = ProfileStore(Pref(context.applicationContext))
+                    // Migrate before publishing: a caller that observes the
+                    // instance must never see a half-migrated store.
+                    created.migrateLegacyStore()
+                    instance = created
+                    created
+                }
             }
         }
 

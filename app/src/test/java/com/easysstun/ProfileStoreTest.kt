@@ -48,6 +48,12 @@ class ProfileStoreTest {
         ProfileStore.resetForTests()
     }
 
+    /** Recreates the process-wide store, as a fresh process start would. */
+    private fun recreateStore(): ProfileStore {
+        ProfileStore.resetForTests()
+        return ProfileStore.get(context).also { store = it }
+    }
+
     private fun profile(
         id: String = UUID.randomUUID().toString(),
         name: String = "Test Profile",
@@ -232,6 +238,7 @@ class ProfileStoreTest {
             }]
         """.trimIndent()
         pref.putString(ProfileStore.LEGACY_SERVER_PROFILES, legacyJson)
+        recreateStore()
 
         val profile = store.all().single()
 
@@ -246,10 +253,10 @@ class ProfileStoreTest {
         val legacyJson = """[{"id":"legacy","name":"Legacy","server":"s","serverPort":"443","password":"pw"}]"""
         pref.putString(ProfileStore.LEGACY_SERVER_PROFILES, legacyJson)
 
-        store.all()
+        recreateStore()
 
         assertEquals(
-            "the migrated payload is copied to the current key",
+            "the legacy payload is copied to the current key when the store is created",
             legacyJson,
             pref.getString(ProfileStore.SERVER_PROFILES),
         )
@@ -257,6 +264,23 @@ class ProfileStoreTest {
             "the legacy key is kept so a downgraded build still reads its profiles",
             legacyJson,
             pref.getString(ProfileStore.LEGACY_SERVER_PROFILES),
+        )
+    }
+
+    @Test
+    fun all_isAPureReadAfterTheInitialMigration() {
+        pref.putString(
+            ProfileStore.LEGACY_SERVER_PROFILES,
+            """[{"id":"legacy","name":"Legacy","server":"s","serverPort":"443","password":"pw"}]""",
+        )
+        recreateStore()
+        // Drop the migrated copy: a read must not migrate (write) again.
+        pref.remove(ProfileStore.SERVER_PROFILES)
+
+        assertTrue(store.all().isEmpty())
+        assertNull(
+            "all() must not write the store",
+            pref.getString(ProfileStore.SERVER_PROFILES),
         )
     }
 
@@ -270,13 +294,20 @@ class ProfileStoreTest {
             ProfileStore.SERVER_PROFILES,
             """[{"id":"new","name":"New","server":"s","serverPort":443,"password":"pw"}]""",
         )
+        recreateStore()
 
         assertEquals("new", store.all().single().id)
+        assertEquals(
+            "an existing current store must not be overwritten by the legacy one",
+            """[{"id":"new","name":"New","server":"s","serverPort":443,"password":"pw"}]""",
+            pref.getString(ProfileStore.SERVER_PROFILES),
+        )
     }
 
     @Test
     fun save_writesOnlyTheCurrentKey() {
         pref.putString(ProfileStore.LEGACY_SERVER_PROFILES, "legacy payload")
+        recreateStore()
         store.add(profile("id1"))
 
         assertEquals(
@@ -328,6 +359,41 @@ class ProfileStoreTest {
         store.delete("does-not-exist")
 
         assertEquals(before, store.changes.value)
+    }
+
+    @Test
+    fun deletingTheLastProfile_dropsTheLegacySnapshot() {
+        pref.putString(
+            ProfileStore.LEGACY_SERVER_PROFILES,
+            """[{"id":"only","name":"Only","server":"s","serverPort":"443","password":"pw"}]""",
+        )
+        recreateStore()
+        assertEquals("only", store.all().single().id)
+
+        store.delete("only")
+
+        assertNull(
+            "the frozen snapshot holds plaintext passwords and has no downgrade value anymore",
+            pref.getString(ProfileStore.LEGACY_SERVER_PROFILES),
+        )
+        assertTrue(store.all().isEmpty())
+    }
+
+    @Test
+    fun deletingOneOfSeveralProfiles_keepsTheLegacySnapshot() {
+        pref.putString(
+            ProfileStore.LEGACY_SERVER_PROFILES,
+            """[{"id":"id1","name":"One","server":"s","serverPort":"443","password":"pw"}]""",
+        )
+        recreateStore()
+        store.add(profile("id2"))
+
+        store.delete("id2")
+
+        assertTrue(
+            "the snapshot is only dropped once there are no profiles left",
+            pref.getString(ProfileStore.LEGACY_SERVER_PROFILES) != null,
+        )
     }
 
     @Test
