@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [easyss]
+    branches: [main]
   pull_request:
-    branches: [easyss]
+    branches: [main]
 
 jobs:
   lint-and-test:

@@ -83,7 +83,7 @@ app/libs/                     # ★ 本地 AAR 依赖（均不入库，首次构
   libeasyss.aar               #   easyss 代理原生库
   hev-socks5-tunnel.aar       #   tun2socks 实现（上游 heiher/hev-socks5-tunnel 预编译，含 4 ABI .so + classes.jar + proguard.txt）
 app/src/test/                 # Robolectric 单元测试（见「测试」）
-.github/workflows/            # ci.yml（push/PR 到 easyss 跑 make check）、release.yml（v* 标签构建签名 APK 并发布）
+.github/workflows/            # ci.yml（push/PR 到 main 跑 make check）、release.yml（v* 标签构建签名 APK 并发布）
 ```
 
 ## 构建机制要点
@@ -147,7 +147,7 @@ app/src/test/                 # Robolectric 单元测试（见「测试」）
 
 ### Git 工作流
 
-**worktree**：仅当当前处于主分支（本仓库为 `easyss`）时，代码改动才先建 worktree 再改；已经在功能分支、用户指定的分支或工作树上时直接改。
+**worktree**：仅当当前处于主分支（本仓库为 `main`）时，代码改动才先建 worktree 再改；已经在功能分支、用户指定的分支或工作树上时直接改。
 
 - 目录固定为 `.agents/worktrees/<name>`，`<name>` 可用 `type/name` 分层（如 `feat/app-list-filter`，对应分支名相同）；该目录不入库（`.gitignore` 已忽略），不要提交其中的内容。
 - 从当前 HEAD 或用户指定的 base 新建分支。
@@ -181,10 +181,10 @@ app/src/test/                 # Robolectric 单元测试（见「测试」）
 
 ### 提交 PR
 
-- 不要直接向 `easyss` 主分支提交 PR 改动：从最新 `easyss` 切出**单独的功能分支**（英文短横线命名，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
+- 不要直接向 `main` 主分支提交 PR 改动：从最新 `main` 切出**单独的功能分支**（英文短横线命名，如 `feat/app-list-filter`、`fix/tun-fd-leak`），完成后推送该分支并创建 PR。
 - PR 标题用英文，采用 `<type>: <description>` 格式。
 - PR 描述用中文，包含：改动动机、具体内容、影响范围、验证方式（如 `make check` 通过、真机测试结果）。
-- 合入 `easyss` 后 CI 自动执行 `make check`；提 PR 前先在本地跑一遍。
+- 合入 `main` 后 CI 自动执行 `make check`；提 PR 前先在本地跑一遍。
 
 ### Review PR
 
@@ -198,5 +198,5 @@ app/src/test/                 # Robolectric 单元测试（见「测试」）
 ## 版本发布流程
 
 1. 更新 `version.properties`（递增 `versionCode`、`versionName`，必要时同步 `libeasyssVersion` / `hevSocks5TunnelVersion`）。
-2. 合并到 `easyss` 分支（CI 会跑 `make check`）。
+2. 合并到 `main` 分支（CI 会跑 `make check`）。
 3. 打 `v*` 格式的 git 标签并推送，Release 工作流自动构建签名 APK 并创建 GitHub Release。
